@@ -140,7 +140,7 @@ export class StudentService {
         caste_ethnicity_code, caste_ethnicity, citizenship_number, birth_certificate_number,
         blood_group, religion, mother_tongue,
         permanent_province_id, permanent_district_id, permanent_municipality_id, permanent_ward_no,
-        permanent_tole_en, permanent_address_en, permanent_tole_np, permanent_address_np,
+        permanent_tole_en, permanent_tole_np,
         temporary_province_id, temporary_district_id, temporary_municipality_id, temporary_ward_no,
         temporary_tole_en, temporary_address_en, temporary_tole_np, temporary_address_np,
         created_by, updated_by
@@ -182,9 +182,7 @@ export class StudentService {
           createStudentDto.permanentMunicipalityId || null,
           createStudentDto.permanentWardNo || null,
           createStudentDto.permanentToleEn || null,
-          createStudentDto.permanentAddressEn || null,
           createStudentDto.permanentToleNp || null,
-          createStudentDto.permanentAddressNp || null,
           createStudentDto.temporaryProvinceId || null,
           createStudentDto.temporaryDistrictId || null,
           createStudentDto.temporaryMunicipalityId || null,

@@ -163,14 +163,6 @@ export class CreateStudentDto {
   @IsString()
   permanentToleEn?: string;
 
-  @ApiPropertyOptional({
-    description: 'Permanent address details (English)',
-    example: 'House No. 123, Street Name',
-  })
-  @IsOptional()
-  @IsString()
-  permanentAddressEn?: string;
-
   // === Permanent Address (Nepali) ===
   @ApiPropertyOptional({
     description: 'Permanent tole (Nepali)',
@@ -179,14 +171,6 @@ export class CreateStudentDto {
   @IsOptional()
   @IsString()
   permanentToleNp?: string;
-
-  @ApiPropertyOptional({
-    description: 'Permanent address details (Nepali)',
-    example: 'घर नं १२३, सडकको नाम',
-  })
-  @IsOptional()
-  @IsString()
-  permanentAddressNp?: string;
 
   // === Temporary Address (English) - Nepal provinces 1-7 ===
   @ApiPropertyOptional({
