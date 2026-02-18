@@ -1,0 +1,56 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+out/
+
+# Environment files
+.env
+.env.local
+.env.production
+.env.*.local
+
+# Logs
+logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*.swn
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Docker
+.docker/
+
+# Cache
+.cache/
+.pnpm-*.cache
+
+# Temp
+tmp/
+temp/
+*.tmp
+
+# Database
+*.sql
+*.sqlite
+
+# Secrets (do NOT commit)
+credentials.json
+*.pem
+*.key
