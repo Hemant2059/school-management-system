@@ -311,4 +311,45 @@ export class AuthService {
 
     return { message: 'Password changed successfully. Account verified.' };
   }
+
+  async forgotPassword(email: string) {
+    const user = await this.userService.findByUsernameOrEmailOrPhone(email);
+
+    if (!user) {
+      return { message: 'If the email exists, a reset link will be sent.' };
+    }
+
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetTokenExpiry = new Date(Date.now() + 30 * 60 * 1000);
+
+    await this.db.query(
+      `UPDATE users SET reset_token = $2, reset_token_expiry = $3 WHERE user_id = $1`,
+      [user.user_id, resetToken, resetTokenExpiry],
+    );
+
+    return {
+      message: 'If the email exists, a reset link will be sent.',
+      resetToken: resetToken,
+      expiry: resetTokenExpiry,
+    };
+  }
+
+  async resetPassword(token: string, newPassword: string) {
+    const user = await this.db.queryOne<any>(
+      `SELECT * FROM users WHERE reset_token = $1 AND reset_token_expiry > NOW()`,
+      [token],
+    );
+
+    if (!user) {
+      throw new UnauthorizedException('Invalid or expired reset token');
+    }
+
+    const newPasswordHash = await bcrypt.hash(newPassword, 10);
+    await this.db.query(
+      `UPDATE users SET password_hash = $2, reset_token = NULL, reset_token_expiry = NULL, is_verified = true, updated_at = NOW() WHERE user_id = $1`,
+      [user.user_id, newPasswordHash],
+    );
+
+    return { message: 'Password reset successfully. You can now login.' };
+  }
 }

@@ -108,6 +108,51 @@ Change password (required on first login to verify account).
 > 3. Call `/auth/change-password` with current password → Sets `isVerified: true`
 > 4. Login again → Returns `isVerified: true`
 
+### POST /auth/forgot-password
+
+Request password reset link.
+
+**Request:**
+
+```json
+{
+  "email": "user@example.com"
+}
+```
+
+**Response (200):**
+
+```json
+{
+  "message": "If the email exists, a reset link will be sent.",
+  "resetToken": "abc123...",
+  "expiry": "2026-02-18T14:00:00.000Z"
+}
+```
+
+> **Note:** In production, the `resetToken` would be sent via email/SMS, not returned in the response.
+
+### POST /auth/reset-password
+
+Reset password using token.
+
+**Request:**
+
+```json
+{
+  "token": "abc123...",
+  "newPassword": "NewPassword456!"
+}
+```
+
+**Response (200):**
+
+```json
+{
+  "message": "Password reset successfully. You can now login."
+}
+```
+
 ---
 
 ## 2. SCHOOLS
