@@ -39,6 +39,8 @@ import { VideoClassModule } from './video-class/video-class.module';
 import { PortalModule } from './portal/portal.module';
 import { DocumentModule } from './document/document.module';
 import { HostelModule } from './hostel/hostel.module';
+import { AdmissionModule } from './admission/admission.module';
+import { EmailModule } from './email/email.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { RolesGuard } from './auth/roles.guard';
 import { AppController } from './app.controller';
@@ -75,6 +77,17 @@ import { redisStore } from 'cache-manager-redis-store';
     }),
     ThrottlerModule.forRoot([
       {
+        name: 'short',
+        ttl: 1000,
+        limit: 10,
+      },
+      {
+        name: 'medium',
+        ttl: 10000,
+        limit: 50,
+      },
+      {
+        name: 'long',
         ttl: 60000,
         limit: 100,
       },
@@ -128,6 +141,8 @@ import { redisStore } from 'cache-manager-redis-store';
     PortalModule,
     DocumentModule,
     HostelModule,
+    AdmissionModule,
+    EmailModule,
   ],
   controllers: [AppController],
   providers: [
