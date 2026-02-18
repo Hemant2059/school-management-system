@@ -116,4 +116,24 @@ export class AuthController {
     const user = await this.authService.getUserProfile(req.user.userId);
     return user;
   }
+
+  @Post('change-password')
+  @ApiOperation({
+    summary: 'Change password',
+    description: 'Change user password. Required on first login.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Password changed successfully',
+  })
+  async changePassword(
+    @Request() req,
+    @Body() body: { currentPassword: string; newPassword: string },
+  ) {
+    return this.authService.changePassword(
+      req.user.userId,
+      body.currentPassword,
+      body.newPassword,
+    );
+  }
 }

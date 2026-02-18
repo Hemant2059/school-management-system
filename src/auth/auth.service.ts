@@ -117,6 +117,7 @@ export class AuthService {
         userType: user.user_type,
         email: user.email,
         phone: user.phone,
+        isVerified: user.is_verified,
       },
     };
   }
@@ -255,7 +256,7 @@ export class AuthService {
   async register(createUserDto: any) {
     const user = await this.userService.create(createUserDto);
     return {
-      message: 'User registered successfully. Please verify your account.',
+      message: 'User registered successfully. Account is active.',
       userId: user.user_id,
     };
   }
@@ -279,5 +280,35 @@ export class AuthService {
       updatedAt: user.updated_at,
       school: null,
     };
+  }
+
+  async changePassword(
+    userId: number,
+    currentPassword: string,
+    newPassword: string,
+  ) {
+    const user = await this.userService.findOne(userId);
+
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+
+    const isPasswordValid = await bcrypt.compare(
+      currentPassword,
+      user.password_hash,
+    );
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Current password is incorrect');
+    }
+
+    const newPasswordHash = await bcrypt.hash(newPassword, 10);
+    await this.userService.updatePassword(userId, newPasswordHash);
+
+    await this.db.query(
+      `UPDATE users SET is_verified = true, updated_at = NOW() WHERE user_id = $1`,
+      [userId],
+    );
+
+    return { message: 'Password changed successfully. Account verified.' };
   }
 }

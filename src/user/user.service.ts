@@ -129,6 +129,13 @@ export class UserService {
     );
   }
 
+  async updatePassword(userId: number, passwordHash: string): Promise<void> {
+    await this.db.query(
+      `UPDATE users SET password_hash = $2, updated_at = NOW() WHERE user_id = $1`,
+      [userId, passwordHash],
+    );
+  }
+
   async update(id: number, updateUserDto: UpdateUserDto): Promise<User> {
     const user = await this.findById(id);
 
