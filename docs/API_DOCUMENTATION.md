@@ -40,10 +40,14 @@ Register a new user.
 
 ```json
 {
-  "message": "User registered successfully. Please verify your account.",
+  "message": "User registered successfully. Account is active.",
   "userId": "1"
 }
 ```
+
+> **Note:** After registration, user must change password to verify account.
+
+````
 
 ### POST /auth/login
 
@@ -56,7 +60,7 @@ Login with username and password.
   "username": "admin123",
   "password": "Password123!"
 }
-```
+````
 
 **Response (200):**
 
@@ -70,10 +74,39 @@ Login with username and password.
     "schoolId": "1",
     "username": "admin123",
     "fullName": "Admin User",
-    "userType": "ADMIN"
+    "userType": "ADMIN",
+    "isVerified": false
   }
 }
 ```
+
+### POST /auth/change-password
+
+Change password (required on first login to verify account).
+
+**Request:**
+
+```json
+{
+  "currentPassword": "Password123!",
+  "newPassword": "NewPassword456!"
+}
+```
+
+**Response (200):**
+
+```json
+{
+  "message": "Password changed successfully. Account verified."
+}
+```
+
+> **First Login Flow:**
+>
+> 1. Register new user → `isVerified: false`
+> 2. Login → Returns `isVerified: false` in response
+> 3. Call `/auth/change-password` with current password → Sets `isVerified: true`
+> 4. Login again → Returns `isVerified: true`
 
 ---
 
