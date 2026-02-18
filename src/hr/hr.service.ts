@@ -3,104 +3,155 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, IsNull, Like } from 'typeorm'; // ✅ Import Like operator
-import { Staff } from './entities/staff.entity';
-import { Payroll } from './entities/payroll.entity';
-import { LeaveType } from './entities/leave-type.entity';
-import { LeaveRequest } from './entities/leave-request.entity';
+import { DatabaseService } from '../database/database.service';
 import { CreateStaffDto } from './dto/create-staff.dto';
 import { ProcessPayrollDto } from './dto/process-payroll.dto';
 import { CreateLeaveRequestDto } from './dto/create-leave-request.dto';
 import { NepaliDateUtil } from '../utils/nepali-date.util';
 import { NepaliNumberUtil } from '../utils/nepali-number.util';
 
+export interface Staff {
+  staff_id: number;
+  school_id: number;
+  user_id: number;
+  staff_code: string;
+  first_name_en: string;
+  middle_name_en: string | null;
+  last_name_en: string;
+  first_name_np: string | null;
+  middle_name_np: string | null;
+  last_name_np: string | null;
+  email: string | null;
+  mobile: string | null;
+  department: string | null;
+  designation: string | null;
+  employment_type: string;
+  joining_date: Date | null;
+  current_status: string;
+  is_active: boolean;
+  created_at: Date;
+  updated_at: Date;
+  deleted_at: Date | null;
+  pan_number?: string;
+  position?: string;
+}
+
+export interface Payroll {
+  payroll_id: number;
+  school_id: number;
+  staff_id: number;
+  salary_month_bs: string;
+  payment_date: Date;
+  payment_date_bs: string;
+  basic_salary: number;
+  house_rent_allowance: number;
+  transport_allowance: number;
+  medical_allowance: number;
+  other_allowances: number;
+  gross_salary: number;
+  cit_deduction: number;
+  ssf_employee_contribution: number;
+  ssf_employer_contribution: number;
+  provident_fund: number;
+  tax_deduction: number;
+  other_deductions: number;
+  total_deductions: number;
+  net_salary: number;
+  pan_number: string | null;
+  is_tax_exempt: boolean;
+  is_paid: boolean;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface LeaveRequest {
+  leave_request_id: number;
+  school_id: number;
+  staff_id: number;
+  leave_type_id: number;
+  start_date: Date;
+  start_date_bs: string;
+  end_date: Date;
+  end_date_bs: string;
+  days_requested: number;
+  reason: string | null;
+  status: string;
+  approved_by: number | null;
+  rejection_reason: string | null;
+  is_active: boolean;
+  created_at: Date;
+  updated_at: Date;
+}
+
 @Injectable()
 export class HrService {
-  constructor(
-    @InjectRepository(Staff)
-    private staffRepository: Repository<Staff>,
-    @InjectRepository(Payroll)
-    private payrollRepository: Repository<Payroll>,
-    @InjectRepository(LeaveType)
-    private leaveTypeRepository: Repository<LeaveType>,
-    @InjectRepository(LeaveRequest)
-    private leaveRequestRepository: Repository<LeaveRequest>,
-  ) {}
+  constructor(private db: DatabaseService) {}
 
-  // Staff Management
   async createStaff(createDto: CreateStaffDto): Promise<Staff> {
-    const existing = await this.staffRepository.findOne({
-      where: {
-        userId: createDto.userId,
-        schoolId: createDto.schoolId,
-        deletedAt: IsNull(),
-      },
-    });
+    const existing = await this.db.queryOne<Staff>(
+      `SELECT staff_id FROM staff WHERE user_id = $1 AND school_id = $2 AND deleted_at IS NULL`,
+      [createDto.userId, createDto.schoolId],
+    );
     if (existing) {
       throw new BadRequestException(
         'Staff record already exists for this user',
       );
     }
 
-    // Convert dates to BS (handle null cases)
-    const dobBs = createDto.dateOfBirth
-      ? NepaliDateUtil.adToBs(createDto.dateOfBirth).bsDate
-      : null;
-    const hireBs = NepaliDateUtil.adToBs(createDto.hireDate).bsDate;
+    const [countResult] = await this.db.query<{ count: string }>(
+      `SELECT COUNT(*) as count FROM staff WHERE school_id = $1`,
+      [createDto.schoolId],
+    );
+    const count = parseInt(countResult.count, 10);
+    const yearSuffix = new Date().getFullYear().toString().slice(-2);
+    const staffCode = `STF-${yearSuffix}-${String(count + 1).padStart(5, '0')}`;
 
-    // ✅ FIXED: Create entity with explicit property mapping
-    const staff = this.staffRepository.create({
-      schoolId: createDto.schoolId,
-      userId: createDto.userId,
-      firstNameEn: createDto.firstNameEn,
-      middleNameEn: createDto.middleNameEn,
-      lastNameEn: createDto.lastNameEn,
-      firstNameNp: createDto.firstNameNp,
-      middleNameNp: createDto.middleNameNp,
-      lastNameNp: createDto.lastNameNp,
-      citizenshipNumber: createDto.citizenshipNumber,
-      panNumber: createDto.panNumber,
-      dateOfBirth: createDto.dateOfBirth,
-      dateOfBirthBs: dobBs, // ✅ Now accepts null
-      gender: createDto.gender,
-      position: createDto.position,
-      department: createDto.department,
-      hireDate: createDto.hireDate,
-      hireDateBs: hireBs, // ✅ Now accepts null
-      employmentType: createDto.employmentType,
-      mobile: createDto.mobile,
-      email: createDto.email,
-      provinceId: createDto.provinceId,
-      districtId: createDto.districtId,
-      municipalityId: createDto.municipalityId,
-      wardNo: createDto.wardNo,
-      toleEn: createDto.toleEn,
-      toleNp: createDto.toleNp,
-      isActive: true,
-    });
-
-    return this.staffRepository.save(staff); // ✅ Returns single Staff
+    const result = await this.db.insert<Staff>(
+      `INSERT INTO staff (
+        school_id, user_id, staff_code, first_name, last_name, email, mobile,
+        department, designation, employment_type, joining_date, current_status, is_active
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      RETURNING *`,
+      [
+        createDto.schoolId,
+        createDto.userId,
+        staffCode,
+        createDto.firstNameEn,
+        createDto.lastNameEn,
+        createDto.email,
+        createDto.mobile,
+        createDto.department,
+        createDto.position,
+        createDto.employmentType || 'PERMANENT',
+        createDto.hireDate,
+        'ACTIVE',
+        true,
+      ],
+    );
+    return result;
   }
 
   async findAllStaff(schoolId: number): Promise<Staff[]> {
-    return this.staffRepository.find({
-      where: { schoolId, isActive: true, deletedAt: IsNull() },
-    });
+    return this.db.query<Staff>(
+      `SELECT * FROM staff WHERE school_id = $1 AND is_active = true AND deleted_at IS NULL`,
+      [schoolId],
+    );
   }
 
   async findOneStaff(id: number, schoolId?: number): Promise<Staff> {
-    const where: any = { staffId: id, deletedAt: IsNull() };
-    if (schoolId) where.schoolId = schoolId;
+    let query = `SELECT * FROM staff WHERE staff_id = $1 AND deleted_at IS NULL`;
+    const params: any[] = [id];
 
-    const staff = await this.staffRepository.findOne({
-      where,
-    });
+    if (schoolId) {
+      params.push(schoolId);
+      query += ` AND school_id = $${params.length}`;
+    }
+
+    const staff = await this.db.queryOne<Staff>(query, params);
     if (!staff) throw new NotFoundException(`Staff with ID ${id} not found`);
     return staff;
   }
 
-  // Nepal Tax Calculation Engine (2081/82 Rules)
   private calculateNepalTax(
     annualIncome: number,
     isTaxExempt: boolean,
@@ -138,15 +189,12 @@ export class HrService {
     return tax;
   }
 
-  // Process Payroll with Nepal Compliance
   async processPayroll(processDto: ProcessPayrollDto): Promise<Payroll> {
-    const existing = await this.payrollRepository.findOne({
-      where: {
-        staffId: processDto.staffId,
-        schoolId: processDto.schoolId,
-        salaryMonthBs: processDto.salaryMonthBs,
-      },
-    });
+    const existing = await this.db.queryOne<Payroll>(
+      `SELECT payroll_id FROM payrolls 
+       WHERE staff_id = $1 AND school_id = $2 AND salary_month_bs = $3`,
+      [processDto.staffId, processDto.schoolId, processDto.salaryMonthBs],
+    );
     if (existing) {
       throw new BadRequestException('Payroll already processed for this month');
     }
@@ -156,14 +204,12 @@ export class HrService {
       processDto.schoolId,
     );
 
-    // Calculate allowances (defaults if not provided)
     const houseRent =
       processDto.houseRentAllowance || processDto.basicSalary * 0.4;
     const transport =
       processDto.transportAllowance || processDto.basicSalary * 0.15;
     const medical = processDto.medicalAllowance || processDto.basicSalary * 0.1;
 
-    // ✅ FIXED: Use optional chaining for missing properties
     const grossSalary =
       processDto.basicSalary +
       houseRent +
@@ -182,11 +228,10 @@ export class HrService {
     const annualTax = this.calculateNepalTax(
       annualIncome,
       processDto.isTaxExempt || false,
-      processDto.panNumber || staff.panNumber,
+      processDto.panNumber || staff.pan_number || undefined,
     );
     const monthlyTax = annualTax / 12;
 
-    // ✅ FIXED: Use optional chaining for missing properties
     const totalDeductions =
       citDeduction +
       providentFund +
@@ -199,33 +244,41 @@ export class HrService {
     const paymentDate = new Date();
     const paymentDateBs = NepaliDateUtil.adToBs(paymentDate).bsDate;
 
-    // ✅ FIXED: Create payroll with explicit property mapping
-    const payroll = this.payrollRepository.create({
-      schoolId: processDto.schoolId,
-      staffId: processDto.staffId,
-      salaryMonthBs: processDto.salaryMonthBs,
-      paymentDate,
-      paymentDateBs,
-      basicSalary: processDto.basicSalary,
-      houseRentAllowance: houseRent,
-      transportAllowance: transport,
-      medicalAllowance: medical,
-      otherAllowances: processDto.otherAllowances || 0, // ✅ Added
-      grossSalary,
-      citDeduction,
-      ssfEmployeeContribution: ssfEmployee,
-      ssfEmployerContribution: ssfEmployer,
-      providentFund,
-      taxDeduction: monthlyTax,
-      otherDeductions: processDto.otherDeductions || 0, // ✅ Added
-      totalDeductions,
-      netSalary,
-      panNumber: processDto.panNumber || staff.panNumber,
-      isTaxExempt: processDto.isTaxExempt || false,
-      isPaid: true,
-    });
-
-    return this.payrollRepository.save(payroll);
+    const result = await this.db.insert<Payroll>(
+      `INSERT INTO payrolls (
+        school_id, staff_id, salary_month_bs, payment_date, payment_date_bs,
+        basic_salary, house_rent_allowance, transport_allowance, medical_allowance,
+        other_allowances, gross_salary, cit_deduction, ssf_employee_contribution,
+        ssf_employer_contribution, provident_fund, tax_deduction, other_deductions,
+        total_deductions, net_salary, pan_number, is_tax_exempt, is_paid
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
+      RETURNING *`,
+      [
+        processDto.schoolId,
+        processDto.staffId,
+        processDto.salaryMonthBs,
+        paymentDate,
+        paymentDateBs,
+        processDto.basicSalary,
+        houseRent,
+        transport,
+        medical,
+        processDto.otherAllowances || 0,
+        grossSalary,
+        citDeduction,
+        ssfEmployee,
+        ssfEmployer,
+        providentFund,
+        monthlyTax,
+        processDto.otherDeductions || 0,
+        totalDeductions,
+        netSalary,
+        processDto.panNumber || staff.pan_number,
+        processDto.isTaxExempt || false,
+        true,
+      ],
+    );
+    return result;
   }
 
   async getStaffPayroll(
@@ -233,18 +286,19 @@ export class HrService {
     schoolId: number,
     year?: string,
   ): Promise<Payroll[]> {
-    const where: any = { staffId, schoolId };
+    let query = `SELECT * FROM payrolls WHERE staff_id = $1 AND school_id = $2`;
+    const params: any[] = [staffId, schoolId];
+
     if (year) {
-      // ✅ FIXED: Use Like operator correctly
-      where.salaryMonthBs = Like(`${year}-%`);
+      params.push(`${year}-%`);
+      query += ` AND salary_month_bs LIKE $${params.length}`;
     }
-    return this.payrollRepository.find({
-      where,
-      order: { paymentDate: 'DESC' },
-    });
+
+    query += ` ORDER BY payment_date DESC`;
+
+    return this.db.query<Payroll>(query, params);
   }
 
-  // Leave Management
   async createLeaveRequest(
     createDto: CreateLeaveRequestDto,
   ): Promise<LeaveRequest> {
@@ -255,58 +309,69 @@ export class HrService {
     const startBs = NepaliDateUtil.adToBs(createDto.startDate).bsDate;
     const endBs = NepaliDateUtil.adToBs(createDto.endDate).bsDate;
 
-    const leaveRequest = this.leaveRequestRepository.create({
-      schoolId: createDto.schoolId,
-      staffId: createDto.staffId,
-      leaveTypeId: createDto.leaveTypeId,
-      startDate: createDto.startDate,
-      startDateBs: startBs,
-      endDate: createDto.endDate,
-      endDateBs: endBs,
-      daysRequested: createDto.daysRequested,
-      reason: createDto.reason,
-      status: 'PENDING',
-      isActive: true,
-    });
-
-    return this.leaveRequestRepository.save(leaveRequest);
+    const result = await this.db.insert<LeaveRequest>(
+      `INSERT INTO leave_requests (
+        school_id, staff_id, leave_type_id, start_date, start_date_bs,
+        end_date, end_date_bs, days_requested, reason, status, is_active
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      RETURNING *`,
+      [
+        createDto.schoolId,
+        createDto.staffId,
+        createDto.leaveTypeId,
+        createDto.startDate,
+        startBs,
+        createDto.endDate,
+        endBs,
+        createDto.daysRequested,
+        createDto.reason,
+        'PENDING',
+        true,
+      ],
+    );
+    return result;
   }
 
   async approveLeaveRequest(
     leaveRequestId: number,
     approvedBy: number,
   ): Promise<LeaveRequest> {
-    const leaveRequest = await this.leaveRequestRepository.findOne({
-      where: { leaveRequestId },
-    });
+    const leaveRequest = await this.db.queryOne<LeaveRequest>(
+      `SELECT * FROM leave_requests WHERE leave_request_id = $1`,
+      [leaveRequestId],
+    );
     if (!leaveRequest) throw new NotFoundException('Leave request not found');
     if (leaveRequest.status !== 'PENDING') {
       throw new BadRequestException('Leave request is not pending');
     }
 
-    leaveRequest.status = 'APPROVED';
-    leaveRequest.approvedBy = approvedBy;
-    return this.leaveRequestRepository.save(leaveRequest);
+    const result = await this.db.insert<LeaveRequest>(
+      `UPDATE leave_requests SET status = 'APPROVED', approved_by = $1 WHERE leave_request_id = $2 RETURNING *`,
+      [approvedBy, leaveRequestId],
+    );
+    return result;
   }
 
   async rejectLeaveRequest(
     leaveRequestId: number,
     rejectionReason: string,
   ): Promise<LeaveRequest> {
-    const leaveRequest = await this.leaveRequestRepository.findOne({
-      where: { leaveRequestId },
-    });
+    const leaveRequest = await this.db.queryOne<LeaveRequest>(
+      `SELECT * FROM leave_requests WHERE leave_request_id = $1`,
+      [leaveRequestId],
+    );
     if (!leaveRequest) throw new NotFoundException('Leave request not found');
     if (leaveRequest.status !== 'PENDING') {
       throw new BadRequestException('Leave request is not pending');
     }
 
-    leaveRequest.status = 'REJECTED';
-    leaveRequest.rejectionReason = rejectionReason;
-    return this.leaveRequestRepository.save(leaveRequest);
+    const result = await this.db.insert<LeaveRequest>(
+      `UPDATE leave_requests SET status = 'REJECTED', rejection_reason = $1 WHERE leave_request_id = $2 RETURNING *`,
+      [rejectionReason, leaveRequestId],
+    );
+    return result;
   }
 
-  // Nepal Holiday Calendar
   getNepalHolidays(year: number): any[] {
     const holidays = [
       {
@@ -328,65 +393,78 @@ export class HrService {
     return holidays;
   }
 
-  // Generate Payslip with NPR Formatting
   async generatePayslip(payrollId: number): Promise<any> {
-    const payroll = await this.payrollRepository.findOne({
-      where: { payrollId },
-    });
+    const payroll = await this.db.queryOne<Payroll>(
+      `SELECT * FROM payrolls WHERE payroll_id = $1`,
+      [payrollId],
+    );
     if (!payroll) throw new NotFoundException('Payroll record not found');
 
-    const staff = await this.findOneStaff(payroll.staffId);
+    const staff = await this.findOneStaff(payroll.staff_id);
+
+    const getFullName = (lang: 'en' | 'np') => {
+      if (lang === 'np' && staff.first_name_np) {
+        return `${staff.first_name_np} ${staff.middle_name_np || ''} ${staff.last_name_np}`.trim();
+      }
+      return `${staff.first_name_en} ${staff.middle_name_en || ''} ${staff.last_name_en}`.trim();
+    };
 
     return {
       payrollId,
-      staffName: staff.getFullName('en'),
-      staffNameNp: staff.getFullName('np'),
+      staffName: getFullName('en'),
+      staffNameNp: getFullName('np'),
       position: staff.position,
-      salaryMonth: payroll.salaryMonthBs,
-      paymentDate: payroll.paymentDate,
-      paymentDateBs: payroll.paymentDateBs,
+      salaryMonth: payroll.salary_month_bs,
+      paymentDate: payroll.payment_date,
+      paymentDateBs: payroll.payment_date_bs,
       earnings: {
-        basicSalary: NepaliNumberUtil.formatCurrency(payroll.basicSalary, 'en'),
+        basicSalary: NepaliNumberUtil.formatCurrency(
+          payroll.basic_salary,
+          'en',
+        ),
         houseRentAllowance: NepaliNumberUtil.formatCurrency(
-          payroll.houseRentAllowance,
+          payroll.house_rent_allowance,
           'en',
         ),
         transportAllowance: NepaliNumberUtil.formatCurrency(
-          payroll.transportAllowance,
+          payroll.transport_allowance,
           'en',
         ),
         medicalAllowance: NepaliNumberUtil.formatCurrency(
-          payroll.medicalAllowance,
+          payroll.medical_allowance,
           'en',
         ),
-        grossSalary: NepaliNumberUtil.formatCurrency(payroll.grossSalary, 'en'),
+        grossSalary: NepaliNumberUtil.formatCurrency(
+          payroll.gross_salary,
+          'en',
+        ),
       },
       deductions: {
         citDeduction: NepaliNumberUtil.formatCurrency(
-          payroll.citDeduction,
+          payroll.cit_deduction,
           'en',
         ),
         ssfEmployeeContribution: NepaliNumberUtil.formatCurrency(
-          payroll.ssfEmployeeContribution,
+          payroll.ssf_employee_contribution,
           'en',
         ),
         providentFund: NepaliNumberUtil.formatCurrency(
-          payroll.providentFund,
+          payroll.provident_fund,
           'en',
         ),
         taxDeduction: NepaliNumberUtil.formatCurrency(
-          payroll.taxDeduction,
+          payroll.tax_deduction,
           'en',
         ),
         totalDeductions: NepaliNumberUtil.formatCurrency(
-          payroll.totalDeductions,
+          payroll.total_deductions,
           'en',
         ),
       },
-      netSalary: NepaliNumberUtil.formatCurrency(payroll.netSalary, 'en'),
-      netSalaryNp: NepaliNumberUtil.formatCurrency(payroll.netSalary, 'ne'),
-      panNumber: payroll.panNumber,
-      remarks: payroll.remarks,
+      netSalary: NepaliNumberUtil.formatCurrency(payroll.net_salary, 'en'),
+      netSalaryNp: NepaliNumberUtil.formatCurrency(payroll.net_salary, 'ne'),
+      panNumber: payroll.pan_number,
+      remarks: null,
     };
   }
 }

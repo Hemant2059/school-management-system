@@ -91,4 +91,40 @@ export class CreateAttendanceDto {
   @IsOptional()
   @IsString()
   readonly remarks?: string;
+
+  @ApiPropertyOptional({
+    description: 'Attendance date in Bikram Sambat',
+    example: '2081-11-02',
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  readonly attendanceDateBs?: string;
+
+  @ApiPropertyOptional({
+    description: 'Check-in time (HH:MM format)',
+    example: '08:30',
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  readonly checkInTime?: string;
+
+  @ApiPropertyOptional({
+    description: 'Check-out time (HH:MM format)',
+    example: '14:30',
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  readonly checkOutTime?: string;
+
+  @ApiPropertyOptional({
+    description: 'Biometric device ID',
+    example: 'BIO-001',
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  readonly biometricDeviceId?: string;
 }

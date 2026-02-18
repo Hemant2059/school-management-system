@@ -111,4 +111,31 @@ export class CreateExamDto {
   @IsNotEmpty()
   @IsInt()
   readonly passMarks: number;
+
+  @ApiPropertyOptional({
+    description: 'Exam date in Bikram Sambat',
+    example: '2080-11-30',
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  readonly examDateBs?: string;
+
+  @ApiPropertyOptional({
+    description: 'Academic year (e.g., 2081)',
+    example: '2081',
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  readonly academicYear?: string;
+
+  @ApiPropertyOptional({
+    description: 'Remarks',
+    example: 'Final examination for Grade 10',
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  readonly remarks?: string;
 }

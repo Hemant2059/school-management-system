@@ -3,10 +3,10 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Not } from 'typeorm';
-import { User } from './entities/user.entity';
+import { DatabaseService } from '../database/database.service';
+import { User } from './entities/interfaces';
 import { CreateUserDto } from './dto/create-user.dto';
+import { UpdateUserDto } from './dto/update-user.dto';
 import { PageOptionsDto } from '../common/dto/page-options.dto';
 import { PageDto } from '../common/dto/page.dto';
 import { PageMetaDto } from '../common/dto/page-meta.dto';
@@ -14,19 +14,13 @@ import * as bcrypt from 'bcryptjs';
 
 @Injectable()
 export class UserService {
-  constructor(
-    @InjectRepository(User)
-    private userRepository: Repository<User>,
-  ) {}
+  constructor(private db: DatabaseService) {}
 
   async create(createUserDto: CreateUserDto): Promise<User> {
-    const existing = await this.userRepository.findOne({
-      where: [
-        { username: createUserDto.username },
-        { email: createUserDto.email },
-        { phone: createUserDto.phone },
-      ],
-    });
+    const existing = await this.db.queryOne<User>(
+      `SELECT * FROM users WHERE username = $1 OR email = $2 OR phone = $3`,
+      [createUserDto.username, createUserDto.email, createUserDto.phone],
+    );
 
     if (existing) {
       throw new BadRequestException(
@@ -36,38 +30,49 @@ export class UserService {
 
     const passwordHash = await bcrypt.hash(createUserDto.password, 10);
 
-    const user = this.userRepository.create({
-      ...createUserDto,
-      passwordHash,
-      isVerified: false,
-      isActive: true,
-      failedLoginAttempts: 0,
-    });
+    const user = await this.db.insert<User>(
+      `INSERT INTO users (school_id, username, email, phone, password_hash, full_name, user_type, is_verified, is_active, failed_login_attempts)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, false, true, 0)
+       RETURNING *`,
+      [
+        createUserDto.schoolId,
+        createUserDto.username,
+        createUserDto.email,
+        createUserDto.phone,
+        passwordHash,
+        createUserDto.fullName,
+        createUserDto.userType,
+      ],
+    );
 
-    return this.userRepository.save(user);
+    return user;
   }
 
   async findAll(pageOptionsDto: PageOptionsDto): Promise<PageDto<User>> {
-    const queryBuilder = this.userRepository.createQueryBuilder('user');
+    const page = pageOptionsDto.page || 1;
+    const take = pageOptionsDto.take || 10;
+    const offset = (page - 1) * take;
 
-    queryBuilder
-      .where('user.isActive = true')
-      .orderBy('user.createdAt', pageOptionsDto.order)
-      .skip(pageOptionsDto.skip)
-      .take(pageOptionsDto.take);
+    const users = await this.db.query<User>(
+      `SELECT * FROM users WHERE is_active = true ORDER BY created_at ${pageOptionsDto.order || 'DESC'} LIMIT $1 OFFSET $2`,
+      [take, offset],
+    );
 
-    const itemCount = await queryBuilder.getCount();
-    const { entities } = await queryBuilder.getRawAndEntities();
+    const [countResult] = await this.db.query<{ count: string }>(
+      `SELECT COUNT(*) as count FROM users WHERE is_active = true`,
+    );
 
-    const pageMetaDto = new PageMetaDto({ itemCount, pageOptionsDto });
+    const itemCount = parseInt(countResult.count, 10);
+    const pageMeta = new PageMetaDto({ itemCount, pageOptionsDto });
 
-    return new PageDto(entities, pageMetaDto);
+    return new PageDto(users, pageMeta);
   }
 
-  async findOne(id: number): Promise<User> {
-    const user = await this.userRepository.findOne({
-      where: { userId: id, isActive: true },
-    });
+  async findById(id: number): Promise<User> {
+    const user = await this.db.queryOne<User>(
+      `SELECT * FROM users WHERE user_id = $1 AND is_active = true`,
+      [id],
+    );
 
     if (!user) {
       throw new NotFoundException(`User with ID ${id} not found`);
@@ -76,39 +81,41 @@ export class UserService {
     return user;
   }
 
+  async findOne(id: number): Promise<User | null> {
+    return this.findById(id);
+  }
+
   async findByUsernameOrEmailOrPhone(identifier: string): Promise<User | null> {
-    return this.userRepository.findOne({
-      where: [
-        { username: identifier, isActive: true },
-        { email: identifier, isActive: true },
-        { phone: identifier, isActive: true },
-      ],
-    });
+    return this.db.queryOne<User>(
+      `SELECT * FROM users WHERE (username = $1 OR email = $1 OR phone = $1) AND is_active = true`,
+      [identifier],
+    );
   }
 
   async findOneWithSchool(id: number): Promise<User> {
-    const user = await this.userRepository.findOne({
-      where: { userId: id, isActive: true },
-      relations: ['school'],
-    });
-
-    if (!user) {
-      throw new NotFoundException(`User with ID ${id} not found`);
-    }
-
+    const user = await this.findById(id);
     return user;
   }
 
   async incrementFailedLogin(userId: number): Promise<void> {
-    await this.userRepository.increment({ userId }, 'failedLoginAttempts', 1);
+    await this.db.query(
+      `UPDATE users SET failed_login_attempts = failed_login_attempts + 1 WHERE user_id = $1`,
+      [userId],
+    );
   }
 
   async resetFailedLogins(userId: number): Promise<void> {
-    await this.userRepository.update(userId, { failedLoginAttempts: 0 });
+    await this.db.query(
+      `UPDATE users SET failed_login_attempts = 0, locked_until = NULL WHERE user_id = $1`,
+      [userId],
+    );
   }
 
-  async lockAccount(userId: number, until: Date): Promise<void> {
-    await this.userRepository.update(userId, { lockedUntil: until });
+  async lockAccount(userId: number, lockedUntil: Date): Promise<void> {
+    await this.db.query(
+      `UPDATE users SET locked_until = $2 WHERE user_id = $1`,
+      [userId, lockedUntil],
+    );
   }
 
   async updateLastLoginInfo(
@@ -116,41 +123,53 @@ export class UserService {
     ip: string,
     userAgent: string,
   ): Promise<void> {
-    await this.userRepository.update(userId, {
-      lastLoginAt: new Date(),
-      lastLoginIp: ip,
-      lastLoginAgent: userAgent,
-    });
+    await this.db.query(
+      `UPDATE users SET last_login_at = NOW(), last_login_ip = $2, last_login_agent = $3 WHERE user_id = $1`,
+      [userId, ip, userAgent],
+    );
   }
 
-  async update(
-    id: number,
-    updateUserDto: Partial<CreateUserDto>,
-  ): Promise<User> {
-    const user = await this.findOne(id);
+  async update(id: number, updateUserDto: UpdateUserDto): Promise<User> {
+    const user = await this.findById(id);
+
+    const updates: string[] = [];
+    const params: any[] = [];
+    let paramIndex = 1;
 
     if (updateUserDto.email) {
-      const existing = await this.userRepository.findOne({
-        where: {
-          email: updateUserDto.email,
-          userId: Not(id),
-          isActive: true,
-        },
-      });
-      if (existing) {
-        throw new BadRequestException('Email already in use');
-      }
+      updates.push(`email = $${paramIndex++}`);
+      params.push(updateUserDto.email);
+    }
+    if (updateUserDto.phone) {
+      updates.push(`phone = $${paramIndex++}`);
+      params.push(updateUserDto.phone);
+    }
+    if (updateUserDto.fullName) {
+      updates.push(`full_name = $${paramIndex++}`);
+      params.push(updateUserDto.fullName);
+    }
+    if (updateUserDto.password) {
+      const passwordHash = await bcrypt.hash(updateUserDto.password, 10);
+      updates.push(`password_hash = $${paramIndex++}`);
+      params.push(passwordHash);
     }
 
-    Object.assign(user, updateUserDto);
-    return this.userRepository.save(user);
+    if (updates.length > 0) {
+      params.push(id);
+      await this.db.query(
+        `UPDATE users SET ${updates.join(', ')}, updated_at = NOW() WHERE user_id = $${paramIndex}`,
+        params,
+      );
+    }
+
+    return this.findById(id);
   }
 
   async remove(id: number): Promise<void> {
-    await this.findOne(id);
-    await this.userRepository.update(id, {
-      isActive: false,
-      deletedAt: new Date(),
-    });
+    await this.findById(id);
+    await this.db.query(
+      `UPDATE users SET is_active = false, deleted_at = NOW() WHERE user_id = $1`,
+      [id],
+    );
   }
 }

@@ -120,13 +120,13 @@ export class FeeController {
     @Param('classId', ParseIntPipe) classId: number,
     @Query('schoolId', ParseIntPipe) schoolId: number,
     @Query('sectionId', ParseIntPipe) sectionId?: number,
-    @Query('academicYearId', ParseIntPipe) academicYearId?: number,
+    @Query('academicYear') academicYear?: string,
   ) {
     return this.feeService.getFeeStructureForClass(
       schoolId,
       classId,
       sectionId,
-      academicYearId,
+      academicYear,
     );
   }
 
@@ -174,9 +174,9 @@ export class FeeController {
   @ApiResponse({ status: 404, description: 'Student not found' })
   getStudentFees(
     @Param('studentId', ParseIntPipe) studentId: number,
-    @Query('academicYearId', ParseIntPipe) academicYearId?: number,
+    @Query('academicYear') academicYear?: string,
   ) {
-    return this.feeService.getStudentFees(studentId, academicYearId);
+    return this.feeService.getStudentFees(studentId, academicYear);
   }
 
   // Payments

@@ -3,66 +3,80 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Section } from './entities/section.entity';
+import { DatabaseService } from '../database/database.service';
 import { CreateSectionDto } from './dto/create-section.dto';
 import { UpdateSectionDto } from './dto/update-section.dto';
 
+export interface Section {
+  section_id: number;
+  school_id: number;
+  class_id: number;
+  section_name: string;
+  section_code: string;
+  section_order: number;
+  capacity: number;
+  is_active: boolean;
+  created_at: Date;
+  updated_at: Date;
+  deleted_at: Date | null;
+}
+
 @Injectable()
 export class SectionService {
-  constructor(
-    @InjectRepository(Section)
-    private sectionRepository: Repository<Section>,
-  ) {}
+  constructor(private db: DatabaseService) {}
 
   async create(createDto: CreateSectionDto): Promise<Section> {
-    const existing = await this.sectionRepository.findOne({
-      where: {
-        sectionCode: createDto.sectionCode,
-        classId: createDto.classId,
-        schoolId: createDto.schoolId,
-        isActive: true,
-      },
-    });
+    const existing = await this.db.queryOne<Section>(
+      `SELECT * FROM sections WHERE section_code = $1 AND class_id = $2 AND school_id = $3 AND is_active = true`,
+      [createDto.sectionCode, createDto.classId, createDto.schoolId],
+    );
+
     if (existing) {
       throw new BadRequestException(
         `Section ${createDto.sectionCode} already exists in this class`,
       );
     }
 
-    const section = this.sectionRepository.create({
-      schoolId: createDto.schoolId,
-      classId: createDto.classId,
-      sectionName: createDto.sectionName,
-      sectionCode: createDto.sectionCode,
-      sectionOrder: createDto.sectionOrder ?? 0,
-      capacity: createDto.capacity,
-      isActive: true,
-    });
-
-    return this.sectionRepository.save(section);
+    return this.db.insert<Section>(
+      `INSERT INTO sections (school_id, class_id, section_name, section_code, section_order, capacity, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, true)
+       RETURNING *`,
+      [
+        createDto.schoolId,
+        createDto.classId,
+        createDto.sectionName,
+        createDto.sectionCode,
+        createDto.sectionOrder ?? 0,
+        createDto.capacity ?? 40,
+      ],
+    );
   }
 
   async findAll(schoolId: number, classId?: number): Promise<Section[]> {
-    const where: any = { schoolId, isActive: true };
-    if (classId) where.classId = classId;
-
-    return this.sectionRepository.find({
-      where,
-      order: { sectionOrder: 'ASC' },
-    });
+    if (classId) {
+      return this.db.query<Section>(
+        `SELECT * FROM sections WHERE school_id = $1 AND class_id = $2 AND is_active = true ORDER BY section_order ASC`,
+        [schoolId, classId],
+      );
+    }
+    return this.db.query<Section>(
+      `SELECT * FROM sections WHERE school_id = $1 AND is_active = true ORDER BY section_order ASC`,
+      [schoolId],
+    );
   }
 
   async findOne(id: number, schoolId?: number): Promise<Section> {
-    const where: any = { sectionId: id, isActive: true };
-    if (schoolId) where.schoolId = schoolId;
+    const section = await this.db.queryOne<Section>(
+      schoolId
+        ? `SELECT * FROM sections WHERE section_id = $1 AND school_id = $2 AND is_active = true`
+        : `SELECT * FROM sections WHERE section_id = $1 AND is_active = true`,
+      schoolId ? [id, schoolId] : [id],
+    );
 
-    const section = await this.sectionRepository.findOne({
-      where,
-    });
-    if (!section)
+    if (!section) {
       throw new NotFoundException(`Section with ID ${id} not found`);
+    }
+
     return section;
   }
 
@@ -71,43 +85,41 @@ export class SectionService {
     schoolId: number,
     updateDto: UpdateSectionDto,
   ): Promise<Section> {
-    const section = await this.findOne(id, schoolId);
-    if (updateDto.sectionName !== undefined)
-      section.sectionName = updateDto.sectionName;
-    if (updateDto.sectionCode !== undefined)
-      section.sectionCode = updateDto.sectionCode;
-    if (updateDto.sectionOrder !== undefined)
-      section.sectionOrder = updateDto.sectionOrder;
-    if (updateDto.capacity !== undefined) section.capacity = updateDto.capacity;
-    return this.sectionRepository.save(section);
+    await this.findOne(id, schoolId);
+
+    const updates: string[] = [];
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    const fieldMap: Record<string, string> = {
+      sectionName: 'section_name',
+      sectionOrder: 'section_order',
+      capacity: 'capacity',
+    };
+
+    for (const [key, dbField] of Object.entries(fieldMap)) {
+      if (updateDto[key as keyof UpdateSectionDto] !== undefined) {
+        updates.push(`${dbField} = $${paramIndex++}`);
+        params.push(updateDto[key as keyof UpdateSectionDto]);
+      }
+    }
+
+    if (updates.length > 0) {
+      params.push(id);
+      await this.db.query(
+        `UPDATE sections SET ${updates.join(', ')}, updated_at = NOW() WHERE section_id = $${paramIndex}`,
+        params,
+      );
+    }
+
+    return this.findOne(id, schoolId);
   }
 
   async remove(id: number, schoolId: number): Promise<void> {
     await this.findOne(id, schoolId);
-    await this.sectionRepository.update(id, {
-      isActive: false,
-      deletedAt: new Date(),
-    });
-  }
-
-  async getSectionsWithClassInfo(
-    schoolId: number,
-    classId: number,
-  ): Promise<any[]> {
-    return this.sectionRepository
-      .createQueryBuilder('section')
-      .innerJoin('section.academicClass', 'class')
-      .select([
-        'section.sectionId',
-        'section.sectionName',
-        'section.sectionCode',
-        'section.capacity',
-        'class.className',
-        'class.classCode',
-      ])
-      .where('section.schoolId = :schoolId', { schoolId })
-      .andWhere('section.classId = :classId', { classId })
-      .andWhere('section.isActive = true')
-      .getMany();
+    await this.db.query(
+      `UPDATE sections SET is_active = false, deleted_at = NOW() WHERE section_id = $1`,
+      [id],
+    );
   }
 }

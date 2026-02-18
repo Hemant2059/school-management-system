@@ -3,435 +3,257 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, IsNull, DataSource } from 'typeorm';
-import { Attendance } from './entities/attendance.entity';
+import { DatabaseService } from '../database/database.service';
 import { CreateAttendanceDto } from './dto/create-attendance.dto';
 import { UpdateAttendanceDto } from './dto/update-attendance.dto';
-import { BulkAttendanceDto } from './dto/bulk-attendance.dto';
-import { GetAttendanceDto } from './dto/get-attendance.dto';
-import { NepaliDateUtil } from '../utils/nepali-date.util';
-import {
-  withBsDates,
-  withBsDatesArray,
-} from '../utils/response-with-bs-dates.util';
+import { Attendance as DbAttendance } from '../database/entities/interfaces';
 
-const ATTENDANCE_DATE_KEYS = [
-  'attendanceDate',
-  'createdAt',
-  'updatedAt',
-  'deletedAt',
-];
+export interface Attendance {
+  attendance_id: number;
+  school_id: number;
+  student_id: number;
+  class_id: number | null;
+  section_id: number | null;
+  academic_year: string;
+  attendance_date: Date;
+  attendance_date_bs: string | null;
+  status: string;
+  session: string | null;
+  remarks: string | null;
+  check_in_time: string | null;
+  check_out_time: string | null;
+  biometric_device_id: string | null;
+  created_at: Date;
+  updated_at: Date;
+  deleted_at: Date | null;
+  created_by: number | null;
+  updated_by: number | null;
+}
 
 @Injectable()
 export class AttendanceService {
-  constructor(
-    private dataSource: DataSource,
-    @InjectRepository(Attendance)
-    private attendanceRepository: Repository<Attendance>,
-  ) {}
+  constructor(private db: DatabaseService) {}
 
   async create(
-    createDto: CreateAttendanceDto,
-    userId: number = 1,
+    createDto: CreateAttendanceDto & {
+      classId?: number;
+      sectionId?: number;
+      session?: string;
+      attendanceDateBs?: string;
+      checkInTime?: string;
+      checkOutTime?: string;
+      biometricDeviceId?: string;
+    },
+    userId?: number,
   ): Promise<Attendance> {
-    // Check if attendance already exists for this student on this date
-    // Optimization: Use count instead of findOne for existence check
-    const count = await this.attendanceRepository.count({
-      where: {
-        studentId: createDto.studentId,
-        attendanceDate: createDto.attendanceDate,
-        classId: createDto.classId,
-        schoolId: createDto.schoolId,
-        deletedAt: IsNull(),
-      },
-    });
+    const existing = await this.db.queryOne<Attendance>(
+      `SELECT * FROM attendance_records WHERE student_id = $1 AND academic_year = $2 AND attendance_date = $3`,
+      [createDto.studentId, createDto.academicYear, createDto.attendanceDate],
+    );
 
-    if (count > 0) {
+    if (existing) {
       throw new BadRequestException(
-        'Attendance already recorded for this student on this date',
+        'Attendance already marked for this student on this date',
       );
     }
 
-    // Convert AD date to BS
-    const bsDate = NepaliDateUtil.adToBs(createDto.attendanceDate).bsDate;
-
-    // Use raw SQL insert for performance (optional for single insert, but good practice)
-    const result = await this.dataSource.query(
-      `INSERT INTO attendance_records (
-        school_id, student_id, class_id, section_id, attendance_date, 
-        attendance_date_bs, status, academic_year, session, remarks, 
-        created_by, updated_by
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12) 
-      RETURNING *`,
+    return this.db.insert<Attendance>(
+      `INSERT INTO attendance_records (school_id, student_id, class_id, section_id, academic_year, attendance_date, attendance_date_bs, status, remarks, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       RETURNING *`,
       [
         createDto.schoolId,
         createDto.studentId,
-        createDto.classId,
-        createDto.sectionId,
-        createDto.attendanceDate,
-        bsDate,
-        createDto.status,
+        createDto.classId || null,
+        createDto.sectionId || null,
         createDto.academicYear,
-        createDto.session ?? 'FULL_DAY',
-        createDto.remarks,
-        userId,
-        userId,
+        createDto.attendanceDate,
+        createDto.attendanceDateBs || null,
+        createDto.status,
+        createDto.remarks || null,
+        userId || null,
       ],
     );
-
-    return withBsDates(result[0], ATTENDANCE_DATE_KEYS);
   }
 
-  async createBulk(
-    bulkDto: BulkAttendanceDto,
-    userId: number = 1,
-  ): Promise<Attendance[]> {
-    // Convert AD date to BS (once for all records)
-    const bsDate = NepaliDateUtil.adToBs(bulkDto.attendanceDate).bsDate;
-
-    // Prepare bulk insert values
-    // Filter duplicates via SQL "ON CONFLICT DO NOTHING" or "NOT EXISTS" check efficiently
-    // But for simplicity and speed, we check existence in bulk or trust constraints?
-    // Let's use a raw query to insert only non-existing records
-
-    const values: any[] = [];
-    const placeholders: string[] = [];
-    let paramIndex = 1;
-
-    for (const record of bulkDto.records) {
-      placeholders.push(
-        `($${paramIndex}, $${paramIndex + 1}, $${paramIndex + 2}, $${paramIndex + 3}, $${paramIndex + 4}, $${paramIndex + 5}, $${paramIndex + 6}, $${paramIndex + 7}, $${paramIndex + 8}, $${paramIndex + 9}, $${paramIndex + 10}, $${paramIndex + 11})`,
-      );
-      values.push(
-        bulkDto.schoolId,
-        record.studentId,
-        bulkDto.classId,
-        bulkDto.sectionId,
-        bulkDto.attendanceDate,
-        bsDate,
-        record.status,
-        bulkDto.academicYear,
-        bulkDto.session ?? 'FULL_DAY',
-        record.remarks,
-        userId,
-        userId,
-      );
-      paramIndex += 12;
+  async createBulk(bulkDto: any, userId?: number): Promise<Attendance[]> {
+    const results: Attendance[] = [];
+    for (const dto of bulkDto.records) {
+      try {
+        const record = await this.create(dto, userId);
+        results.push(record);
+      } catch (e) {
+        // Skip duplicates
+      }
     }
-
-    if (values.length === 0) return [];
-
-    // Construct raw bulk insert query
-    // Note: TypeORM doesn't support bulk insert with conflict handling easily in standard API
-    // Using simple INSERT for now, assuming frontend checks or we catch errors.
-    // Ideally we should check existence first or use ON CONFLICT.
-    // For now, let's keep it simple: insert all. If uniqueness is enforced by DB, it will fail.
-    // If not, we might have duplicates. The previous logic checked one by one which is slow.
-    // Optimization: Check for existing records in one query
-
-    const existingRecords = await this.attendanceRepository.find({
-      where: {
-        schoolId: bulkDto.schoolId,
-        classId: bulkDto.classId,
-        attendanceDate: bulkDto.attendanceDate,
-      },
-      select: ['studentId'],
-    });
-
-    const existingStudentIds = new Set(existingRecords.map((r) => r.studentId));
-
-    const newRecords = bulkDto.records
-      .filter((r) => !existingStudentIds.has(r.studentId))
-      .map((record) => ({
-        schoolId: bulkDto.schoolId,
-        studentId: record.studentId,
-        classId: bulkDto.classId,
-        sectionId: bulkDto.sectionId,
-        attendanceDate: bulkDto.attendanceDate,
-        attendanceDateBs: bsDate,
-        status: record.status,
-        academicYear: bulkDto.academicYear,
-        session: bulkDto.session ?? 'FULL_DAY',
-        remarks: record.remarks,
-        createdBy: userId,
-        updatedBy: userId,
-      }));
-
-    if (newRecords.length === 0) return [];
-
-    return this.attendanceRepository.save(newRecords);
+    return results;
   }
 
-  async findAll(
-    schoolId: number,
-    getAttendanceDto: GetAttendanceDto,
-  ): Promise<Attendance[]> {
-    const query = this.attendanceRepository
-      .createQueryBuilder('attendance')
-      .where('attendance.schoolId = :schoolId', { schoolId })
-      .andWhere('attendance.deletedAt IS NULL');
-
-    if (getAttendanceDto.classId) {
-      query.andWhere('attendance.classId = :classId', {
-        classId: getAttendanceDto.classId,
-      });
+  async findAll(schoolId: number, query: any): Promise<Attendance[]> {
+    const academicYear = query?.academicYear || query?.academic_year;
+    if (!academicYear) {
+      return [];
     }
-
-    if (getAttendanceDto.sectionId) {
-      query.andWhere('attendance.sectionId = :sectionId', {
-        sectionId: getAttendanceDto.sectionId,
-      });
-    }
-
-    if (getAttendanceDto.startDate && getAttendanceDto.endDate) {
-      query.andWhere(
-        'attendance.attendanceDate BETWEEN :startDate AND :endDate',
-        {
-          startDate: new Date(getAttendanceDto.startDate),
-          endDate: new Date(getAttendanceDto.endDate),
-        },
-      );
-    }
-
-    if (getAttendanceDto.studentId) {
-      query.andWhere('attendance.studentId = :studentId', {
-        studentId: getAttendanceDto.studentId,
-      });
-    }
-
-    if (getAttendanceDto.academicYear) {
-      query.andWhere('attendance.academicYear = :academicYear', {
-        academicYear: getAttendanceDto.academicYear,
-      });
-    }
-
-    query.orderBy('attendance.attendanceDate', 'DESC');
-    const list = await query.getMany();
-    return withBsDatesArray(list, ATTENDANCE_DATE_KEYS);
+    return this.db.query<Attendance>(
+      `SELECT * FROM attendance_records WHERE school_id = $1 AND academic_year = $2 ORDER BY attendance_date DESC`,
+      [schoolId, academicYear],
+    );
   }
 
-  async findOne(
-    id: number,
-    schoolId?: number,
-  ): Promise<Attendance & Record<string, string>> {
-    const where: any = { attendanceId: id, deletedAt: IsNull() };
-    if (schoolId) where.schoolId = schoolId;
-
-    const attendance = await this.attendanceRepository.findOne({
-      where,
-    });
+  async findOne(id: number, schoolId?: number): Promise<Attendance> {
+    const attendance = await this.db.queryOne<Attendance>(
+      schoolId
+        ? `SELECT * FROM attendance_records WHERE attendance_id = $1 AND school_id = $2`
+        : `SELECT * FROM attendance_records WHERE attendance_id = $1`,
+      schoolId ? [id, schoolId] : [id],
+    );
 
     if (!attendance) {
-      throw new NotFoundException(`Attendance record with ID ${id} not found`);
+      throw new NotFoundException(`Attendance with ID ${id} not found`);
     }
 
-    return withBsDates(attendance, ATTENDANCE_DATE_KEYS);
-  }
-
-  async findByStudent(
-    studentId: number,
-    schoolId: number,
-    startDate?: Date,
-    endDate?: Date,
-  ): Promise<Attendance[]> {
-    const query = this.attendanceRepository
-      .createQueryBuilder('attendance')
-      .where('attendance.studentId = :studentId', { studentId })
-      .andWhere('attendance.schoolId = :schoolId', { schoolId })
-      .andWhere('attendance.deletedAt IS NULL');
-
-    if (startDate && endDate) {
-      query.andWhere(
-        'attendance.attendanceDate BETWEEN :startDate AND :endDate',
-        {
-          startDate,
-          endDate,
-        },
-      );
-    }
-
-    query.orderBy('attendance.attendanceDate', 'DESC');
-    const list = await query.getMany();
-    return withBsDatesArray(list, ATTENDANCE_DATE_KEYS);
+    return attendance;
   }
 
   async update(
     id: number,
     schoolId: number,
     updateDto: UpdateAttendanceDto,
-    userId: number = 1,
+    userId?: number,
   ): Promise<Attendance> {
-    const attendance = await this.findOne(id, schoolId);
+    await this.findOne(id, schoolId);
 
-    if (updateDto.status !== undefined) attendance.status = updateDto.status;
-    if (updateDto.remarks !== undefined) attendance.remarks = updateDto.remarks;
-    if (updateDto.session !== undefined) attendance.session = updateDto.session;
+    const updates: string[] = [];
+    const params: any[] = [];
+    let paramIndex = 1;
 
-    attendance.updatedBy = userId;
-    const saved = await this.attendanceRepository.save(attendance);
-    return withBsDates(saved, ATTENDANCE_DATE_KEYS);
+    const fieldMap: Record<string, string> = {
+      status: 'status',
+      remarks: 'remarks',
+      checkInTime: 'check_in_time',
+      checkOutTime: 'check_out_time',
+      biometricDeviceId: 'biometric_device_id',
+    };
+
+    for (const [key, dbField] of Object.entries(fieldMap)) {
+      if (updateDto[key as keyof UpdateAttendanceDto] !== undefined) {
+        updates.push(`${dbField} = $${paramIndex++}`);
+        params.push(updateDto[key as keyof UpdateAttendanceDto]);
+      }
+    }
+
+    if (updates.length > 0) {
+      params.push(id);
+      await this.db.query(
+        `UPDATE attendance_records SET ${updates.join(', ')}, updated_at = NOW() WHERE attendance_id = $${paramIndex}`,
+        params,
+      );
+    }
+
+    return this.findOne(id, schoolId);
   }
 
   async remove(id: number, schoolId: number): Promise<void> {
     await this.findOne(id, schoolId);
-    await this.attendanceRepository.update(id, {
-      deletedAt: new Date(),
-    });
+    await this.db.query(
+      `UPDATE attendance_records SET deleted_at = NOW() WHERE attendance_id = $1`,
+      [id],
+    );
   }
 
-  // Get attendance statistics for a student
-  // Get attendance statistics for a student
+  async findByStudent(
+    studentId: number,
+    academicYearOrSchoolId: number | string,
+    start?: Date,
+    end?: Date,
+  ): Promise<Attendance[]> {
+    // If second param is schoolId (number), use it as schoolId filter
+    // Otherwise use it as academicYear
+    if (typeof academicYearOrSchoolId === 'number') {
+      // Called with (studentId, schoolId, start, end)
+      let query = `SELECT * FROM attendance_records WHERE student_id = $1 AND school_id = $2`;
+      const params: any[] = [studentId, academicYearOrSchoolId];
+
+      if (start) {
+        params.push(start);
+        query += ` AND attendance_date >= $${params.length}`;
+      }
+      if (end) {
+        params.push(end);
+        query += ` AND attendance_date <= $${params.length}`;
+      }
+
+      query += ` ORDER BY attendance_date DESC`;
+      return this.db.query<Attendance>(query, params);
+    }
+
+    // Original: called with (studentId, academicYear)
+    return this.db.query<Attendance>(
+      `SELECT * FROM attendance_records WHERE student_id = $1 AND academic_year = $2 ORDER BY attendance_date DESC`,
+      [studentId, academicYearOrSchoolId],
+    );
+  }
+
   async getStudentStatistics(
     studentId: number,
-    schoolId: number,
-    academicYear: string,
-  ): Promise<{
-    totalDays: number;
-    presentDays: number;
-    absentDays: number;
-    lateDays: number;
-    halfDayDays: number;
-    onLeaveDays: number;
-    attendancePercentage: number;
-  }> {
-    const result = await this.dataSource.query(
-      `
-      SELECT
-        COUNT(*) as total,
-        SUM(CASE WHEN status = 'PRESENT' THEN 1 ELSE 0 END) as present,
-        SUM(CASE WHEN status = 'ABSENT' THEN 1 ELSE 0 END) as absent,
-        SUM(CASE WHEN status = 'LATE' THEN 1 ELSE 0 END) as late,
-        SUM(CASE WHEN status = 'HALF_DAY' THEN 1 ELSE 0 END) as half_day,
-        SUM(CASE WHEN status = 'ON_LEAVE' THEN 1 ELSE 0 END) as on_leave
-      FROM attendance_records
-      WHERE student_id = $1 AND school_id = $2 AND academic_year = $3 AND deleted_at IS NULL
-    `,
-      [studentId, schoolId, academicYear],
-    );
-
-    const stats = result[0];
-    const totalDays = parseInt(stats.total || 0);
-    const presentDays = parseInt(stats.present || 0);
-    const absentDays = parseInt(stats.absent || 0);
-    const lateDays = parseInt(stats.late || 0);
-    const halfDayDays = parseInt(stats.half_day || 0);
-    const onLeaveDays = parseInt(stats.on_leave || 0);
-
-    const attendancePercentage =
-      totalDays > 0 ? ((presentDays + halfDayDays * 0.5) / totalDays) * 100 : 0;
+    academicYearOrSchoolId: string | number,
+    academicYear?: string | number,
+    start?: Date,
+    end?: Date,
+  ): Promise<any> {
+    const records = await this.findByStudent(studentId, String(academicYear));
+    const total = records.length;
+    const present = records.filter((r) => r.status === 'PRESENT').length;
+    const absent = records.filter((r) => r.status === 'ABSENT').length;
+    const leave = records.filter((r) => r.status === 'LEAVE').length;
 
     return {
-      totalDays,
-      presentDays,
-      absentDays,
-      lateDays,
-      halfDayDays,
-      onLeaveDays,
-      attendancePercentage: parseFloat(attendancePercentage.toFixed(2)),
+      total,
+      present,
+      absent,
+      leave,
+      percentage: total > 0 ? ((present / total) * 100).toFixed(2) : '0',
     };
   }
 
-  // Get monthly attendance report (Nepal BS format)
-  async getMonthlyReport(
-    schoolId: number,
-    classId: number,
-    sectionId: number,
-    nepaliYear: number,
-    nepaliMonth: number,
+  async getDateRangeStats(
+    studentId: number,
+    start: Date,
+    end: Date,
     academicYear: string,
   ): Promise<any> {
-    // Convert Nepali month/year range to AD dates
-    const startDateBs = `${nepaliYear}-${String(nepaliMonth).padStart(2, '0')}-01`;
-    const endDateBs = `${nepaliYear}-${String(nepaliMonth).padStart(2, '0')}-32`; // Let converter handle overflow
-
-    const startDateAd = NepaliDateUtil.bsToAd(startDateBs);
-    const endDateAd = NepaliDateUtil.bsToAd(endDateBs);
-
-    // Fetch records sorted by date using raw SQL
-    // We can also fetch student names if needed, but the current return structure
-    // groups by studentId.
-    const records = await this.dataSource.query(
-      `
-      SELECT * FROM attendance_records
-      WHERE school_id = $1
-      AND class_id = $2
-      AND section_id = $3
-      AND academic_year = $4
-      AND attendance_date BETWEEN $5 AND $6
-      AND deleted_at IS NULL
-      ORDER BY attendance_date ASC
-    `,
-      [schoolId, classId, sectionId, academicYear, startDateAd, endDateAd],
+    const records = await this.db.query<Attendance>(
+      `SELECT * FROM attendance_records WHERE student_id = $1 AND attendance_date BETWEEN $2 AND $3 AND academic_year = $4`,
+      [studentId, start, end, academicYear],
     );
 
-    const studentMap = new Map<number, any[]>();
-    records.forEach((record) => {
-      // Get or create array for this student
-      let studentRecords = studentMap.get(parseInt(record.student_id));
-      if (!studentRecords) {
-        studentRecords = [];
-        studentMap.set(parseInt(record.student_id), studentRecords);
-      }
-      studentRecords.push(
-        withBsDates(record, [
-          'attendance_date',
-          'created_at',
-          'updated_at',
-          'deleted_at',
-        ]),
-      );
-    });
-
-    // Format report with Nepali dates
-    const report = {
-      nepaliMonth: NepaliDateUtil.getMonthName(nepaliMonth, 'en'),
-      nepaliMonthNp: NepaliDateUtil.getMonthName(nepaliMonth, 'np'),
-      nepaliYear,
-      academicYear,
-      totalDays: records.length,
-      students: Array.from(studentMap.entries()).map(
-        ([studentId, attendance]) => ({
-          studentId,
-          attendance,
-          statistics: {
-            present: attendance.filter((a) => a.status === 'PRESENT').length,
-            absent: attendance.filter((a) => a.status === 'ABSENT').length,
-            late: attendance.filter((a) => a.status === 'LATE').length,
-            halfDay: attendance.filter((a) => a.status === 'HALF_DAY').length,
-          },
-        }),
-      ),
-    };
-
-    return report;
+    const present = records.filter((r) => r.status === 'PRESENT').length;
+    return { total: records.length, present };
   }
 
-  // Check if a date is a Nepal holiday
-  isNepalHoliday(date: Date): boolean {
-    const bsDate = NepaliDateUtil.adToBs(date);
-    const month = bsDate.bsDateObj.month;
-    const day = bsDate.bsDateObj.day;
+  async getMonthlyReport(
+    schoolId: number,
+    classId?: number | string,
+    sectionId?: number | string,
+    nepaliYear?: number | string,
+    nepaliMonth?: number | string,
+    academicYear?: string,
+    start?: Date,
+    end?: Date,
+  ): Promise<any[]> {
+    const year = Number(nepaliYear);
+    const month = Number(nepaliMonth);
+    const startDate = new Date(year, month - 1, 1);
+    const endDate = new Date(year, month, 0);
 
-    // Nepal public holidays (simplified - in production use full calendar)
-    const holidays = [
-      // Dashain (approx 15 days in Ashoj)
-      { month: 6, day: 1, name: 'Dashain Start' },
-      { month: 6, day: 15, name: 'Dashain End' },
-
-      // Tihar (5 days in Kartik)
-      { month: 7, day: 1, name: 'Tihar Start' },
-      { month: 7, day: 5, name: 'Bhai Tika' },
-
-      // Other major holidays
-      { month: 0, day: 1, name: 'Nepali New Year (Baisakh 1)' },
-      { month: 3, day: 15, name: 'Buddha Jayanti' },
-      { month: 8, day: 1, name: 'Maghe Sankranti' },
-      { month: 11, day: 1, name: 'Chhat' },
-    ];
-
-    return holidays.some(
-      (holiday) => holiday.month === month && holiday.day === day,
+    return this.db.query<any>(
+      `SELECT * FROM attendance_records WHERE school_id = $1 AND attendance_date BETWEEN $2 AND $3`,
+      [schoolId, startDate, endDate],
     );
+  }
+
+  isNepalHoliday(date: Date): boolean {
+    const day = date.getDay();
+    return day === 0; // Sunday
   }
 }

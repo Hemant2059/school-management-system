@@ -1,10 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, IsNull, LessThan, In } from 'typeorm';
-import { Student } from '../student/entities/student.entity';
-import { School } from '../school/entities/school.entity';
-import { StudentFee } from '../fee/entities/student-fee.entity';
-import { Attendance } from '../attendance/entities/attendance.entity';
+import { DatabaseService } from '../database/database.service';
 import { GOVT_FREE_SEAT_QUOTA_PERCENT } from '../common/constants/nepal.constants';
 import { NepaliDateUtil } from '../utils/nepali-date.util';
 
@@ -65,29 +60,18 @@ const HELP_FAQ = [
 
 @Injectable()
 export class AiService {
-  constructor(
-    @InjectRepository(Student)
-    private studentRepository: Repository<Student>,
-    @InjectRepository(School)
-    private schoolRepository: Repository<School>,
-    @InjectRepository(StudentFee)
-    private studentFeeRepository: Repository<StudentFee>,
-    @InjectRepository(Attendance)
-    private attendanceRepository: Repository<Attendance>,
-  ) {}
+  constructor(private db: DatabaseService) {}
 
-  /**
-   * Rule-based suggestions to help run the school (no external AI required).
-   */
   async getSuggestions(schoolId: number): Promise<{
     schoolId: number;
     generatedAt: string;
     generatedAtBs: string;
     suggestions: SuggestionItem[];
   }> {
-    const school = await this.schoolRepository.findOne({
-      where: { schoolId },
-    });
+    const school = await this.db.queryOne<{ school_id: number }>(
+      `SELECT school_id FROM schools WHERE school_id = $1`,
+      [schoolId],
+    );
     if (!school) {
       throw new NotFoundException(`School with ID ${schoolId} not found`);
     }
@@ -96,36 +80,38 @@ export class AiService {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const [totalStudents, freeSeatCount, schoolStudents] = await Promise.all([
-      this.studentRepository.count({
-        where: { schoolId, isActive: true, currentStatus: 'ACTIVE' },
-      }),
-      this.studentRepository.count({
-        where: {
-          schoolId,
-          isActive: true,
-          currentStatus: 'ACTIVE',
-          isGovtMandatedFreeSeat: true,
-        },
-      }),
-      this.studentRepository.find({
-        where: { schoolId, isActive: true, currentStatus: 'ACTIVE' },
-        select: ['studentId'],
-      }),
-    ]);
+    const [totalStudentsRes, freeSeatCountRes, schoolStudents] =
+      await Promise.all([
+        this.db.query<{ count: string }>(
+          `SELECT COUNT(*) as count FROM students WHERE school_id = $1 AND is_active = true AND current_status = 'ACTIVE'`,
+          [schoolId],
+        ),
+        this.db.query<{ count: string }>(
+          `SELECT COUNT(*) as count FROM students WHERE school_id = $1 AND is_active = true AND current_status = 'ACTIVE' AND is_govt_mandated_free_seat = true`,
+          [schoolId],
+        ),
+        this.db.query<{ student_id: number }>(
+          `SELECT student_id FROM students WHERE school_id = $1 AND is_active = true AND current_status = 'ACTIVE'`,
+          [schoolId],
+        ),
+      ]);
 
-    const studentIds = schoolStudents.map((s) => s.studentId);
-    const overdueFees =
-      studentIds.length > 0
-        ? await this.studentFeeRepository.find({
-            where: {
-              studentId: In(studentIds),
-              status: In(['PENDING', 'PARTIAL']),
-              dueDate: LessThan(today),
-              deletedAt: IsNull(),
-            },
-          })
-        : [];
+    const totalStudents = parseInt(totalStudentsRes[0]?.count || '0');
+    const freeSeatCount = parseInt(freeSeatCountRes[0]?.count || '0');
+    const studentIds = schoolStudents.map((s) => s.student_id);
+
+    let overdueFees: any[] = [];
+    if (studentIds.length > 0) {
+      const overdueFeesRes = await this.db.query<{
+        total_amount: string;
+        paid_amount: string;
+      }>(
+        `SELECT total_amount, paid_amount FROM student_fees 
+         WHERE student_id = ANY($1) AND status IN ('PENDING', 'PARTIAL') AND due_date < $2 AND deleted_at IS NULL`,
+        [studentIds, today],
+      );
+      overdueFees = overdueFeesRes;
+    }
 
     const freeSeatPct =
       totalStudents > 0
@@ -159,7 +145,12 @@ export class AiService {
 
     if (overdueFees.length > 0) {
       const totalOverdue = overdueFees.reduce(
-        (sum, f) => sum + Number((f.totalAmount || 0) - (f.paidAmount || 0)),
+        (sum, f) =>
+          sum +
+          Number(
+            (parseFloat(f.total_amount) || 0) -
+              (parseFloat(f.paid_amount) || 0),
+          ),
         0,
       );
       suggestions.push({
@@ -168,7 +159,7 @@ export class AiService {
         title: `${overdueFees.length} overdue fee(s)`,
         titleNp: `${overdueFees.length} भुक्तानी बाकी`,
         description: `Total overdue amount: NPR ${totalOverdue.toLocaleString()}. Send reminders or collect payments.`,
-        descriptionNp: `जम्मा बाकी रकम: रु ${totalOverdue.toLocaleString()}. अनुस्मारक पठाउनुहोस् वा भुक्तानी लिनुहोस्।`,
+        descriptionNp: `जम्मा बाकी रकम: रु ${totalOverdue.toLocaleString()}। अनुस्मारक पठाउनुहोस् वा भुक्तानी लिनुहोस्।`,
         action: 'View overdue fees',
         payload: { count: overdueFees.length, amount: totalOverdue },
       });
@@ -197,13 +188,13 @@ export class AiService {
     };
   }
 
-  /**
-   * Dashboard insights: summary + suggestions (for home screen).
-   */
   async getDashboardInsights(schoolId: number): Promise<DashboardInsight> {
-    const school = await this.schoolRepository.findOne({
-      where: { schoolId },
-    });
+    const school = await this.db.queryOne<{
+      school_id: number;
+      school_name: string;
+    }>(`SELECT school_id, school_name FROM schools WHERE school_id = $1`, [
+      schoolId,
+    ]);
     if (!school) {
       throw new NotFoundException(`School with ID ${schoolId} not found`);
     }
@@ -211,49 +202,56 @@ export class AiService {
     const { suggestions, generatedAt, generatedAtBs } =
       await this.getSuggestions(schoolId);
 
-    const [totalStudents, freeSeatCount, schoolStudents] = await Promise.all([
-      this.studentRepository.count({
-        where: { schoolId, isActive: true, currentStatus: 'ACTIVE' },
-      }),
-      this.studentRepository.count({
-        where: {
-          schoolId,
-          isActive: true,
-          currentStatus: 'ACTIVE',
-          isGovtMandatedFreeSeat: true,
-        },
-      }),
-      this.studentRepository.find({
-        where: { schoolId, isActive: true, currentStatus: 'ACTIVE' },
-        select: ['studentId'],
-      }),
-    ]);
+    const [totalStudentsRes, freeSeatCountRes, schoolStudents] =
+      await Promise.all([
+        this.db.query<{ count: string }>(
+          `SELECT COUNT(*) as count FROM students WHERE school_id = $1 AND is_active = true AND current_status = 'ACTIVE'`,
+          [schoolId],
+        ),
+        this.db.query<{ count: string }>(
+          `SELECT COUNT(*) as count FROM students WHERE school_id = $1 AND is_active = true AND current_status = 'ACTIVE' AND is_govt_mandated_free_seat = true`,
+          [schoolId],
+        ),
+        this.db.query<{ student_id: number }>(
+          `SELECT student_id FROM students WHERE school_id = $1 AND is_active = true AND current_status = 'ACTIVE'`,
+          [schoolId],
+        ),
+      ]);
 
-    const studentIds = schoolStudents.map((s) => s.studentId);
-    const overdueFees =
-      studentIds.length > 0
-        ? await this.studentFeeRepository.find({
-            where: {
-              studentId: In(studentIds),
-              status: In(['PENDING', 'PARTIAL']),
-              dueDate: LessThan(new Date()),
-              deletedAt: IsNull(),
-            },
-          })
-        : [];
+    const totalStudents = parseInt(totalStudentsRes[0]?.count || '0');
+    const freeSeatCount = parseInt(freeSeatCountRes[0]?.count || '0');
+    const studentIds = schoolStudents.map((s) => s.student_id);
+
+    let overdueFees: any[] = [];
+    if (studentIds.length > 0) {
+      const overdueFeesRes = await this.db.query<{
+        total_amount: string;
+        paid_amount: string;
+      }>(
+        `SELECT total_amount, paid_amount FROM student_fees 
+         WHERE student_id = ANY($1) AND status IN ('PENDING', 'PARTIAL') AND due_date < NOW() AND deleted_at IS NULL`,
+        [studentIds],
+      );
+      overdueFees = overdueFeesRes;
+    }
 
     const freeSeatPct =
       totalStudents > 0
         ? Number(((freeSeatCount / totalStudents) * 100).toFixed(2))
         : 0;
+
     const totalOverdue = overdueFees.reduce(
-      (sum, f) => sum + Number((f.totalAmount || 0) - (f.paidAmount || 0)),
+      (sum, f) =>
+        sum +
+        Number(
+          (parseFloat(f.total_amount) || 0) - (parseFloat(f.paid_amount) || 0),
+        ),
       0,
     );
 
     return {
-      schoolId: school.schoolId,
-      schoolName: school.schoolName,
+      schoolId: school.school_id,
+      schoolName: school.school_name,
       generatedAt,
       generatedAtBs,
       academicYear: NepaliDateUtil.getCurrentFiscalYear().yearCode,
@@ -269,9 +267,6 @@ export class AiService {
     };
   }
 
-  /**
-   * Help / FAQ. Optional query to match; if no API key, returns static FAQ.
-   */
   getHelp(query?: string): Promise<{
     query: string | null;
     answer: string;

@@ -3,10 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, IsNull, LessThan } from 'typeorm'; // ✅ Import LessThan
-import { Book } from './entities/book.entity';
-import { BookIssue } from './entities/book-issue.entity';
+import { DatabaseService } from '../database/database.service';
 import { CreateBookDto } from './dto/create-book.dto';
 import { UpdateBookDto } from './dto/update-book.dto';
 import { CreateBookIssueDto } from './dto/create-book-issue.dto';
@@ -14,44 +11,83 @@ import { ReturnBookDto } from './dto/return-book.dto';
 import { NepaliDateUtil } from '../utils/nepali-date.util';
 import { NepaliNumberUtil } from '../utils/nepali-number.util';
 
+export interface Book {
+  book_id: number;
+  school_id: number;
+  isbn: string | null;
+  book_code: string;
+  title: string;
+  title_np: string | null;
+  author: string | null;
+  author_np: string | null;
+  publisher: string | null;
+  publisher_np: string | null;
+  category: string | null;
+  total_copies: number;
+  available_copies: number;
+  issued_copies: number | null;
+  price: number | null;
+  currency: string | null;
+  rack_number: string | null;
+  is_active: boolean;
+  created_at: Date;
+  updated_at: Date;
+  deleted_at: Date | null;
+}
+
+export interface BookIssue {
+  issue_id: number;
+  school_id: number;
+  book_id: number;
+  student_id: number;
+  teacher_id: number | null;
+  issue_date: Date;
+  issue_date_bs: string | null;
+  due_date: Date;
+  due_date_bs: string | null;
+  return_date: Date | null;
+  return_date_bs: string | null;
+  fine_amount: number;
+  days_overdue: number;
+  status: string;
+  remarks: string | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
 @Injectable()
 export class LibraryService {
-  constructor(
-    @InjectRepository(Book)
-    private bookRepository: Repository<Book>,
-    @InjectRepository(BookIssue)
-    private bookIssueRepository: Repository<BookIssue>,
-  ) {}
+  constructor(private db: DatabaseService) {}
 
-  // Book Management
   async createBook(createDto: CreateBookDto): Promise<Book> {
-    const existing = await this.bookRepository.findOne({
-      where: {
-        isbn: createDto.isbn,
-        schoolId: createDto.schoolId,
-        deletedAt: IsNull(),
-      },
-    });
+    const existing = await this.db.queryOne<Book>(
+      `SELECT book_id FROM books WHERE isbn = $1 AND school_id = $2 AND deleted_at IS NULL`,
+      [createDto.isbn, createDto.schoolId],
+    );
     if (existing) {
       throw new BadRequestException(
         'Book with this ISBN already exists at this school',
       );
     }
 
-    const bsDate = NepaliDateUtil.adToBs(createDto.acquisitionDate).bsDate;
+    const result = await this.db.insert<Book>(
+      `INSERT INTO books (school_id, isbn, book_code, title, author, publisher, category, quantity, available_quantity, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true)
+       RETURNING *`,
+      [
+        createDto.schoolId,
+        createDto.isbn,
+        createDto.bookCode,
+        createDto.titleEn,
+        createDto.authorEn,
+        createDto.publisherEn,
+        createDto.bookType,
+        createDto.totalCopies,
+        createDto.totalCopies,
+      ],
+    );
 
-    const book = this.bookRepository.create({
-      ...createDto,
-      schoolId: createDto.schoolId,
-      acquisitionDateBs: bsDate,
-      totalCopies: createDto.totalCopies || 1,
-      issuedCopies: 0,
-      damagedCopies: 0,
-      currency: createDto.currency || 'NPR',
-      isActive: true,
-    });
-
-    return this.bookRepository.save(book);
+    return result;
   }
 
   async findAllBooks(
@@ -61,22 +97,41 @@ export class LibraryService {
     isSeeReference?: boolean,
     isNebReference?: boolean,
   ): Promise<Book[]> {
-    const where: any = { schoolId, isActive: true, deletedAt: IsNull() };
-    if (bookType) where.bookType = bookType;
-    if (subject) where.subject = subject;
-    if (isSeeReference !== undefined) where.isSeeReference = isSeeReference;
-    if (isNebReference !== undefined) where.isNebReference = isNebReference;
+    let query = `SELECT * FROM books WHERE school_id = $1 AND is_active = true AND deleted_at IS NULL`;
+    const params: any[] = [schoolId];
 
-    return this.bookRepository.find({ where, order: { titleEn: 'ASC' } });
+    if (bookType) {
+      params.push(bookType);
+      query += ` AND book_type = $${params.length}`;
+    }
+    if (subject) {
+      params.push(subject);
+      query += ` AND subject = $${params.length}`;
+    }
+    if (isSeeReference !== undefined) {
+      params.push(isSeeReference);
+      query += ` AND is_see_reference = $${params.length}`;
+    }
+    if (isNebReference !== undefined) {
+      params.push(isNebReference);
+      query += ` AND is_neb_reference = $${params.length}`;
+    }
+
+    query += ` ORDER BY title ASC`;
+
+    return this.db.query<Book>(query, params);
   }
 
   async findOneBook(id: number, schoolId?: number): Promise<Book> {
-    const where: any = { bookId: id, deletedAt: IsNull() };
-    if (schoolId) where.schoolId = schoolId;
+    let query = `SELECT * FROM books WHERE book_id = $1 AND deleted_at IS NULL`;
+    const params: any[] = [id];
 
-    const book = await this.bookRepository.findOne({
-      where,
-    });
+    if (schoolId) {
+      params.push(schoolId);
+      query += ` AND school_id = $${params.length}`;
+    }
+
+    const book = await this.db.queryOne<Book>(query, params);
     if (!book) throw new NotFoundException(`Book with ID ${id} not found`);
     return book;
   }
@@ -86,52 +141,73 @@ export class LibraryService {
     schoolId: number,
     updateDto: UpdateBookDto,
   ): Promise<Book> {
-    const book = await this.findOneBook(id, schoolId);
+    await this.findOneBook(id, schoolId);
 
-    // ✅ FIXED: Set BS date directly on ENTITY, not DTO
-    if (
-      updateDto.acquisitionDate &&
-      updateDto.acquisitionDate !== book.acquisitionDate
-    ) {
-      book.acquisitionDateBs = NepaliDateUtil.adToBs(
-        updateDto.acquisitionDate,
-      ).bsDate;
+    const updates: string[] = [];
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    const fieldMap: { [key: string]: string } = {
+      titleEn: 'title',
+      titleNp: 'title_np',
+      authorEn: 'author',
+      authorNp: 'author_np',
+      publisherEn: 'publisher',
+      publisherNp: 'publisher_np',
+      isbn: 'isbn',
+      bookCode: 'book_code',
+      bookType: 'category',
+      price: 'price',
+      currency: 'currency',
+      totalCopies: 'total_copies',
+    };
+
+    for (const [dtoField, dbField] of Object.entries(fieldMap)) {
+      if ((updateDto as any)[dtoField] !== undefined) {
+        updates.push(`${dbField} = $${paramIndex}`);
+        params.push((updateDto as any)[dtoField]);
+        paramIndex++;
+      }
     }
 
-    Object.assign(book, updateDto);
-    return this.bookRepository.save(book);
+    if (updates.length === 0) return this.findOneBook(id, schoolId);
+
+    params.push(id);
+    await this.db.update(
+      `UPDATE books SET ${updates.join(', ')} WHERE book_id = $${paramIndex}`,
+      params,
+    );
+
+    return this.findOneBook(id, schoolId);
   }
 
   async removeBook(id: number, schoolId: number): Promise<void> {
     await this.findOneBook(id, schoolId);
-    const activeIssues = await this.bookIssueRepository.count({
-      where: { bookId: id, schoolId, status: 'ISSUED' },
-    });
-    if (activeIssues > 0) {
+    const activeIssues = await this.db.queryOne<{ count: string }>(
+      `SELECT COUNT(*) as count FROM book_issues WHERE book_id = $1 AND school_id = $2 AND status = 'ISSUED'`,
+      [id, schoolId],
+    );
+    if (activeIssues && parseInt(activeIssues.count) > 0) {
       throw new BadRequestException('Cannot delete book with active issues');
     }
-    await this.bookRepository.update(id, {
-      isActive: false,
-      deletedAt: new Date(),
-    });
+    await this.db.update(
+      `UPDATE books SET is_active = false, deleted_at = NOW() WHERE book_id = $1`,
+      [id],
+    );
   }
 
-  // Book Issue Management
   async issueBook(createDto: CreateBookIssueDto): Promise<BookIssue> {
     const book = await this.findOneBook(createDto.bookId, createDto.schoolId);
 
-    if (book.issuedCopies >= book.totalCopies) {
+    if ((book.issued_copies || 0) >= book.total_copies) {
       throw new BadRequestException('No copies available for issue');
     }
 
-    const existingIssue = await this.bookIssueRepository.findOne({
-      where: {
-        bookId: createDto.bookId,
-        studentId: createDto.studentId,
-        schoolId: createDto.schoolId,
-        status: 'ISSUED',
-      },
-    });
+    const existingIssue = await this.db.queryOne<BookIssue>(
+      `SELECT issue_id FROM book_issues 
+       WHERE book_id = $1 AND student_id = $2 AND school_id = $3 AND status = 'ISSUED'`,
+      [createDto.bookId, createDto.studentId, createDto.schoolId],
+    );
     if (existingIssue) {
       throw new BadRequestException('Student already has this book issued');
     }
@@ -139,24 +215,33 @@ export class LibraryService {
     const issueDateBs = NepaliDateUtil.adToBs(createDto.issueDate).bsDate;
     const dueDateBs = NepaliDateUtil.adToBs(createDto.dueDate).bsDate;
 
-    const bookIssue = this.bookIssueRepository.create({
-      schoolId: createDto.schoolId,
-      bookId: createDto.bookId,
-      studentId: createDto.studentId,
-      teacherId: createDto.teacherId,
-      issueDate: createDto.issueDate,
-      issueDateBs,
-      dueDate: createDto.dueDate,
-      dueDateBs,
-      status: 'ISSUED',
-      fineAmount: 0,
-      daysOverdue: 0,
-    });
+    const result = await this.db.insert<BookIssue>(
+      `INSERT INTO book_issues (
+        school_id, book_id, student_id, teacher_id, issue_date, issue_date_bs,
+        due_date, due_date_bs, status, fine_amount, days_overdue
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      RETURNING *`,
+      [
+        createDto.schoolId,
+        createDto.bookId,
+        createDto.studentId,
+        createDto.teacherId || null,
+        createDto.issueDate,
+        issueDateBs,
+        createDto.dueDate,
+        dueDateBs,
+        'ISSUED',
+        0,
+        0,
+      ],
+    );
 
-    book.issuedCopies += 1;
-    await this.bookRepository.save(book);
+    await this.db.update(
+      `UPDATE books SET issued_copies = issued_copies + 1 WHERE book_id = $1`,
+      [createDto.bookId],
+    );
 
-    return this.bookIssueRepository.save(bookIssue);
+    return result;
   }
 
   async returnBook(
@@ -164,9 +249,10 @@ export class LibraryService {
     schoolId: number,
     returnDto: ReturnBookDto,
   ): Promise<BookIssue> {
-    const bookIssue = await this.bookIssueRepository.findOne({
-      where: { issueId, schoolId },
-    });
+    const bookIssue = await this.db.queryOne<BookIssue>(
+      `SELECT * FROM book_issues WHERE issue_id = $1 AND school_id = $2`,
+      [issueId, schoolId],
+    );
     if (!bookIssue) {
       throw new NotFoundException(
         `Book issue with ID ${returnDto.issueId} not found`,
@@ -177,7 +263,7 @@ export class LibraryService {
     }
 
     const today = new Date();
-    const dueDate = new Date(bookIssue.dueDate);
+    const dueDate = new Date(bookIssue.due_date);
     const daysOverdue =
       returnDto.daysOverdue ||
       Math.max(
@@ -190,95 +276,93 @@ export class LibraryService {
     const finePerDay = 5;
     const fineAmount = returnDto.fineAmount || daysOverdue * finePerDay;
 
-    bookIssue.returnDate = today;
-    bookIssue.returnDateBs = NepaliDateUtil.adToBs(today).bsDate;
-    bookIssue.fineAmount = fineAmount;
-    bookIssue.daysOverdue = daysOverdue;
-    bookIssue.status = 'RETURNED';
-    bookIssue.remarks = `Returned after ${daysOverdue} days overdue. Fine: NPR ${fineAmount}`;
+    const returnDateBs = NepaliDateUtil.adToBs(today).bsDate;
+    const remarks = `Returned after ${daysOverdue} days overdue. Fine: NPR ${fineAmount}`;
 
-    const book = await this.findOneBook(bookIssue.bookId, schoolId);
-    book.issuedCopies = Math.max(0, book.issuedCopies - 1);
-    await this.bookRepository.save(book);
+    const result = await this.db.insert<BookIssue>(
+      `UPDATE book_issues SET 
+        return_date = $1, return_date_bs = $2, fine_amount = $3, 
+        days_overdue = $4, status = $5, remarks = $6
+      WHERE issue_id = $7
+      RETURNING *`,
+      [
+        today,
+        returnDateBs,
+        fineAmount,
+        daysOverdue,
+        'RETURNED',
+        remarks,
+        issueId,
+      ],
+    );
 
-    return this.bookIssueRepository.save(bookIssue);
+    await this.db.update(
+      `UPDATE books SET issued_copies = GREATEST(issued_copies - 1, 0) WHERE book_id = $1`,
+      [bookIssue.book_id],
+    );
+
+    return result;
   }
 
   async getStudentIssuedBooks(
     studentId: number,
     schoolId: number,
   ): Promise<BookIssue[]> {
-    return this.bookIssueRepository.find({
-      where: { studentId, schoolId, status: 'ISSUED' },
-      order: { issueDate: 'DESC' },
-    });
+    return this.db.query<BookIssue>(
+      `SELECT * FROM book_issues WHERE student_id = $1 AND school_id = $2 AND status = 'ISSUED' ORDER BY issue_date DESC`,
+      [studentId, schoolId],
+    );
   }
 
   async getOverdueBooks(schoolId: number): Promise<BookIssue[]> {
     const today = new Date();
-    // ✅ FIXED: Use LessThan operator instead of MongoDB-style $lt
-    return this.bookIssueRepository.find({
-      where: {
-        schoolId,
-        dueDate: LessThan(today),
-        status: 'ISSUED',
-      },
-      order: { dueDate: 'ASC' },
-    });
+    return this.db.query<BookIssue>(
+      `SELECT * FROM book_issues WHERE school_id = $1 AND due_date < $2 AND status = 'ISSUED' ORDER BY due_date ASC`,
+      [schoolId, today],
+    );
   }
 
-  // Nepal-specific: Get SEE/NEB reference books
   async getSeeReferenceBooks(schoolId: number): Promise<Book[]> {
-    return this.bookRepository.find({
-      where: {
-        schoolId,
-        isSeeReference: true,
-        isActive: true,
-        deletedAt: IsNull(),
-      },
-      order: { subject: 'ASC', curriculumLevel: 'ASC' },
-    });
+    return this.db.query<Book>(
+      `SELECT * FROM books WHERE school_id = $1 AND is_see_reference = true AND is_active = true AND deleted_at IS NULL ORDER BY subject ASC, curriculum_level ASC`,
+      [schoolId],
+    );
   }
 
   async getNebReferenceBooks(schoolId: number): Promise<Book[]> {
-    return this.bookRepository.find({
-      where: {
-        schoolId,
-        isNebReference: true,
-        isActive: true,
-        deletedAt: IsNull(),
-      },
-      order: { subject: 'ASC', curriculumLevel: 'ASC' },
-    });
+    return this.db.query<Book>(
+      `SELECT * FROM books WHERE school_id = $1 AND is_neb_reference = true AND is_active = true AND deleted_at IS NULL ORDER BY subject ASC, curriculum_level ASC`,
+      [schoolId],
+    );
   }
 
-  // Generate fine receipt in NPR format
   async generateFineReceipt(issueId: number, schoolId: number): Promise<any> {
-    const bookIssue = await this.bookIssueRepository.findOne({
-      where: { issueId, schoolId },
-    });
+    const bookIssue = await this.db.queryOne<BookIssue>(
+      `SELECT * FROM book_issues WHERE issue_id = $1 AND school_id = $2`,
+      [issueId, schoolId],
+    );
     if (!bookIssue || bookIssue.status !== 'RETURNED') {
       throw new NotFoundException('Book issue not found or not returned');
     }
 
-    const book = await this.findOneBook(bookIssue.bookId, schoolId);
+    const book = await this.findOneBook(bookIssue.book_id, schoolId);
 
     return {
-      issueId: bookIssue.issueId,
-      bookTitle: book.titleEn,
-      bookTitleNp: book.titleNp || book.titleEn,
-      issueDate: bookIssue.issueDate,
-      issueDateBs: bookIssue.issueDateBs,
-      returnDate: bookIssue.returnDate,
-      returnDateBs: bookIssue.returnDateBs,
-      daysOverdue: bookIssue.daysOverdue,
-      fineAmount: bookIssue.fineAmount,
+      issueId: bookIssue.issue_id,
+      bookTitle: book.title,
+      bookTitleNp: book.title_np || book.title,
+      issueDate: bookIssue.issue_date,
+      issueDateBs: bookIssue.issue_date_bs,
+      returnDate: bookIssue.return_date,
+      returnDateBs: bookIssue.return_date_bs,
+      daysOverdue: bookIssue.days_overdue,
+      fineAmount: bookIssue.fine_amount,
       fineAmountNpr: NepaliNumberUtil.formatCurrency(
-        bookIssue.fineAmount,
+        bookIssue.fine_amount,
         'en',
       ),
       fineAmountNprNp: NepaliNumberUtil.formatCurrency(
-        bookIssue.fineAmount,
+        bookIssue.fine_amount,
         'ne',
       ),
       paymentStatus: 'PENDING',

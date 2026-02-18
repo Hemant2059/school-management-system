@@ -268,16 +268,17 @@ export class CreateStudentDto {
   studentEmail?: string;
 
   // === Admission Details ===
-  @ApiProperty({ description: 'Admission date', example: '2024-04-14' })
-  @IsNotEmpty()
+  @ApiPropertyOptional({ description: 'Admission date', example: '2024-04-14' })
+  @IsOptional()
   @IsDate()
   @Type(() => Date)
-  admissionDate: Date;
+  admissionDate?: Date;
 
-  @ApiProperty({ description: 'Admission class ID', example: 5 })
-  @IsNotEmpty()
+  @ApiPropertyOptional({ description: 'Admission class ID', example: 5 })
+  @IsOptional()
   @IsInt()
-  admissionClassId: number;
+  @Type(() => Number)
+  admissionClassId?: number;
 
   @ApiPropertyOptional({
     description: 'Previous school name',

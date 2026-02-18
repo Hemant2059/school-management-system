@@ -1,14 +1,13 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { CacheModule } from '@nestjs/cache-manager';
-import { TypeOrmModule } from '@nestjs/typeorm';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { validate } from './config/env.validation';
 import { LoggerModule } from 'nestjs-pino';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { IdempotencyInterceptor } from './common/interceptors/idempotency.interceptor';
-import { databaseConfig } from './config/database.config';
+import { DatabaseModule } from './database/database.module';
 import { SchoolModule } from './school/school.module';
 import { UserModule } from './user/user.module';
 import { AuthModule } from './auth/auth.module';
@@ -90,7 +89,7 @@ import { redisStore } from 'cache-manager-redis-store';
         },
       },
     }),
-    TypeOrmModule.forRoot(databaseConfig),
+    DatabaseModule,
 
     SchoolModule,
     UserModule,

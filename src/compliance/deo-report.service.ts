@@ -1,11 +1,5 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
-import { Student } from '../student/entities/student.entity';
-import { School } from '../school/entities/school.entity';
-import { Enrollment } from '../enrollment/entities/enrollment.entity';
-import { AcademicClass } from '../academic-class/entities/academic-class.entity';
-import { Section } from '../section/entities/section.entity';
+import { DatabaseService } from '../database/database.service';
 import { NepaliDateUtil } from '../utils/nepali-date.util';
 import { GOVT_FREE_SEAT_QUOTA_PERCENT } from '../common/constants/nepal.constants';
 
@@ -21,141 +15,172 @@ function addReportBsDates(report: Record<string, any>): Record<string, any> {
   return report;
 }
 
-/**
- * DEO (District Education Office) / MOEST compliance reports for Nepal.
- * Aligned with MOEST enrollment and reporting templates.
- */
 @Injectable()
 export class DeoReportService {
-  constructor(
-    @InjectRepository(Student)
-    private studentRepository: Repository<Student>,
-    @InjectRepository(School)
-    private schoolRepository: Repository<School>,
-    @InjectRepository(Enrollment)
-    private enrollmentRepository: Repository<Enrollment>,
-    @InjectRepository(AcademicClass)
-    private classRepository: Repository<AcademicClass>,
-    @InjectRepository(Section)
-    private sectionRepository: Repository<Section>,
-  ) {}
-
-  async generateEnrollmentReport(schoolId: number) {
-    const school = await this.schoolRepository.findOne({
-      where: { schoolId },
-    });
-    if (!school) {
-      throw new NotFoundException(`School with ID ${schoolId} not found`);
-    }
-
-    const students = await this.studentRepository.find({
-      where: { schoolId, isActive: true, currentStatus: 'ACTIVE' },
-    });
-    const studentIds = students.map((s) => s.studentId);
-
-    const enrollments =
-      studentIds.length > 0
-        ? await this.enrollmentRepository.find({
-            where: {
-              studentId: In(studentIds),
-              isCurrent: true,
-              status: 'ACTIVE',
-            },
-          })
-        : [];
-
-    const classIds = [...new Set(enrollments.map((e) => e.classId))];
-    const sectionIds = [
-      ...new Set(enrollments.map((e) => e.sectionId).filter(Boolean)),
-    ];
-
-    const classes =
-      classIds.length > 0
-        ? await this.classRepository.find({ where: { classId: In(classIds) } })
-        : [];
-    const sections =
-      sectionIds.length > 0
-        ? await this.sectionRepository.find({
-            where: { sectionId: In(sectionIds) },
-          })
-        : [];
-
-    const classMap = new Map(classes.map((c) => [c.classId, c]));
-    const sectionMap = new Map(sections.map((s) => [s.sectionId, s]));
-    const enrollmentByStudent = new Map(
-      enrollments.map((e) => [e.studentId, e]),
-    );
-
-    const out = {
-      reportType: 'DEO_ENROLLMENT_V3_2',
-      generatedAt: new Date().toISOString(),
-      school: {
-        schoolId: school.schoolId,
-        schoolCode: school.schoolCode,
-        schoolName: school.schoolName,
-        schoolNameNepali: school.schoolNameNepali ?? undefined,
-        provinceId: school.provinceId ?? undefined,
-        districtId: school.districtId ?? undefined,
-        registrationNumber: school.registrationNumber ?? undefined,
-        affiliationNumber: school.affiliationNumber ?? undefined,
-      },
-      academicYear: this.getCurrentAcademicYearBs(),
-      data: students.map((s) => {
-        const enrollment = enrollmentByStudent.get(s.studentId);
-        const ac = enrollment ? classMap.get(enrollment.classId) : undefined;
-        const sec = enrollment?.sectionId
-          ? sectionMap.get(enrollment.sectionId)
-          : undefined;
-        return {
-          studentId: s.studentId,
-          admissionNumber: s.admissionNumber,
-          rollNumber: enrollment?.rollNumber ?? s.rollNumber,
-          name: s.getFullName(),
-          nameNp: s.getFullName('np'),
-          casteCode: s.casteEthnicityCode || null,
-          gender: s.gender,
-          isGovtSeat: s.isGovtMandatedFreeSeat ?? false,
-          dobBs: s.dobBsSnapshot || s.dateOfBirthBs,
-          className: ac?.className ?? null,
-          sectionName: sec?.sectionName ?? null,
-          academicYear: enrollment?.academicYear ?? null,
-          boardExamRegistration: enrollment?.boardExamRegistration ?? null,
-        };
-      }),
-    };
-    return addReportBsDates(out);
-  }
+  constructor(private db: DatabaseService) {}
 
   private getCurrentAcademicYearBs(): string {
     const { yearCode } = NepaliDateUtil.getCurrentFiscalYear();
     return yearCode;
   }
 
-  /**
-   * Government-mandated 10% free-seat report per school (Nepal policy).
-   * Returns count, percentage, and compliance (within 10%).
-   */
-  async getFreeSeatReport(schoolId: number) {
-    const school = await this.schoolRepository.findOne({
-      where: { schoolId },
-    });
+  async generateEnrollmentReport(schoolId: number) {
+    const school = await this.db.queryOne<{
+      school_id: number;
+      school_code: string;
+      school_name: string;
+      school_name_nepali: string | null;
+      province_id: number | null;
+      district_id: number | null;
+      registration_number: string | null;
+      affiliation_number: string | null;
+    }>(`SELECT * FROM schools WHERE school_id = $1`, [schoolId]);
+
     if (!school) {
       throw new NotFoundException(`School with ID ${schoolId} not found`);
     }
 
-    const [total, freeSeatCount] = await Promise.all([
-      this.studentRepository.count({
-        where: { schoolId, isActive: true, currentStatus: 'ACTIVE' },
+    const students = await this.db.query<{
+      student_id: number;
+      admission_number: string;
+      roll_number: number | null;
+      first_name_en: string;
+      middle_name_en: string | null;
+      last_name_en: string;
+      first_name_np: string | null;
+      middle_name_np: string | null;
+      last_name_np: string | null;
+      caste_ethnicity_code: string | null;
+      gender: string;
+      is_govt_mandated_free_seat: boolean;
+      dob_bs_snapshot: string | null;
+      date_of_birth_bs: string | null;
+    }>(
+      `SELECT * FROM students WHERE school_id = $1 AND is_active = true AND current_status = 'ACTIVE'`,
+      [schoolId],
+    );
+
+    const studentIds = students.map((s) => s.student_id);
+
+    let student_enrollments: any[] = [];
+    if (studentIds.length > 0) {
+      student_enrollments = await this.db.query<{
+        student_id: number;
+        class_id: number;
+        section_id: number | null;
+        roll_number: number | null;
+        is_current: boolean;
+        status: string;
+        academic_year: string | null;
+        board_exam_registration: string | null;
+      }>(
+        `SELECT * FROM student_enrollments WHERE student_id = ANY($1) AND is_current = true AND status = 'ACTIVE'`,
+        [studentIds],
+      );
+    }
+
+    const classIds = [...new Set(student_enrollments.map((e) => e.class_id))];
+    const sectionIds = [
+      ...new Set(student_enrollments.map((e) => e.section_id).filter(Boolean)),
+    ];
+
+    let classes: any[] = [];
+    let sections: any[] = [];
+    if (classIds.length > 0) {
+      classes = await this.db.query<{ class_id: number; class_name: string }>(
+        `SELECT class_id, class_name FROM classes WHERE class_id = ANY($1)`,
+        [classIds],
+      );
+    }
+    if (sectionIds.length > 0) {
+      sections = await this.db.query<{
+        section_id: number;
+        section_name: string;
+      }>(
+        `SELECT section_id, section_name FROM sections WHERE section_id = ANY($1)`,
+        [sectionIds],
+      );
+    }
+
+    const classMap = new Map(classes.map((c) => [c.class_id, c]));
+    const sectionMap = new Map(sections.map((s) => [s.section_id, s]));
+    const enrollmentByStudent = new Map(
+      student_enrollments.map((e) => [e.student_id, e]),
+    );
+
+    const getFullName = (s: any, lang: 'en' | 'np') => {
+      if (lang === 'np' && s.first_name_np) {
+        return `${s.first_name_np} ${s.middle_name_np || ''} ${s.last_name_np || ''}`.trim();
+      }
+      return `${s.first_name_en} ${s.middle_name_en || ''} ${s.last_name_en || ''}`.trim();
+    };
+
+    const out = {
+      reportType: 'DEO_ENROLLMENT_V3_2',
+      generatedAt: new Date().toISOString(),
+      school: {
+        schoolId: school.school_id,
+        schoolCode: school.school_code,
+        schoolName: school.school_name,
+        schoolNameNepali: school.school_name_nepali || undefined,
+        provinceId: school.province_id || undefined,
+        districtId: school.district_id || undefined,
+        registrationNumber: school.registration_number || undefined,
+        affiliationNumber: school.affiliation_number || undefined,
+      },
+      academicYear: this.getCurrentAcademicYearBs(),
+      data: students.map((s) => {
+        const enrollment = enrollmentByStudent.get(s.student_id);
+        const ac = enrollment ? classMap.get(enrollment.class_id) : undefined;
+        const sec = enrollment?.section_id
+          ? sectionMap.get(enrollment.section_id)
+          : undefined;
+        return {
+          studentId: s.student_id,
+          admissionNumber: s.admission_number,
+          rollNumber: enrollment?.roll_number ?? s.roll_number,
+          name: getFullName(s, 'en'),
+          nameNp: getFullName(s, 'np'),
+          casteCode: s.caste_ethnicity_code || null,
+          gender: s.gender,
+          isGovtSeat: s.is_govt_mandated_free_seat ?? false,
+          dobBs: s.dob_bs_snapshot || s.date_of_birth_bs,
+          className: ac?.class_name ?? null,
+          sectionName: sec?.section_name ?? null,
+          academicYear: enrollment?.academic_year ?? null,
+          boardExamRegistration: enrollment?.board_exam_registration ?? null,
+        };
       }),
-      this.studentRepository.count({
-        where: {
-          schoolId,
-          isActive: true,
-          currentStatus: 'ACTIVE',
-          isGovtMandatedFreeSeat: true,
-        },
-      }),
+    };
+    return addReportBsDates(out);
+  }
+
+  async getFreeSeatReport(schoolId: number) {
+    const school = await this.db.queryOne<{
+      school_id: number;
+      school_code: string;
+      school_name: string;
+    }>(
+      `SELECT school_id, school_code, school_name FROM schools WHERE school_id = $1`,
+      [schoolId],
+    );
+    if (!school) {
+      throw new NotFoundException(`School with ID ${schoolId} not found`);
+    }
+
+    const [totalRes, freeSeatCountRes] = await Promise.all([
+      this.db.query<{ count: string }>(
+        `SELECT COUNT(*) as count FROM students WHERE school_id = $1 AND is_active = true AND current_status = 'ACTIVE'`,
+        [schoolId],
+      ),
+      this.db.query<{ count: string }>(
+        `SELECT COUNT(*) as count FROM students WHERE school_id = $1 AND is_active = true AND current_status = 'ACTIVE' AND is_govt_mandated_free_seat = true`,
+        [schoolId],
+      ),
     ]);
+
+    const total = parseInt(totalRes[0]?.count || '0');
+    const freeSeatCount = parseInt(freeSeatCountRes[0]?.count || '0');
 
     const percentage =
       total > 0 ? Number(((freeSeatCount / total) * 100).toFixed(2)) : 0;
@@ -167,8 +192,8 @@ export class DeoReportService {
     return addReportBsDates({
       reportType: 'GOVT_FREE_SEAT_QUOTA',
       schoolId,
-      schoolCode: school.schoolCode,
-      schoolName: school.schoolName,
+      schoolCode: school.school_code,
+      schoolName: school.school_name,
       generatedAt: new Date().toISOString(),
       totalActiveStudents: total,
       govtFreeSeatCount: freeSeatCount,
@@ -180,31 +205,40 @@ export class DeoReportService {
     });
   }
 
-  /**
-   * Annual statistics report for DEO/MOEST (Nepal government compliance).
-   * Summary by class, gender, free-seat count, and current academic year.
-   */
   async getAnnualStatisticsReport(schoolId: number) {
-    const school = await this.schoolRepository.findOne({
-      where: { schoolId },
-    });
+    const school = await this.db.queryOne<{
+      school_id: number;
+      school_code: string;
+      school_name: string;
+    }>(
+      `SELECT school_id, school_code, school_name FROM schools WHERE school_id = $1`,
+      [schoolId],
+    );
     if (!school) {
       throw new NotFoundException(`School with ID ${schoolId} not found`);
     }
 
-    const students = await this.studentRepository.find({
-      where: { schoolId, isActive: true, currentStatus: 'ACTIVE' },
-    });
-    const enrollments =
-      students.length > 0
-        ? await this.enrollmentRepository.find({
-            where: {
-              studentId: In(students.map((s) => s.studentId)),
-              isCurrent: true,
-              status: 'ACTIVE',
-            },
-          })
-        : [];
+    const students = await this.db.query<{
+      student_id: number;
+      gender: string;
+      is_govt_mandated_free_seat: boolean;
+    }>(
+      `SELECT student_id, gender, is_govt_mandated_free_seat FROM students WHERE school_id = $1 AND is_active = true AND current_status = 'ACTIVE'`,
+      [schoolId],
+    );
+
+    const studentIds = students.map((s) => s.student_id);
+
+    let student_enrollments: any[] = [];
+    if (studentIds.length > 0) {
+      student_enrollments = await this.db.query<{
+        student_id: number;
+        class_id: number;
+      }>(
+        `SELECT student_id, class_id FROM student_enrollments WHERE student_id = ANY($1) AND is_current = true AND status = 'ACTIVE'`,
+        [studentIds],
+      );
+    }
 
     const byClass = new Map<number, number>();
     let male = 0,
@@ -215,10 +249,10 @@ export class DeoReportService {
       if (s.gender === 'MALE') male++;
       else if (s.gender === 'FEMALE') female++;
       else other++;
-      if (s.isGovtMandatedFreeSeat) freeSeat++;
+      if (s.is_govt_mandated_free_seat) freeSeat++;
     }
-    for (const e of enrollments) {
-      byClass.set(e.classId, (byClass.get(e.classId) ?? 0) + 1);
+    for (const e of student_enrollments) {
+      byClass.set(e.class_id, (byClass.get(e.class_id) ?? 0) + 1);
     }
 
     const academicYear = this.getCurrentAcademicYearBs();
@@ -227,8 +261,8 @@ export class DeoReportService {
     return addReportBsDates({
       reportType: 'ANNUAL_STATISTICS_DEO',
       schoolId,
-      schoolCode: school.schoolCode,
-      schoolName: school.schoolName,
+      schoolCode: school.school_code,
+      schoolName: school.school_name,
       generatedAt,
       academicYear,
       totalStudents: students.length,

@@ -18,8 +18,24 @@ export class AuditInterceptor implements NestInterceptor {
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<any> {
     const request = context.switchToHttp().getRequest();
-    const { method, url, body, user, ip } = request;
-    const userAgent = request.get('user-agent');
+    const { method, url, body, user } = request;
+
+    let ip: string;
+    let userAgent: string;
+
+    if (request.get && request.get('user-agent')) {
+      ip =
+        request.ip ||
+        request.get('X-Forwarded-For') ||
+        request.connection?.remoteAddress;
+      userAgent = request.get('user-agent');
+    } else {
+      ip =
+        (request.headers['x-forwarded-for'] as string) ||
+        request.ip ||
+        'unknown';
+      userAgent = (request.headers['user-agent'] as string) || 'unknown';
+    }
 
     // Only log state-changing operations
     const auditMethods = ['POST', 'PUT', 'PATCH', 'DELETE'];

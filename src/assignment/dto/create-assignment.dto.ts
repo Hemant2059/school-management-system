@@ -10,14 +10,14 @@ import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateAssignmentDto {
-  @ApiProperty({
+  @ApiPropertyOptional({
     description: 'Assignment title',
     example: 'Quadratic Equations Chapter Exercise',
     type: String,
   })
-  @IsNotEmpty()
+  @IsOptional()
   @IsString()
-  readonly title: string;
+  readonly title?: string;
 
   @ApiProperty({
     description: 'Detailed assignment description or instructions',

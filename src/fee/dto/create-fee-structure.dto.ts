@@ -5,6 +5,7 @@ import {
   IsBoolean,
   IsOptional,
   IsDate,
+  IsString,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
@@ -20,13 +21,13 @@ export class CreateFeeStructureDto {
   readonly schoolId: number;
 
   @ApiProperty({
-    description: 'Academic year ID',
-    example: 1,
-    type: Number,
+    description: 'Academic year (e.g., 2081)',
+    example: '2081',
+    type: String,
   })
   @IsNotEmpty()
-  @IsInt()
-  readonly academicYearId: number;
+  @IsString()
+  readonly academicYear: string;
 
   @ApiProperty({
     description: 'Academic class ID',
@@ -38,6 +39,15 @@ export class CreateFeeStructureDto {
   readonly classId: number;
 
   @ApiPropertyOptional({
+    description: 'Stream ID (for classes 11-12)',
+    example: 1,
+    type: Number,
+  })
+  @IsOptional()
+  @IsInt()
+  readonly streamId?: number;
+
+  @ApiPropertyOptional({
     description: 'Section ID (optional, null means applies to all sections)',
     example: 2,
     type: Number,
@@ -47,13 +57,13 @@ export class CreateFeeStructureDto {
   readonly sectionId?: number;
 
   @ApiProperty({
-    description: 'Fee category ID (e.g., Tuition, Exam, Transport)',
-    example: 1,
-    type: Number,
+    description: 'Fee type (e.g., tuition, exam, transport, library)',
+    example: 'tuition',
+    type: String,
   })
   @IsNotEmpty()
-  @IsInt()
-  readonly categoryId: number;
+  @IsString()
+  readonly feeType: string;
 
   @ApiProperty({
     description: 'Fee amount in NPR',
@@ -66,23 +76,22 @@ export class CreateFeeStructureDto {
   readonly amount: number;
 
   @ApiPropertyOptional({
-    description: 'Whether fee can be paid in installments',
+    description: 'Whether fee is recurring',
     example: true,
     type: Boolean,
   })
   @IsOptional()
   @IsBoolean()
-  readonly isInstallment?: boolean;
+  readonly isRecurring?: boolean;
 
   @ApiPropertyOptional({
-    description: 'Number of installments allowed',
-    example: 4,
-    type: Number,
-    minimum: 1,
+    description: 'Fee frequency (monthly, quarterly, yearly)',
+    example: 'yearly',
+    type: String,
   })
   @IsOptional()
-  @IsInt()
-  readonly installmentCount?: number;
+  @IsString()
+  readonly feeFrequency?: string;
 
   @ApiPropertyOptional({
     description: 'Fee payment due date',
@@ -93,4 +102,22 @@ export class CreateFeeStructureDto {
   @IsDate()
   @Type(() => Date)
   readonly dueDate?: Date;
+
+  @ApiPropertyOptional({
+    description: 'Due date in Bikram Sambat (e.g., 2081-03-15)',
+    example: '2081-03-15',
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  readonly dueDateBs?: string;
+
+  @ApiPropertyOptional({
+    description: 'Whether fee is mandatory',
+    example: true,
+    type: Boolean,
+  })
+  @IsOptional()
+  @IsBoolean()
+  readonly isMandatory?: boolean;
 }

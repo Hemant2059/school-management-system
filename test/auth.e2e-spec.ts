@@ -9,6 +9,7 @@ describe('Authentication (e2e)', () => {
   let refreshToken: string;
   const testUsername = `testuser_${Date.now()}`;
   const testPassword = 'Password123!';
+  const testPhone = `984${Date.now().toString().slice(-8)}`;
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -37,7 +38,9 @@ describe('Authentication (e2e)', () => {
           password: testPassword,
           fullName: 'Test User',
           email: `${testUsername}@example.com`,
+          phone: testPhone,
           userType: 'STUDENT',
+          schoolId: 1,
         })
         .expect(HttpStatus.CREATED)
         .then((response) => {

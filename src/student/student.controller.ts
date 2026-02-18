@@ -23,7 +23,7 @@ import { StudentService } from './student.service';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { UpdateStudentDto } from './dto/update-student.dto';
 import { PageDto } from '../common/dto/page.dto';
-import { Student } from './entities/student.entity';
+import { Student } from './student.service';
 import { GetStudentsDto } from './dto/get-students.dto';
 
 @ApiTags('Student Management')

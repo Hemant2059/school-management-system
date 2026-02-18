@@ -3,99 +3,74 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, IsNull } from 'typeorm';
-import { Subject } from './entities/subject.entity';
+import { DatabaseService } from '../database/database.service';
 import { CreateSubjectDto } from './dto/create-subject.dto';
 import { UpdateSubjectDto } from './dto/update-subject.dto';
-import { GetSubjectsDto } from './dto/get-subjects.dto';
+
+export interface Subject {
+  subject_id: number;
+  school_id: number;
+  subject_code: string;
+  subject_name_en: string;
+  subject_name_np: string | null;
+  subject_type: string;
+  is_optional: boolean;
+  credit_hours: number | null;
+  is_active: boolean;
+  created_at: Date;
+  updated_at: Date;
+  deleted_at: Date | null;
+}
 
 @Injectable()
 export class SubjectService {
-  constructor(
-    @InjectRepository(Subject)
-    private subjectRepository: Repository<Subject>,
-  ) {}
+  constructor(private db: DatabaseService) {}
 
   async create(createDto: CreateSubjectDto): Promise<Subject> {
-    const existing = await this.subjectRepository.findOne({
-      where: {
-        subjectCode: createDto.subjectCode,
-        schoolId: createDto.schoolId,
-        deletedAt: IsNull(),
-      },
-    });
+    const existing = await this.db.queryOne<Subject>(
+      `SELECT * FROM subjects WHERE subject_code = $1 AND school_id = $2 AND is_active = true`,
+      [createDto.subjectCode, createDto.schoolId],
+    );
+
     if (existing) {
       throw new BadRequestException('Subject code already exists');
     }
 
-    const subject = this.subjectRepository.create(createDto);
-    return this.subjectRepository.save(subject);
+    return this.db.insert<Subject>(
+      `INSERT INTO subjects (school_id, subject_code, subject_name, subject_name_nepali, subject_type, subject_group, credit_hours, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, true)
+       RETURNING *`,
+      [
+        createDto.schoolId,
+        createDto.subjectCode,
+        createDto.subjectName,
+        createDto.subjectNameNepali || null,
+        createDto.subjectType || 'COMPULSORY',
+        createDto.subjectGroup || null,
+        createDto.creditHours || 0,
+      ],
+    );
   }
 
-  async findAll(
-    schoolId: number,
-    getSubjectsDto: GetSubjectsDto,
-  ): Promise<Subject[]> {
-    const where: any = {
-      schoolId,
-      deletedAt: IsNull(),
-    };
-
-    if (getSubjectsDto.isActive !== undefined) {
-      where.isActive = getSubjectsDto.isActive;
-    } else {
-      where.isActive = true;
-    }
-
-    if (getSubjectsDto.subjectGroup) {
-      where.subjectGroup = getSubjectsDto.subjectGroup;
-    }
-
-    if (getSubjectsDto.search) {
-      const query = this.subjectRepository
-        .createQueryBuilder('subject')
-        .where('subject.schoolId = :schoolId', { schoolId })
-        .andWhere('subject.deletedAt IS NULL');
-
-      if (getSubjectsDto.isActive !== undefined) {
-        query.andWhere('subject.isActive = :isActive', {
-          isActive: getSubjectsDto.isActive,
-        });
-      } else {
-        query.andWhere('subject.isActive = :isActive', { isActive: true });
-      }
-
-      if (getSubjectsDto.subjectGroup) {
-        query.andWhere('subject.subjectGroup = :group', {
-          group: getSubjectsDto.subjectGroup,
-        });
-      }
-
-      query.andWhere(
-        '(LOWER(subject.subjectName) LIKE :search OR LOWER(subject.subjectCode) LIKE :search)',
-        { search: `%${getSubjectsDto.search.toLowerCase()}%` },
-      );
-
-      return query.getMany();
-    }
-
-    // If no complex search, use simple find
-    return this.subjectRepository.find({
-      where,
-      order: { subjectName: 'ASC' },
-    });
+  async findAll(schoolId: number, query?: any): Promise<Subject[]> {
+    return this.db.query<Subject>(
+      `SELECT * FROM subjects WHERE school_id = $1 AND is_active = true ORDER BY subject_name_en ASC`,
+      [schoolId],
+    );
   }
 
   async findOne(id: number, schoolId?: number): Promise<Subject> {
-    const where: any = { subjectId: id, deletedAt: IsNull() };
-    if (schoolId) where.schoolId = schoolId;
+    const subject = await this.db.queryOne<Subject>(
+      schoolId
+        ? `SELECT * FROM subjects WHERE subject_id = $1 AND school_id = $2 AND is_active = true`
+        : `SELECT * FROM subjects WHERE subject_id = $1 AND is_active = true`,
+      schoolId ? [id, schoolId] : [id],
+    );
 
-    const subject = await this.subjectRepository.findOne({
-      where,
-    });
-    if (!subject)
+    if (!subject) {
       throw new NotFoundException(`Subject with ID ${id} not found`);
+    }
+
     return subject;
   }
 
@@ -104,31 +79,52 @@ export class SubjectService {
     schoolId: number,
     updateDto: UpdateSubjectDto,
   ): Promise<Subject> {
-    const subject = await this.findOne(id, schoolId);
-    Object.assign(subject, updateDto);
-    return this.subjectRepository.save(subject);
+    await this.findOne(id, schoolId);
+
+    const updates: string[] = [];
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    const fieldMap: Record<string, string> = {
+      subjectName: 'subject_name_en',
+      subjectNameNepali: 'subject_name_np',
+      subjectType: 'subject_type',
+      creditHours: 'credit_hours',
+    };
+
+    for (const [key, dbField] of Object.entries(fieldMap)) {
+      if (updateDto[key as keyof UpdateSubjectDto] !== undefined) {
+        updates.push(`${dbField} = $${paramIndex++}`);
+        params.push(updateDto[key as keyof UpdateSubjectDto]);
+      }
+    }
+
+    if (updates.length > 0) {
+      params.push(id);
+      await this.db.query(
+        `UPDATE subjects SET ${updates.join(', ')}, updated_at = NOW() WHERE subject_id = $${paramIndex}`,
+        params,
+      );
+    }
+
+    return this.findOne(id, schoolId);
   }
 
   async remove(id: number, schoolId: number): Promise<void> {
     await this.findOne(id, schoolId);
-    await this.subjectRepository.update(id, {
-      isActive: false,
-      deletedAt: new Date(),
-    });
+    await this.db.query(
+      `UPDATE subjects SET is_active = false, deleted_at = NOW() WHERE subject_id = $1`,
+      [id],
+    );
   }
 
   async getSubjectsByGroup(
     schoolId: number,
     group: string,
   ): Promise<Subject[]> {
-    return this.subjectRepository.find({
-      where: {
-        schoolId,
-        subjectGroup: group,
-        isActive: true,
-        deletedAt: IsNull(),
-      },
-      order: { subjectName: 'ASC' },
-    });
+    return this.db.query<Subject>(
+      `SELECT * FROM subjects WHERE school_id = $1 AND subject_type = $2 AND is_active = true ORDER BY subject_name_en ASC`,
+      [schoolId, group],
+    );
   }
 }

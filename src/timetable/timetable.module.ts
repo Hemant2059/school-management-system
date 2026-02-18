@@ -1,11 +1,10 @@
 import { Module } from '@nestjs/common';
-import { TypeOrmModule } from '@nestjs/typeorm';
 import { TimetableController } from './timetable.controller';
 import { TimetableService } from './timetable.service';
-import { Timetable } from './entities/timetable.entity';
+import { DatabaseModule } from '../database/database.module';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Timetable])],
+  imports: [DatabaseModule],
   controllers: [TimetableController],
   providers: [TimetableService],
   exports: [TimetableService],

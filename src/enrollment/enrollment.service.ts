@@ -3,78 +3,66 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, IsNull } from 'typeorm';
-import { Enrollment } from './entities/enrollment.entity';
-import { AcademicClass } from '../academic-class/entities/academic-class.entity';
+import { DatabaseService } from '../database/database.service';
 import { CreateEnrollmentDto } from './dto/create-enrollment.dto';
 import { UpdateEnrollmentDto } from './dto/update-enrollment.dto';
-import { NepaliDateUtil } from '../utils/nepali-date.util';
-import { BOARD_EXAM_APPLICABLE_CLASS_ORDERS } from '../common/constants/nepal.constants';
-import {
-  withBsDates,
-  withBsDatesArray,
-} from '../utils/response-with-bs-dates.util';
 
-const ENROLLMENT_DATE_KEYS = [
-  'enrollmentDate',
-  'createdAt',
-  'updatedAt',
-  'deletedAt',
-];
+export interface Enrollment {
+  enrollment_id: number;
+  school_id: number;
+  student_id: number;
+  class_id: number;
+  section_id: number | null;
+  academic_year: string;
+  roll_number: number | null;
+  enrollment_date: Date | null;
+  enrollment_date_bs: string | null;
+  is_current: boolean;
+  status: string;
+  created_at: Date;
+  updated_at: Date;
+  deleted_at: Date | null;
+}
 
 @Injectable()
 export class EnrollmentService {
-  constructor(
-    @InjectRepository(Enrollment)
-    private enrollmentRepository: Repository<Enrollment>,
-    @InjectRepository(AcademicClass)
-    private academicClassRepository: Repository<AcademicClass>,
-  ) {}
+  constructor(private db: DatabaseService) {}
 
   async create(
     createDto: CreateEnrollmentDto,
-    userId: number = 1,
+    userId?: number,
   ): Promise<Enrollment> {
-    // Check if student already has current enrollment
-    const currentEnrollment = await this.enrollmentRepository.findOne({
-      where: {
-        studentId: createDto.studentId,
-        schoolId: createDto.schoolId,
-        isCurrent: true,
-        status: 'ACTIVE',
-        deletedAt: IsNull(),
-      },
-    });
+    const currentEnrollment = await this.db.queryOne<Enrollment>(
+      `SELECT * FROM student_enrollments WHERE student_id = $1 AND school_id = $2 AND is_current = true AND status = 'ACTIVE'`,
+      [createDto.studentId, createDto.schoolId],
+    );
 
     if (currentEnrollment) {
       throw new BadRequestException(
-        `Student already enrolled in class ${currentEnrollment.classId}. ` +
-          `Update existing enrollment or mark as PROMOTED/REPEATED first.`,
+        'Student already has an active enrollment. Please update or withdraw first.',
       );
     }
 
-    if (createDto.boardExamRegistration) {
-      await this.assertBoardExamClass(createDto.classId, 'create');
-    }
+    const [rollResult] = await this.db.query<{ max_roll: string }>(
+      `SELECT MAX(roll_number) as max_roll FROM student_enrollments WHERE class_id = $1 AND academic_year = $2`,
+      [createDto.classId, createDto.academicYear],
+    );
+    const nextRoll = parseInt(rollResult?.max_roll || '0', 10) + 1;
 
-    const enrollment = this.enrollmentRepository.create({
-      studentId: createDto.studentId,
-      schoolId: createDto.schoolId,
-      classId: createDto.classId,
-      sectionId: createDto.sectionId,
-      academicYear: createDto.academicYear,
-      enrollmentDate: createDto.enrollmentDate,
-      status: createDto.status ?? 'ACTIVE',
-      isCurrent: true,
-      rollNumber: createDto.rollNumber,
-      boardExamRegistration: createDto.boardExamRegistration,
-      createdBy: userId,
-      updatedBy: userId,
-    });
-
-    const saved = await this.enrollmentRepository.save(enrollment);
-    return withBsDates(saved, ENROLLMENT_DATE_KEYS);
+    return this.db.insert<Enrollment>(
+      `INSERT INTO student_enrollments (school_id, student_id, class_id, section_id, academic_year, roll_number, enrollment_date, is_current, status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, true, 'ACTIVE')
+       RETURNING *`,
+      [
+        createDto.schoolId,
+        createDto.studentId,
+        createDto.classId,
+        createDto.sectionId || null,
+        createDto.academicYear,
+        nextRoll,
+        createDto.enrollmentDate || null,
+      ],
+    );
   }
 
   async findAll(
@@ -82,185 +70,126 @@ export class EnrollmentService {
     studentId?: number,
     academicYear?: string,
   ): Promise<Enrollment[]> {
-    const query = this.enrollmentRepository
-      .createQueryBuilder('enrollment')
-      .where('enrollment.schoolId = :schoolId', { schoolId })
-      .andWhere('enrollment.deletedAt IS NULL');
-
-    if (studentId) {
-      query.andWhere('enrollment.studentId = :studentId', { studentId });
+    if (studentId && academicYear) {
+      return this.db.query<Enrollment>(
+        `SELECT * FROM student_enrollments WHERE school_id = $1 AND student_id = $2 AND academic_year = $3 ORDER BY roll_number ASC`,
+        [schoolId, studentId, academicYear],
+      );
     }
-
     if (academicYear) {
-      query.andWhere('enrollment.academicYear = :academicYear', {
-        academicYear,
-      });
+      return this.db.query<Enrollment>(
+        `SELECT * FROM student_enrollments WHERE school_id = $1 AND academic_year = $2 ORDER BY roll_number ASC`,
+        [schoolId, academicYear],
+      );
     }
-
-    query.orderBy('enrollment.enrollmentDate', 'DESC');
-    const list = await query.getMany();
-    return withBsDatesArray(list, ENROLLMENT_DATE_KEYS);
+    return this.db.query<Enrollment>(
+      `SELECT * FROM student_enrollments WHERE school_id = $1 AND is_current = true ORDER BY roll_number ASC`,
+      [schoolId],
+    );
   }
 
-  async findOne(
-    id: number,
-    schoolId?: number,
-  ): Promise<Enrollment & Record<string, string>> {
-    const where: any = {
-      enrollmentId: id,
-      deletedAt: IsNull(),
-    };
-    if (schoolId) where.schoolId = schoolId;
-
-    const enrollment = await this.enrollmentRepository.findOne({
-      where,
-    });
+  async findOne(id: number, schoolId?: number): Promise<Enrollment> {
+    const enrollment = await this.db.queryOne<Enrollment>(
+      schoolId
+        ? `SELECT * FROM student_enrollments WHERE enrollment_id = $1 AND school_id = $2`
+        : `SELECT * FROM student_enrollments WHERE enrollment_id = $1`,
+      schoolId ? [id, schoolId] : [id],
+    );
 
     if (!enrollment) {
       throw new NotFoundException(`Enrollment with ID ${id} not found`);
     }
 
-    return withBsDates(enrollment, ENROLLMENT_DATE_KEYS);
+    return enrollment;
   }
 
   async findByStudent(
     studentId: number,
     schoolId: number,
   ): Promise<Enrollment[]> {
-    return this.enrollmentRepository.find({
-      where: {
-        studentId,
-        schoolId,
-        deletedAt: IsNull(),
-      },
-      order: { enrollmentDate: 'DESC' },
-    });
+    return this.db.query<Enrollment>(
+      `SELECT * FROM student_enrollments WHERE student_id = $1 AND school_id = $2 ORDER BY academic_year DESC`,
+      [studentId, schoolId],
+    );
   }
 
   async update(
     id: number,
     schoolId: number,
     updateDto: UpdateEnrollmentDto,
-    userId: number = 1,
+    userId?: number,
   ): Promise<Enrollment> {
-    const enrollment = await this.findOne(id, schoolId);
+    await this.findOne(id, schoolId);
 
-    if (updateDto.classId !== undefined) enrollment.classId = updateDto.classId;
-    if (updateDto.sectionId !== undefined)
-      enrollment.sectionId = updateDto.sectionId;
-    if (updateDto.status !== undefined) enrollment.status = updateDto.status;
-    if (updateDto.isCurrent !== undefined)
-      enrollment.isCurrent = updateDto.isCurrent;
-    if (updateDto.rollNumber !== undefined)
-      enrollment.rollNumber = updateDto.rollNumber;
-    if (updateDto.boardExamRegistration !== undefined) {
-      const classId = updateDto.classId ?? enrollment.classId;
-      await this.assertBoardExamClass(classId, 'update');
-      enrollment.boardExamRegistration = updateDto.boardExamRegistration;
+    const updates: string[] = [];
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    const fieldMap: Record<string, string> = {
+      sectionId: 'section_id',
+      rollNumber: 'roll_number',
+      status: 'status',
+    };
+
+    for (const [key, dbField] of Object.entries(fieldMap)) {
+      if (updateDto[key as keyof UpdateEnrollmentDto] !== undefined) {
+        updates.push(`${dbField} = $${paramIndex++}`);
+        params.push(updateDto[key as keyof UpdateEnrollmentDto]);
+      }
     }
 
-    enrollment.updatedBy = userId;
-    const saved = await this.enrollmentRepository.save(enrollment);
-    return withBsDates(saved, ENROLLMENT_DATE_KEYS);
+    if (updates.length > 0) {
+      params.push(id);
+      await this.db.query(
+        `UPDATE student_enrollments SET ${updates.join(', ')}, updated_at = NOW() WHERE enrollment_id = $${paramIndex}`,
+        params,
+      );
+    }
+
+    return this.findOne(id, schoolId);
   }
 
   async remove(id: number, schoolId: number): Promise<void> {
     await this.findOne(id, schoolId);
-    await this.enrollmentRepository.update(id, {
-      deletedAt: new Date(),
-    });
-  }
-
-  // ✅ FIXED: Correct promotion logic
-  async promoteStudent(
-    enrollmentId: number, // ✅ Enrollment ID (not student ID)
-    schoolId: number,
-    newClassId: number,
-    newSectionId: number,
-    academicYear: string,
-    userId: number = 1,
-  ): Promise<Enrollment> {
-    // Get current enrollment by ID
-    const currentEnrollment = await this.enrollmentRepository.findOne({
-      where: {
-        enrollmentId, // ✅ Use enrollmentId to find the specific enrollment
-        schoolId,
-        isCurrent: true,
-        deletedAt: IsNull(),
-      },
-    });
-
-    if (!currentEnrollment) {
-      throw new BadRequestException(
-        'No current enrollment found for promotion',
-      );
-    }
-
-    // Mark current enrollment as PROMOTED
-    await this.enrollmentRepository.update(currentEnrollment.enrollmentId, {
-      status: 'PROMOTED',
-      isCurrent: false,
-      updatedBy: userId,
-    });
-
-    // ✅ Create new enrollment with ALL required fields
-    const newEnrollment = this.enrollmentRepository.create({
-      studentId: currentEnrollment.studentId, // ✅ Carry forward student ID
-      schoolId, // ✅ Set school ID
-      classId: newClassId, // ✅ Required field
-      sectionId: newSectionId, // ✅ Required field
-      academicYear,
-      enrollmentDate: new Date(),
-      status: 'ACTIVE',
-      isCurrent: true,
-      createdBy: userId,
-      updatedBy: userId,
-    });
-
-    return this.enrollmentRepository.save(newEnrollment);
-  }
-
-  /**
-   * Board exam registration (SEE/NEB) is only applicable for classes 8–12.
-   * Throws if classId does not refer to one of those class orders.
-   */
-  private async assertBoardExamClass(
-    classId: number,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _action: 'create' | 'update',
-  ): Promise<void> {
-    const academicClass = await this.academicClassRepository.findOne({
-      where: { classId },
-    });
-    if (!academicClass) {
-      throw new BadRequestException(`Class with ID ${classId} not found`);
-    }
-    const applicable = (
-      BOARD_EXAM_APPLICABLE_CLASS_ORDERS as readonly number[]
-    ).includes(academicClass.classOrder);
-    if (!applicable) {
-      throw new BadRequestException(
-        `Board exam registration (SEE/NEB) is only applicable for classes 8, 9, 10, 11, 12. ` +
-          `This enrollment is for class order ${academicClass.classOrder} (${academicClass.className}).`,
-      );
-    }
+    await this.db.query(
+      `UPDATE student_enrollments SET is_current = false, status = 'WITHDRAWN', deleted_at = NOW() WHERE enrollment_id = $1`,
+      [id],
+    );
   }
 
   async getCurrentEnrollmentWithDetails(
-    enrollmentId: number,
+    id: number,
     schoolId: number,
   ): Promise<any> {
-    const enrollment = await this.findOne(enrollmentId, schoolId);
+    return this.findOne(id, schoolId);
+  }
 
-    const [startYear] = enrollment.academicYear.split('-');
-    const nepaliYear = parseInt(startYear, 10);
+  async promoteStudent(
+    studentId: number,
+    schoolId: number,
+    newClassId: number,
+    academicYear: string | number,
+    newSectionId?: number | string,
+    userId?: number,
+  ): Promise<Enrollment> {
+    const currentEnrollment = await this.db.queryOne<Enrollment>(
+      `SELECT * FROM student_enrollments WHERE student_id = $1 AND school_id = $2 AND is_current = true`,
+      [studentId, schoolId],
+    );
 
-    return {
-      ...enrollment,
-      nepaliAcademicYear: `${nepaliYear}–${nepaliYear + 1}`,
-      enrollmentDateBs:
-        enrollment.enrollmentDateBs ??
-        NepaliDateUtil.adToBs(enrollment.enrollmentDate).bsDate,
-    };
+    if (currentEnrollment) {
+      await this.db.query(
+        `UPDATE student_enrollments SET is_current = false WHERE enrollment_id = $1`,
+        [currentEnrollment.enrollment_id],
+      );
+    }
+
+    return this.create({
+      studentId,
+      schoolId,
+      classId: newClassId,
+      academicYear: String(academicYear),
+      enrollmentDate: new Date(),
+    });
   }
 }

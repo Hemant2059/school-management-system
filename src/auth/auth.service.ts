@@ -1,16 +1,13 @@
 import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DatabaseService } from '../database/database.service';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
 import { UserService } from '../user/user.service';
 import { LoginDto } from '../user/dto/login.dto';
 import { NepaliDateUtil } from '../utils/nepali-date.util';
-import { UserSession } from '../user/entities/user-session.entity';
-import { User } from '../user/entities/user.entity';
-import { AuditLog } from '../user/entities/audit-log.entity';
+import { User, UserSession } from '../user/entities/interfaces';
 
 @Injectable()
 export class AuthService {
@@ -20,34 +17,31 @@ export class AuthService {
     private userService: UserService,
     private jwtService: JwtService,
     private configService: ConfigService,
-    @InjectRepository(UserSession)
-    private sessionRepository: Repository<UserSession>,
-    @InjectRepository(AuditLog)
-    private auditLogRepository: Repository<AuditLog>,
+    private db: DatabaseService,
   ) {}
 
   async validateUser(username: string, password: string): Promise<User> {
     const user = await this.userService.findByUsernameOrEmailOrPhone(username);
 
-    if (!user || !user.isActive) {
+    if (!user || !user.is_active) {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    if (user.lockedUntil && new Date() < user.lockedUntil) {
+    if (user.locked_until && new Date() < user.locked_until) {
       const lockMinutes = Math.ceil(
-        (user.lockedUntil.getTime() - new Date().getTime()) / 60000,
+        (user.locked_until.getTime() - new Date().getTime()) / 60000,
       );
       throw new UnauthorizedException(
         `Account locked for ${lockMinutes} more minutes`,
       );
     }
 
-    const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+    const isPasswordValid = await bcrypt.compare(password, user.password_hash);
     if (!isPasswordValid) {
-      await this.userService.incrementFailedLogin(user.userId);
-      if (user.failedLoginAttempts >= 4) {
+      await this.userService.incrementFailedLogin(user.user_id);
+      if (user.failed_login_attempts >= 4) {
         const lockUntil = new Date(Date.now() + 15 * 60 * 1000);
-        await this.userService.lockAccount(user.userId, lockUntil);
+        await this.userService.lockAccount(user.user_id, lockUntil);
         throw new UnauthorizedException(
           'Account locked due to multiple failed attempts. Try again in 15 minutes.',
         );
@@ -55,71 +49,72 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    await this.userService.resetFailedLogins(user.userId);
+    await this.userService.resetFailedLogins(user.user_id);
     return user;
   }
 
   async login(loginDto: LoginDto, ip: string, userAgent: string) {
     const user = await this.validateUser(loginDto.username, loginDto.password);
 
-    // 1. Create session object first to get UUID
-    const session = this.sessionRepository.create({
-      userId: user.userId,
-      schoolId: user.schoolId,
-      refreshTokenHash: 'PENDING', // Temporary placeholder
-      ipAddress: ip,
-      userAgent,
-      deviceName: this.extractDevice(userAgent),
-      lastActiveAt: new Date(),
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-    });
+    const sessionId = crypto.randomUUID();
+    const refreshTokenHash = 'PENDING';
 
-    // Save to generate sessionId
-    await this.sessionRepository.save(session);
-
-    // 2. Generate tokens including the sid and schoolId
-    const tokens = await this.getTokens(
-      user.userId,
-      user.username,
-      user.userType,
-      user.schoolId,
-      session.sessionId,
+    await this.db.insert(
+      `INSERT INTO user_sessions (session_id, user_id, school_id, refresh_token_hash, ip_address, user_agent, device_name, last_active_at, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW() + INTERVAL '7 days')
+       RETURNING *`,
+      [
+        sessionId,
+        user.user_id,
+        user.school_id,
+        refreshTokenHash,
+        ip,
+        userAgent,
+        this.extractDevice(userAgent),
+      ],
     );
 
-    // 3. Update session with actual refresh token hash
-    const refreshTokenHash = crypto
+    const tokens = await this.getTokens(
+      user.user_id,
+      user.username,
+      user.user_type,
+      user.school_id,
+      sessionId,
+    );
+
+    const newRefreshTokenHash = crypto
       .createHash('sha256')
       .update(tokens.refreshToken)
       .digest('hex');
 
-    session.refreshTokenHash = refreshTokenHash;
-    await this.sessionRepository.save(session);
+    await this.db.query(
+      `UPDATE user_sessions SET refresh_token_hash = $2, updated_at = NOW() WHERE session_id = $1`,
+      [sessionId, newRefreshTokenHash],
+    );
 
-    // Update user's last login tracking
-    await this.userService.updateLastLoginInfo(user.userId, ip, userAgent);
+    await this.userService.updateLastLoginInfo(user.user_id, ip, userAgent);
 
-    // Record login in audit log
-    await this.auditLogRepository.save(
-      this.auditLogRepository.create({
-        userId: user.userId,
-        schoolId: user.schoolId,
-        action: 'LOGIN',
-        module: 'AUTH',
-        ipAddress: ip,
+    await this.db.insert(
+      `INSERT INTO audit_logs (user_id, school_id, action, entity_type, new_values, ip_address, user_agent)
+       VALUES ($1, $2, 'LOGIN', 'USER', $3, $4, $5)`,
+      [
+        user.user_id,
+        user.school_id,
+        JSON.stringify({ sessionId }),
+        ip,
         userAgent,
-        details: { sessionId: session.sessionId },
-      }),
+      ],
     );
 
     return {
       ...tokens,
-      sessionId: session.sessionId,
+      sessionId,
       user: {
-        id: user.userId,
-        schoolId: user.schoolId,
+        id: user.user_id,
+        schoolId: user.school_id,
         username: user.username,
-        fullName: user.fullName,
-        userType: user.userType,
+        fullName: user.full_name,
+        userType: user.user_type,
         email: user.email,
         phone: user.phone,
       },
@@ -132,23 +127,29 @@ export class AuthService {
       .update(refreshToken)
       .digest('hex');
 
-    await this.sessionRepository.delete({ userId, refreshTokenHash });
+    await this.db.query(
+      `DELETE FROM user_sessions WHERE user_id = $1 AND refresh_token_hash = $2`,
+      [userId, refreshTokenHash],
+    );
   }
 
   async logoutAll(userId: number) {
-    await this.sessionRepository.delete({ userId });
+    await this.db.query(`DELETE FROM user_sessions WHERE user_id = $1`, [
+      userId,
+    ]);
 
-    // Record in audit log
     const user = await this.userService.findOne(userId);
-    await this.auditLogRepository.save(
-      this.auditLogRepository.create({
-        userId,
-        schoolId: user.schoolId,
-        action: 'LOGOUT_ALL',
-        module: 'AUTH',
-        details: { message: 'Signed out from all devices' },
-      }),
-    );
+    if (user) {
+      await this.db.insert(
+        `INSERT INTO audit_logs (user_id, school_id, action, module, details)
+         VALUES ($1, $2, 'LOGOUT_ALL', 'AUTH', $3)`,
+        [
+          userId,
+          user.school_id,
+          JSON.stringify({ message: 'Signed out from all devices' }),
+        ],
+      );
+    }
   }
 
   async refreshTokens(refreshToken: string, ip: string, userAgent: string) {
@@ -166,39 +167,42 @@ export class AuthService {
       .update(refreshToken)
       .digest('hex');
 
-    const session = await this.sessionRepository.findOne({
-      where: { userId: payload.sub, refreshTokenHash },
-    });
+    const session = await this.db.queryOne<UserSession>(
+      `SELECT * FROM user_sessions WHERE user_id = $1 AND refresh_token_hash = $2`,
+      [payload.sub, refreshTokenHash],
+    );
 
-    if (!session || new Date() > session.expiresAt) {
-      if (session) await this.sessionRepository.remove(session);
+    if (!session || new Date() > session.expires_at) {
+      if (session) {
+        await this.db.query(`DELETE FROM user_sessions WHERE session_id = $1`, [
+          session.session_id,
+        ]);
+      }
       throw new UnauthorizedException('Session expired or invalidated');
     }
 
     const user = await this.userService.findOne(payload.sub);
-    if (!user || !user.isActive) {
+    if (!user || !user.is_active) {
       throw new UnauthorizedException('User account inactive');
     }
 
     const tokens = await this.getTokens(
-      user.userId,
+      user.user_id,
       user.username,
-      user.userType,
-      user.schoolId,
-      session.sessionId,
+      user.user_type,
+      user.school_id,
+      session.session_id,
     );
 
-    // Update session with new refresh token
     const newRefreshTokenHash = crypto
       .createHash('sha256')
       .update(tokens.refreshToken)
       .digest('hex');
 
-    session.refreshTokenHash = newRefreshTokenHash;
-    session.lastActiveAt = new Date();
-    session.ipAddress = ip;
-    session.userAgent = userAgent;
-    await this.sessionRepository.save(session);
+    await this.db.query(
+      `UPDATE user_sessions SET refresh_token_hash = $2, last_active_at = NOW(), ip_address = $3, user_agent = $4, updated_at = NOW() WHERE session_id = $1`,
+      [session.session_id, newRefreshTokenHash, ip, userAgent],
+    );
 
     return tokens;
   }
@@ -252,7 +256,7 @@ export class AuthService {
     const user = await this.userService.create(createUserDto);
     return {
       message: 'User registered successfully. Please verify your account.',
-      userId: user.userId,
+      userId: user.user_id,
     };
   }
 
@@ -260,27 +264,20 @@ export class AuthService {
     const user = await this.userService.findOneWithSchool(userId);
 
     return {
-      userId: user.userId,
-      schoolId: user.schoolId,
+      userId: user.user_id,
+      schoolId: user.school_id,
       username: user.username,
       email: user.email,
       phone: user.phone,
-      fullName: user.fullName,
-      userType: user.userType,
-      isVerified: user.isVerified,
-      isActive: user.isActive,
-      lastLoginAt: user.lastLoginAt,
-      lastLoginIp: user.lastLoginIp,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
-      school: user.school
-        ? {
-            schoolId: user.school.schoolId,
-            schoolCode: user.school.schoolCode,
-            schoolName: user.school.schoolName,
-            schoolNameNepali: user.school.schoolNameNepali,
-          }
-        : null,
+      fullName: user.full_name,
+      userType: user.user_type,
+      isVerified: user.is_verified,
+      isActive: user.is_active,
+      lastLoginAt: user.last_login_at,
+      lastLoginIp: user.last_login_ip,
+      createdAt: user.created_at,
+      updatedAt: user.updated_at,
+      school: null,
     };
   }
 }

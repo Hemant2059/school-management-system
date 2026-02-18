@@ -1,59 +1,153 @@
-# School Management System (Backend)
+# Nepal School Management System (SMS)
 
-A comprehensive backend solution for modern schools, built with NestJS and TypeORM. 
+A comprehensive, Nepal-specific school management system built with NestJS and PostgreSQL. Designed to comply with Nepal Government regulations (MOEST, NEB, District Education Office).
 
-## 🚀 Key Features
-- **Global Auth & RBAC**: Secure JWT-based authentication with role-based access control (Admin, Teacher, Staff, Student, etc.).
-- **Bilingual Support**: Nepali (BS) and English (AD) date system integration with bilingual data entry (Unicode support).
-- **Academic Management**: Comprehensive management for Classes, Sections, Subjects, and Enrollments.
-- **Attendance**: Bulk and individual attendance tracking with holiday detection.
-- **Library & Transport**: Book issue tracking and student transport route/fee management.
-- **Exams & Results**: Automated mark calculation, result publishing, and digital report card generation.
-- **HR & Payroll**: Staff onboarding, leave management, and automated payslip generation.
-- **Notifications**: System alerts with planned SMS integration.
+## Features
 
-## 📖 Documentation
-For a detailed list of all system endpoints, base URL, and authentication methods, please refer to:
-👉 **[API_DOCUMENTATION.md](./API_DOCUMENTATION.md)**
+### Core Management
 
-## 🛠 Project Setup
+- Student Information Management (with BS/AD dates, caste/ethnicity tracking)
+- Teacher & Staff Management (PAN, SSF, citizenship tracking)
+- Parent/Guardian Portal
+- Class, Section, and Subject Management
+
+### Academic
+
+- Exam Schedule & Management
+- Marks Entry & Grade Calculation
+- Report Card Generation
+- Attendance Tracking (with biometric device support)
+- Timetable Management
+- Assignment Management
+
+### Finance
+
+- Fee Structure & Collection
+- Multiple Payment Methods (Cash, Bank, eSewa, Khalti, Fonepay, ConnectIPS, IME Pay)
+- Expense Management
+- Financial Reports
+
+### Library & Transport
+
+- Book Inventory & Issue/Return
+- Transport Routes & Vehicle Management
+- Student Transport Assignments
+
+### Compliance (Nepal Government)
+
+- DEO Student Reports (caste/ethnicity, free seat, disability)
+- Staff Reports
+- Tax Compliance (PAN, SSF, TDS)
+- Fiscal Year in Bikram Sambat
+
+## Tech Stack
+
+| Component | Technology             |
+| --------- | ---------------------- |
+| Backend   | NestJS 11.x            |
+| Database  | PostgreSQL 15+         |
+| API       | REST + Swagger/OpenAPI |
+| Auth      | JWT                    |
+| Cache     | Redis                  |
+| Queue     | BullMQ                 |
+| Server    | Fastify                |
+
+## Prerequisites
+
+- Node.js 18+
+- PostgreSQL 15+
+- Redis 7+
+
+## Installation
 
 ```bash
 # Install dependencies
-$ pnpm install
+npm install
 
-# Database Setup (PostgreSQL)
-# Ensure your .env is configured correctly
+# Set up environment variables
+cp .env.example .env
+# Edit .env with your database credentials
 
-# Run migrations
-$ pnpm run TypeORM:migrate
+# Run database migration
+psql -U postgres -d sms_nepal -f src/database/migrations/1706200000000-NepalSchemaEnhancement.sql
 
-# Seed the database (Populates 34+ tables with 10 records each)
-$ npx ts-node src/database/seeds/seeder.ts
+# Start development server
+npm run start:dev
 ```
 
-## Running the App
+## Environment Variables
+
+```env
+# Database
+DB_HOST=localhost
+DB_PORT=5432
+DB_USERNAME=postgres
+DB_PASSWORD=your_password
+DB_NAME=sms_nepal
+
+# Redis
+REDIS_HOST=localhost
+REDIS_PORT=6379
+
+# JWT
+JWT_SECRET=your_jwt_secret
+JWT_EXPIRES_IN=7d
+
+# Server
+PORT=3000
+NODE_ENV=development
+```
+
+## API Documentation
+
+Once running, visit:
+
+- **Swagger UI**: http://localhost:3000/docs
+- **OpenAPI JSON**: http://localhost:3000/docs-json
+
+## Nepal-Specific Features
+
+- **Bikram Sambat (BS) Dates**: Full support throughout the system
+- **Geographic Structure**: Provinces, Districts, Municipalities, Wards
+- **Compliance Fields**: MOEST codes, PAN numbers, SSF tracking
+- **Digital Payments**: eSewa, Khalti, Fonepay, ConnectIPS, IME Pay
+
+## Project Structure
+
+```
+src/
+├── auth/              # Authentication & JWT
+├── user/              # User management
+├── school/            # School settings
+├── student/           # Student management
+├── teacher/           # Teacher management
+├── guardian/          # Parent/Guardian
+├── attendance/        # Attendance
+├── fee/               # Fees & Payments
+├── exam/              # Exams & Marks
+├── library/           # Library
+├── transport/         # Transport
+├── compliance/        # DEO Reports
+├── dashboard/         # Analytics
+└── database/          # Database service (raw SQL)
+```
+
+## Scripts
 
 ```bash
-# development
-$ pnpm run start
-
-# watch mode
-$ pnpm run start:dev
-
-# production mode
-$ pnpm run start:prod
+npm run start:dev      # Development server with hot reload
+npm run build          # Build for production
+npm run start:prod     # Run production build
+npm run lint           # Lint code
+npm run test           # Run tests
+npm run seed           # Seed database
 ```
 
-## 🧪 Testing
+## Documentation
 
-```bash
-# unit tests
-$ pnpm run test
+- [Government Submission Documentation](./docs/GOVERNMENT_SUBMISSION.md) - Full compliance documentation
+- [API Documentation](./docs/) - Detailed API endpoints
 
-# e2e tests
-$ pnpm run test:e2e
-```
+## License
 
-## 📜 License
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+Private - All rights reserved

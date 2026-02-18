@@ -25,8 +25,8 @@ export class DashboardController {
   @Roles(UserRole.ADMIN)
   @ApiOperation({ summary: 'Get Admin dashboard statistics' })
   @ApiResponse({ status: 200, type: AdminStatsDto })
-  async getAdminStats(@GetUser('schoolId') schoolId: number) {
-    return this.dashboardService.getAdminStats(schoolId);
+  async getAdminStats(@GetUser('schoolId') schoolId: string) {
+    return this.dashboardService.getAdminStats(parseInt(schoolId));
   }
 
   @Get('student')

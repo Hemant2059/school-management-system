@@ -15,15 +15,12 @@ import helmet from '@fastify/helmet';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { TimeoutInterceptor } from './common/interceptors/timeout.interceptor';
-import { AuditInterceptor } from './common/interceptors/audit.interceptor';
-import { AuditLog } from './user/entities/audit-log.entity';
-import { getRepositoryToken } from '@nestjs/typeorm';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
     new FastifyAdapter(),
-    { bufferLogs: true }, // Buffer logs until logger is attached
+    { bufferLogs: true },
   );
 
   // Use Pino Logger
@@ -86,10 +83,6 @@ async function bootstrap() {
   app.useGlobalFilters(new HttpExceptionFilter());
   app.useGlobalInterceptors(new TimeoutInterceptor());
   app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
-
-  // Audit interceptor
-  const auditRepo = app.get(getRepositoryToken(AuditLog));
-  app.useGlobalInterceptors(new AuditInterceptor(auditRepo));
 
   // Swagger setup
   const config = new DocumentBuilder()

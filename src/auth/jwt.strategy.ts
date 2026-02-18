@@ -4,17 +4,15 @@ import { ConfigService } from '@nestjs/config';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { FastifyRequest } from 'fastify';
 import { UserService } from '../user/user.service';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { UserSession } from '../user/entities/user-session.entity';
+import { DatabaseService } from '../database/database.service';
+import { UserSession } from '../user/entities/interfaces';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
     private configService: ConfigService,
     private userService: UserService,
-    @InjectRepository(UserSession)
-    private sessionRepository: Repository<UserSession>,
+    private db: DatabaseService,
   ) {
     const secret = configService.get<string>('JWT_SECRET');
     if (!secret) {
@@ -36,11 +34,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('User not found');
     }
 
-    // Strict multi-device session verification
     if (payload.sid) {
-      const session = await this.sessionRepository.findOne({
-        where: { sessionId: payload.sid, userId: user.userId },
-      });
+      const session = await this.db.queryOne<UserSession>(
+        `SELECT * FROM user_sessions WHERE session_id = $1 AND user_id = $2`,
+        [payload.sid, user.user_id],
+      );
       if (!session) {
         throw new UnauthorizedException('Session invalidated or logged out');
       }
@@ -50,6 +48,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       userId: payload.sub,
       username: payload.username,
       userType: payload.userType,
+      schoolId: payload.schoolId,
     };
   }
 }

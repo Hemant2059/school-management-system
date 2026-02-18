@@ -23,7 +23,7 @@ import { CreateTeacherDto } from './dto/create-teacher.dto';
 import { UpdateTeacherDto } from './dto/update-teacher.dto';
 import { PageOptionsDto } from '../common/dto/page-options.dto';
 import { PageDto } from '../common/dto/page.dto';
-import { Teacher } from './entities/teacher.entity';
+import { Teacher } from './teacher.service';
 
 @ApiTags('Teacher Management')
 @ApiBearerAuth()

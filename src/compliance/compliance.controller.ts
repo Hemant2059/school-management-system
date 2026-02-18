@@ -5,7 +5,7 @@ import { GetUser } from '../common/decorators/get-user.decorator';
 
 import { SeedAdminJsonService } from '../database/seeds/seed-admin-json.service';
 
-@Controller('api/compliance')
+@Controller('compliance')
 export class ComplianceController {
   constructor(
     private deoReportService: DeoReportService,

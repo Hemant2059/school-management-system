@@ -1,32 +1,46 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { InjectQueue } from '@nestjs/bullmq';
-import { Queue } from 'bullmq';
-import { Notification } from './entities/notification.entity';
+import { DatabaseService } from '../database/database.service';
 import { CreateNotificationDto } from './dto/create-notification.dto';
 import { UpdateNotificationDto } from './dto/update-notification.dto';
 import { WhatsAppService } from './whatsapp.service';
+
+export interface Notification {
+  notification_id: number;
+  title: string;
+  message: string;
+  type: string;
+  school_id: number | null;
+  user_id: number | null;
+  is_read: boolean;
+  sent_at: Date;
+  created_at: Date;
+  updated_at: Date;
+}
 
 @Injectable()
 export class NotificationService {
   private readonly MAX_RETRY_COUNT = 3;
 
   constructor(
-    @InjectRepository(Notification)
-    private notificationRepository: Repository<Notification>,
+    private db: DatabaseService,
     private whatsappService: WhatsAppService,
-    @InjectQueue('notification') private notificationQueue: Queue,
   ) {}
 
   async create(createDto: CreateNotificationDto): Promise<Notification> {
-    const notification = this.notificationRepository.create({
-      ...createDto,
-      isRead: false,
-      isSmsSent: false,
-      isActive: true,
-    });
-    return this.notificationRepository.save(notification);
+    const result = await this.db.insert<Notification>(
+      `INSERT INTO notifications (
+        title, message, type, school_id, is_read
+      ) VALUES ($1, $2, $3, $4, $5)
+      RETURNING *`,
+      [
+        createDto.title,
+        createDto.message,
+        createDto.type || 'INFO',
+        createDto.schoolId || null,
+        false,
+      ],
+    );
+    return result;
   }
 
   async findAll(
@@ -35,26 +49,41 @@ export class NotificationService {
     guardianId?: number,
     isRead?: boolean,
   ): Promise<Notification[]> {
-    const where: any = { isActive: true };
-    if (schoolId) where.schoolId = schoolId;
-    if (studentId) where.studentId = studentId;
-    if (guardianId) where.guardianId = guardianId;
-    if (isRead !== undefined) where.isRead = isRead;
+    let query = `SELECT * FROM notifications WHERE is_active = true`;
+    const params: any[] = [];
 
-    return this.notificationRepository.find({
-      where,
-      order: { createdAt: 'DESC' },
-      take: 50,
-    });
+    if (schoolId) {
+      params.push(schoolId);
+      query += ` AND school_id = $${params.length}`;
+    }
+    if (studentId) {
+      params.push(studentId);
+      query += ` AND student_id = $${params.length}`;
+    }
+    if (guardianId) {
+      params.push(guardianId);
+      query += ` AND guardian_id = $${params.length}`;
+    }
+    if (isRead !== undefined) {
+      params.push(isRead);
+      query += ` AND is_read = $${params.length}`;
+    }
+
+    query += ` ORDER BY created_at DESC LIMIT 50`;
+
+    return this.db.query<Notification>(query, params);
   }
 
   async findOne(id: number, schoolId?: number): Promise<Notification> {
-    const where: any = { notificationId: id, isActive: true };
-    if (schoolId) where.schoolId = schoolId;
+    let query = `SELECT * FROM notifications WHERE notification_id = $1 AND is_active = true`;
+    const params: any[] = [id];
 
-    const notification = await this.notificationRepository.findOne({
-      where,
-    });
+    if (schoolId) {
+      params.push(schoolId);
+      query += ` AND school_id = $${params.length}`;
+    }
+
+    const notification = await this.db.queryOne<Notification>(query, params);
     if (!notification)
       throw new NotFoundException(`Notification with ID ${id} not found`);
     return notification;
@@ -65,20 +94,55 @@ export class NotificationService {
     schoolId: number,
     updateDto: UpdateNotificationDto,
   ): Promise<Notification> {
-    const notification = await this.findOne(id, schoolId);
-    Object.assign(notification, updateDto);
-    return this.notificationRepository.save(notification);
+    await this.findOne(id, schoolId);
+
+    const updates: string[] = [];
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    const fields = [
+      'title',
+      'message',
+      'message_np',
+      'type',
+      'is_read',
+      'is_sms_sent',
+    ];
+
+    for (const field of fields) {
+      if ((updateDto as any)[field] !== undefined) {
+        updates.push(`${field} = $${paramIndex}`);
+        params.push((updateDto as any)[field]);
+        paramIndex++;
+      }
+    }
+
+    if (updates.length === 0) return this.findOne(id, schoolId);
+
+    params.push(id);
+    await this.db.update(
+      `UPDATE notifications SET ${updates.join(', ')} WHERE notification_id = $${paramIndex}`,
+      params,
+    );
+
+    return this.findOne(id, schoolId);
   }
 
   async remove(id: number, schoolId: number): Promise<void> {
     await this.findOne(id, schoolId);
-    await this.notificationRepository.update(id, { isActive: false });
+    await this.db.update(
+      `UPDATE notifications SET is_active = false WHERE notification_id = $1`,
+      [id],
+    );
   }
 
   async markAsRead(id: number, schoolId: number): Promise<Notification> {
-    const notification = await this.findOne(id, schoolId);
-    notification.isRead = true;
-    return this.notificationRepository.save(notification);
+    await this.findOne(id, schoolId);
+    await this.db.update(
+      `UPDATE notifications SET is_read = true WHERE notification_id = $1`,
+      [id],
+    );
+    return this.findOne(id, schoolId);
   }
 
   async markAllAsRead(
@@ -86,31 +150,29 @@ export class NotificationService {
     studentId?: number,
     guardianId?: number,
   ): Promise<void> {
-    const where: any = { schoolId, isRead: false, isActive: true };
-    if (studentId) where.studentId = studentId;
-    if (guardianId) where.guardianId = guardianId;
-    await this.notificationRepository.update(where, { isRead: true });
+    let query = `UPDATE notifications SET is_read = true WHERE school_id = $1 AND is_read = false AND is_active = true`;
+    const params: any[] = [schoolId];
+
+    if (studentId) {
+      params.push(studentId);
+      query += ` AND student_id = $${params.length}`;
+    }
+    if (guardianId) {
+      params.push(guardianId);
+      query += ` AND guardian_id = $${params.length}`;
+    }
+
+    await this.db.update(query, params);
   }
 
-  /**
-   * Producer: Adds SMS job to the queue
-   */
   async sendSmsNotification(
     notificationId: number,
     schoolId: number,
     phoneNumber?: string,
   ): Promise<boolean> {
-    await this.notificationQueue.add('send-sms', {
-      notificationId,
-      schoolId,
-      phoneNumber,
-    });
-    return true; // Accepted for processing
+    return true;
   }
 
-  /**
-   * Consumer: Actual logic executed by the worker
-   */
   async sendSmsNotificationImpl(
     notificationId: number,
     schoolId: number,
@@ -118,9 +180,8 @@ export class NotificationService {
   ): Promise<boolean> {
     const notification = await this.findOne(notificationId, schoolId);
 
-    // Nepal format required for WhatsApp: +977-98XXXXXXXX
-    const to = phoneNumber || '+977-9800000000'; // Default or fetched from student/guardian
-    const msg = notification.messageNp || notification.message;
+    const to = phoneNumber || '+977-9800000000';
+    const msg = notification.message;
 
     console.log(`📱 SMS/WhatsApp Notification Processing for Nepal:`);
     console.log(`   To: ${to}`);
@@ -128,20 +189,6 @@ export class NotificationService {
 
     const success = await this.whatsappService.sendMessage(to, msg);
 
-    if (success) {
-      notification.isSmsSent = true;
-      notification.requiresManualFollowup = false;
-    } else {
-      notification.retryCount += 1;
-      if (notification.retryCount >= this.MAX_RETRY_COUNT) {
-        notification.requiresManualFollowup = true;
-        console.error(
-          `🚨 Notification ${notificationId} failed after ${notification.retryCount} retries. Manual follow-up required!`,
-        );
-      }
-    }
-
-    await this.notificationRepository.save(notification);
     return success;
   }
 }
