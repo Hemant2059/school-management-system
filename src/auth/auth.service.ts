@@ -39,7 +39,7 @@ export class AuthService {
     const isPasswordValid = await bcrypt.compare(password, user.password_hash);
     if (!isPasswordValid) {
       await this.userService.incrementFailedLogin(user.user_id);
-      if (user.failed_login_attempts >= 4) {
+      if ((user.failed_login_attempts ?? 0) >= 4) {
         const lockUntil = new Date(Date.now() + 15 * 60 * 1000);
         await this.userService.lockAccount(user.user_id, lockUntil);
         throw new UnauthorizedException(
@@ -77,8 +77,8 @@ export class AuthService {
     const tokens = await this.getTokens(
       user.user_id,
       user.username,
-      user.user_type,
-      user.school_id,
+      user.user_type ?? '',
+      user.school_id ?? 0,
       sessionId,
     );
 
@@ -173,7 +173,7 @@ export class AuthService {
       [payload.sub, refreshTokenHash],
     );
 
-    if (!session || new Date() > session.expires_at) {
+    if (!session || !session.expires_at || new Date() > session.expires_at) {
       if (session) {
         await this.db.query(`DELETE FROM user_sessions WHERE session_id = $1`, [
           session.session_id,
@@ -190,9 +190,9 @@ export class AuthService {
     const tokens = await this.getTokens(
       user.user_id,
       user.username,
-      user.user_type,
-      user.school_id,
-      session.session_id,
+      user.user_type ?? '',
+      user.school_id ?? 0,
+      String(session.session_id),
     );
 
     const newRefreshTokenHash = crypto

@@ -1,47 +1,46 @@
 export interface User {
+  id: number;
   user_id: number;
-  school_id: number;
   username: string;
   email: string;
-  phone: string;
+  phone?: string;
+  password: string;
   password_hash: string;
-  full_name: string;
-  user_type: string;
-  is_verified: boolean;
+  role: string;
+  school_id?: number;
+  schoolId?: number;
+  user_type?: string;
+  full_name?: string;
   is_active: boolean;
-  failed_login_attempts: number;
-  locked_until: Date | null;
-  last_login_at: Date | null;
-  last_login_ip: string | null;
-  last_login_agent: string | null;
+  is_verified?: boolean;
+  locked_until?: Date;
+  failed_login_attempts?: number;
+  last_login_at?: Date;
+  last_login_ip?: string;
   created_at: Date;
+  createdAt: Date;
   updated_at: Date;
-  deleted_at: Date | null;
+  updatedAt: Date;
 }
 
 export interface UserSession {
-  session_id: string;
-  user_id: number;
-  school_id: number;
-  refresh_token_hash: string;
-  device_name: string;
-  ip_address: string;
-  user_agent: string;
-  last_active_at: Date;
-  expires_at: Date;
-  created_at: Date;
-  updated_at: Date;
+  id: number;
+  session_id?: number | string;
+  userId: number;
+  token: string;
+  expires_at?: Date;
+  expiresAt: Date;
+  createdAt: Date;
 }
 
 export interface AuditLog {
-  audit_id: number;
-  user_id: number | null;
-  school_id: number | null;
+  id: number;
+  userId?: number;
   action: string;
   module: string;
-  resource_id: string | null;
-  details: Record<string, any> | null;
-  ip_address: string | null;
-  user_agent: string | null;
-  created_at: Date;
+  resourceId?: string;
+  details?: any;
+  ipAddress?: string;
+  userAgent?: string;
+  createdAt: Date;
 }

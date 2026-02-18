@@ -33,6 +33,12 @@ import { HealthModule } from './health/health.module';
 import { ComplianceModule } from './compliance/compliance.module';
 import { AiModule } from './ai/ai.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { WebsocketModule } from './websocket/websocket.module';
+import { PaymentModule } from './payment/payment.module';
+import { VideoClassModule } from './video-class/video-class.module';
+import { PortalModule } from './portal/portal.module';
+import { DocumentModule } from './document/document.module';
+import { HostelModule } from './hostel/hostel.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { RolesGuard } from './auth/roles.guard';
 import { AppController } from './app.controller';
@@ -116,6 +122,12 @@ import { redisStore } from 'cache-manager-redis-store';
     ComplianceModule,
     AiModule,
     DashboardModule,
+    WebsocketModule,
+    PaymentModule,
+    VideoClassModule,
+    PortalModule,
+    DocumentModule,
+    HostelModule,
   ],
   controllers: [AppController],
   providers: [

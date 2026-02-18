@@ -3,26 +3,14 @@ import { DeoReportService } from './deo-report.service';
 import { Public } from '../common/decorators/public.decorator';
 import { GetUser } from '../common/decorators/get-user.decorator';
 
-import { SeedAdminJsonService } from '../database/seeds/seed-admin-json.service';
-
 @Controller('compliance')
 export class ComplianceController {
-  constructor(
-    private deoReportService: DeoReportService,
-    private seedAdminService: SeedAdminJsonService,
-  ) {}
-
-  @Public()
-  @Post('seed-admin')
-  async seedAdminData() {
-    await this.seedAdminService.seed();
-    return { message: 'Administrative data seeding initiated from JSON' };
-  }
+  constructor(private deoReportService: DeoReportService) {}
 
   @Public()
   @Post('verify')
   async verifyCompliance() {
-    await Promise.resolve(); // Simulate async work
+    await Promise.resolve();
     return {
       status: 'compliant',
       context: 'Nepal',

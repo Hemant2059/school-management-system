@@ -85,17 +85,12 @@ export class ReportCardService {
         doc.moveDown();
 
         // Overall Result
-        doc
-          .fontSize(11)
-          .text(`Overall Percentage / कुल प्रतिशत: ${data.percentage}%`, {
-            bold: true,
-          });
-        doc.text(`Grade / ग्रेड: ${data.grade} (${data.gradePoint})`, {
-          bold: true,
-        });
+        doc.fontSize(11).font('Helvetica-Bold');
+        doc.text(`Overall Percentage / कुल प्रतिशत: ${data.percentage}%`);
+        doc.font('Helvetica').fontSize(11);
+        doc.text(`Grade / ग्रेड: ${data.grade} (${data.gradePoint})`);
         doc.text(
           `Division / श्रेणी: ${this.getDivision(parseFloat(data.percentage))}`,
-          { bold: true },
         );
         doc.moveDown();
 
