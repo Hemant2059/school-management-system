@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { BullModule } from '@nestjs/bullmq';
+// import { BullModule } from '@nestjs/bullmq';
 import { CacheModule } from '@nestjs/cache-manager';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
@@ -55,7 +55,13 @@ import { AdminModule } from './admin/admin.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { RolesGuard } from './auth/roles.guard';
 import { AppController } from './app.controller';
-import { redisStore } from 'cache-manager-redis-store';
+
+let redisStore: any;
+try {
+  redisStore = require('cache-manager-redis-store').redisStore;
+} catch {
+  redisStore = undefined;
+}
 
 @Module({
   imports: [
@@ -66,26 +72,36 @@ import { redisStore } from 'cache-manager-redis-store';
     }),
     CacheModule.registerAsync({
       isGlobal: true,
-      useFactory: async () => ({
-        store: await redisStore({
-          socket: {
-            host: process.env.REDIS_HOST || 'localhost',
-            port: parseInt(process.env.REDIS_PORT || '6379'),
-          },
-        }),
-        ttl: parseInt(process.env.REDIS_TTL || '3600'),
-      }),
+      useFactory: async () => {
+        const redisHost = process.env.REDIS_HOST;
+        if (redisHost && redisStore) {
+          return {
+            store: await redisStore({
+              socket: {
+                host: redisHost,
+                port: parseInt(process.env.REDIS_PORT || '6379'),
+              },
+            }),
+            ttl: parseInt(process.env.REDIS_TTL || '3600'),
+          };
+        }
+        return {
+          ttl: parseInt(process.env.REDIS_TTL || '3600'),
+        };
+      },
     }),
-    BullModule.forRootAsync({
-      imports: [ConfigModule],
-      useFactory: (configService: ConfigService) => ({
-        connection: {
-          host: configService.get('REDIS_HOST') || 'localhost',
-          port: configService.get('REDIS_PORT') || 6379,
-        },
-      }),
-      inject: [ConfigService],
-    }),
+    // BullModule commented out - requires Redis
+    // Uncomment when REDIS_HOST is configured
+    // BullModule.forRootAsync({
+    //   imports: [ConfigModule],
+    //   useFactory: (configService: ConfigService) => ({
+    //     connection: {
+    //       host: configService.get('REDIS_HOST'),
+    //       port: configService.get('REDIS_PORT') || 6379,
+    //     },
+    //   }),
+    //   inject: [ConfigService],
+    // }),
     ThrottlerModule.forRoot([
       {
         name: 'short',
