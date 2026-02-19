@@ -24,6 +24,13 @@ export class AuthService {
     this.logger.log('Validating user: ' + username);
     const user = await this.userService.findByUsernameOrEmailOrPhone(username);
 
+    this.logger.log(
+      'User found: ' +
+        (user ? user.username : 'null') +
+        ' hash: ' +
+        (user?.password_hash?.substring(0, 20) || 'none'),
+    );
+
     if (!user) {
       this.logger.error('User not found: ' + username);
       throw new UnauthorizedException('Invalid credentials');
