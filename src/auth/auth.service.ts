@@ -44,6 +44,14 @@ export class AuthService {
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.password_hash);
+    this.logger.log(
+      'Password check result: ' +
+        isPasswordValid +
+        ' for user: ' +
+        user.username +
+        ' hash length: ' +
+        (user.password_hash?.length || 0),
+    );
     if (!isPasswordValid) {
       await this.userService.incrementFailedLogin(user.user_id);
       if ((user.failed_login_attempts ?? 0) >= 4) {
