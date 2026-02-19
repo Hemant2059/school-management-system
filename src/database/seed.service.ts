@@ -11,6 +11,7 @@ export class SeedService implements OnModuleInit {
   async onModuleInit() {
     await new Promise((resolve) => setTimeout(resolve, 2000));
     await this.seedAll();
+    await this.resetAdminPassword();
   }
 
   async seedAll() {
