@@ -40,61 +40,148 @@ export class DatabaseService implements OnModuleDestroy {
       this.logger.log('Initializing database schema...');
 
       await this.pool.query(`
+        -- Schools
         CREATE TABLE IF NOT EXISTS schools (
           school_id SERIAL PRIMARY KEY,
-          name VARCHAR(255) NOT NULL,
-          address TEXT,
-          phone VARCHAR(20),
-          email VARCHAR(255),
-          logo_url VARCHAR(500),
-          established_year INTEGER,
-          is_active BOOLEAN DEFAULT true,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          name VARCHAR(255) NOT NULL, address TEXT, phone VARCHAR(20), email VARCHAR(255),
+          logo_url VARCHAR(500), established_year INTEGER,
+          is_active BOOLEAN DEFAULT true, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
+        -- Users
         CREATE TABLE IF NOT EXISTS users (
           user_id SERIAL PRIMARY KEY,
-          username VARCHAR(50) UNIQUE NOT NULL,
-          email VARCHAR(255) UNIQUE NOT NULL,
-          password VARCHAR(255) NOT NULL,
-          full_name VARCHAR(100),
-          phone VARCHAR(20),
-          user_type VARCHAR(20) NOT NULL,
+          username VARCHAR(50) UNIQUE NOT NULL, email VARCHAR(255) UNIQUE NOT NULL, password VARCHAR(255) NOT NULL,
+          full_name VARCHAR(100), phone VARCHAR(20), user_type VARCHAR(20) NOT NULL,
           school_id INTEGER REFERENCES schools(school_id),
-          is_active BOOLEAN DEFAULT true,
-          is_verified BOOLEAN DEFAULT false,
-          is_system BOOLEAN DEFAULT false,
-          last_login_at TIMESTAMP,
-          last_login_ip VARCHAR(45),
-          failed_attempts INTEGER DEFAULT 0,
-          locked_until TIMESTAMP,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          deleted_at TIMESTAMP
+          is_active BOOLEAN DEFAULT true, is_verified BOOLEAN DEFAULT false, is_system BOOLEAN DEFAULT false,
+          last_login_at TIMESTAMP, last_login_ip VARCHAR(45), failed_attempts INTEGER DEFAULT 0, locked_until TIMESTAMP,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, deleted_at TIMESTAMP
         );
 
+        -- User Sessions
         CREATE TABLE IF NOT EXISTS user_sessions (
-          session_id SERIAL PRIMARY KEY,
-          user_id INTEGER REFERENCES users(user_id) ON DELETE CASCADE,
-          refresh_token VARCHAR(500),
-          device_info VARCHAR(255),
-          ip_address VARCHAR(45),
-          user_agent TEXT,
-          expires_at TIMESTAMP NOT NULL,
+          session_id SERIAL PRIMARY KEY, user_id INTEGER REFERENCES users(user_id) ON DELETE CASCADE,
+          refresh_token VARCHAR(500), device_info VARCHAR(255), ip_address VARCHAR(45), user_agent TEXT,
+          expires_at TIMESTAMP NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- Classes
+        CREATE TABLE IF NOT EXISTS classes (
+          class_id SERIAL PRIMARY KEY, school_id INTEGER REFERENCES schools(school_id),
+          class_name VARCHAR(50) NOT NULL, class_code VARCHAR(20), class_order INTEGER,
+          education_level VARCHAR(50), is_active BOOLEAN DEFAULT true, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- Sections
+        CREATE TABLE IF NOT EXISTS sections (
+          section_id SERIAL PRIMARY KEY, school_id INTEGER REFERENCES schools(school_id),
+          class_id INTEGER REFERENCES classes(class_id), section_name VARCHAR(20) NOT NULL, section_code VARCHAR(20),
+          section_order INTEGER, is_active BOOLEAN DEFAULT true, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- Subjects
+        CREATE TABLE IF NOT EXISTS subjects (
+          subject_id SERIAL PRIMARY KEY, school_id INTEGER REFERENCES schools(school_id),
+          subject_name_en VARCHAR(100) NOT NULL, subject_name_np VARCHAR(100),
+          subject_code VARCHAR(20), subject_type VARCHAR(20), class_id INTEGER REFERENCES classes(class_id),
+          is_active BOOLEAN DEFAULT true, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- Students
+        CREATE TABLE IF NOT EXISTS students (
+          student_id SERIAL PRIMARY KEY, school_id INTEGER REFERENCES schools(school_id),
+          admission_number VARCHAR(50) UNIQUE NOT NULL, first_name_en VARCHAR(100) NOT NULL,
+          middle_name_en VARCHAR(100), last_name_en VARCHAR(100), first_name_np VARCHAR(100),
+          middle_name_np VARCHAR(100), last_name_np VARCHAR(100), gender VARCHAR(10),
+          date_of_birth DATE, date_of_birth_bs VARCHAR(20), birthplace VARCHAR(100),
+          nationality VARCHAR(50), ethnicity VARCHAR(50), religion VARCHAR(50),
+          current_class_id INTEGER REFERENCES classes(class_id), current_section_id INTEGER REFERENCES sections(section_id),
+          academic_year VARCHAR(10), roll_number INTEGER, current_status VARCHAR(20) DEFAULT 'ACTIVE',
+          is_active BOOLEAN DEFAULT true, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- Guardians
+        CREATE TABLE IF NOT EXISTS guardians (
+          guardian_id SERIAL PRIMARY KEY, school_id INTEGER REFERENCES schools(school_id),
+          first_name VARCHAR(100) NOT NULL, middle_name VARCHAR(100), last_name VARCHAR(100),
+          phone VARCHAR(20), email VARCHAR(255), occupation VARCHAR(100),
+          relationship VARCHAR(50), is_active BOOLEAN DEFAULT true, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- Student Guardians
+        CREATE TABLE IF NOT EXISTS student_guardians (
+          student_guardian_id SERIAL PRIMARY KEY,
+          student_id INTEGER REFERENCES students(student_id), guardian_id INTEGER REFERENCES guardians(guardian_id),
+          relationship_type VARCHAR(20) NOT NULL, is_primary BOOLEAN DEFAULT false,
+          is_emergency_contact BOOLEAN DEFAULT false, is_active BOOLEAN DEFAULT true,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
+        -- Fees
+        CREATE TABLE IF NOT EXISTS fees (
+          fee_id SERIAL PRIMARY KEY, school_id INTEGER REFERENCES schools(school_id),
+          student_id INTEGER REFERENCES students(student_id), fee_type VARCHAR(50) NOT NULL,
+          amount DECIMAL(10,2) NOT NULL, discount_amount DECIMAL(10,2), fine_amount DECIMAL(10,2),
+          total_amount DECIMAL(10,2), due_date DATE, status VARCHAR(20) DEFAULT 'pending',
+          academic_year VARCHAR(10), class_id INTEGER, section_id INTEGER, invoice_number VARCHAR(50),
+          is_active BOOLEAN DEFAULT true, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- Payments
+        CREATE TABLE IF NOT EXISTS payments (
+          payment_id SERIAL PRIMARY KEY, school_id INTEGER REFERENCES schools(school_id),
+          student_id INTEGER REFERENCES students(student_id), fee_id INTEGER REFERENCES fees(fee_id),
+          amount DECIMAL(10,2) NOT NULL, payment_date DATE, payment_method VARCHAR(50),
+          transaction_id VARCHAR(100), received_by INTEGER, bank_name VARCHAR(100), cheque_number VARCHAR(50),
+          remarks TEXT, idempotency_key VARCHAR(100), is_verified BOOLEAN DEFAULT false,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- Attendance
+        CREATE TABLE IF NOT EXISTS attendance (
+          attendance_id SERIAL PRIMARY KEY, school_id INTEGER REFERENCES schools(school_id),
+          student_id INTEGER REFERENCES students(student_id), attendance_date DATE NOT NULL,
+          status VARCHAR(20) NOT NULL, remarks TEXT, marked_by INTEGER,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- Exams
+        CREATE TABLE IF NOT EXISTS exams (
+          exam_id SERIAL PRIMARY KEY, school_id INTEGER REFERENCES schools(school_id),
+          exam_name VARCHAR(100) NOT NULL, exam_type VARCHAR(50), class_id INTEGER REFERENCES classes(class_id),
+          academic_year VARCHAR(10), start_date DATE, end_date DATE, is_active BOOLEAN DEFAULT true,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- Marks
+        CREATE TABLE IF NOT EXISTS marks (
+          mark_id SERIAL PRIMARY KEY, school_id INTEGER REFERENCES schools(school_id),
+          student_id INTEGER REFERENCES students(student_id), exam_id INTEGER REFERENCES exams(exam_id),
+          subject_id INTEGER REFERENCES subjects(subject_id), class_id INTEGER, section_id INTEGER,
+          academic_year VARCHAR(10), theory_marks DECIMAL(5,2), practical_marks DECIMAL(5,2),
+          total_marks DECIMAL(5,2), grade VARCHAR(5), is_absent BOOLEAN DEFAULT false,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- Indexes
         CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
         CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
         CREATE INDEX IF NOT EXISTS idx_users_school ON users(school_id);
-        CREATE INDEX IF NOT EXISTS idx_users_type ON users(user_type);
         CREATE INDEX IF NOT EXISTS idx_sessions_user ON user_sessions(user_id);
+        CREATE INDEX IF NOT EXISTS idx_students_school ON students(school_id);
+        CREATE INDEX IF NOT EXISTS idx_classes_school ON classes(school_id);
+        CREATE INDEX IF NOT EXISTS idx_sections_school ON sections(school_id);
+        CREATE INDEX IF NOT EXISTS idx_subjects_school ON subjects(school_id);
+        CREATE INDEX IF NOT EXISTS idx_fees_student ON fees(student_id);
+        CREATE INDEX IF NOT EXISTS idx_payments_student ON payments(student_id);
+        CREATE INDEX IF NOT EXISTS idx_attendance_student ON attendance(student_id);
+        CREATE INDEX IF NOT EXISTS idx_marks_student ON marks(student_id);
       `);
 
       this.logger.log('Database schema initialized successfully');
     } catch (error) {
-      this.logger.error('Failed to initialize schema:', error.message);
+      this.logger.error('Failed to initialize schema: ' + error.message);
     }
   }
 
