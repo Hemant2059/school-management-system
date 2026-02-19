@@ -265,6 +265,57 @@ export class AuthService {
     };
   }
 
+  async setupInitialAdmin(body: {
+    schoolName: string;
+    username: string;
+    email: string;
+    password: string;
+    fullName: string;
+    phone?: string;
+  }) {
+    const existingAdmins = await this.db.query(
+      `SELECT user_id FROM users WHERE user_type = 'ADMIN' LIMIT 1`,
+    );
+
+    if (existingAdmins.length > 0) {
+      throw new UnauthorizedException(
+        'System already initialized. Please login.',
+      );
+    }
+
+    const school = await this.db.insert(
+      `INSERT INTO schools (name, is_active, created_at, updated_at)
+       VALUES ($1, true, NOW(), NOW())
+       RETURNING school_id, name`,
+      [body.schoolName],
+    );
+    const schoolId = school[0].school_id;
+
+    const hashedPassword = await bcrypt.hash(body.password, 10);
+
+    const user = await this.db.insert(
+      `INSERT INTO users (username, email, password, full_name, phone, user_type, school_id, is_active, is_verified, created_at, updated_at)
+       VALUES ($1, $2, $3, $4, $5, 'ADMIN', $6, true, true, NOW(), NOW())
+       RETURNING user_id, username, email, user_type, school_id`,
+      [
+        body.username,
+        body.email,
+        hashedPassword,
+        body.fullName,
+        body.phone || null,
+        schoolId,
+      ],
+    );
+
+    return {
+      message: 'System initialized successfully. Please login.',
+      schoolId: schoolId,
+      schoolName: body.schoolName,
+      userId: user[0].user_id,
+      username: user[0].username,
+    };
+  }
+
   async getUserProfile(userId: number) {
     const user = await this.userService.findOneWithSchool(userId);
 

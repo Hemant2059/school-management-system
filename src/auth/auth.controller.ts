@@ -201,6 +201,45 @@ export class AuthController {
     return this.authService.register(createUserDto, adminSchoolId);
   }
 
+  @Public()
+  @Post('setup')
+  @ApiOperation({
+    summary: 'Initial Setup - Create First Admin & School',
+    description: `Public endpoint to set up the first admin user and school.
+    
+    **IMPORTANT:** This endpoint is only active when no admin users exist.
+    Use this for initial system setup only.`,
+  })
+  @ApiBody({
+    description: 'Initial setup data',
+    schema: {
+      type: 'object',
+      required: ['schoolName', 'username', 'email', 'password', 'fullName'],
+      properties: {
+        schoolName: { type: 'string', example: 'My School' },
+        username: { type: 'string', example: 'admin' },
+        email: { type: 'string', example: 'admin@school.edu.np' },
+        password: { type: 'string', example: 'Admin@123' },
+        fullName: { type: 'string', example: 'School Admin' },
+        phone: { type: 'string', example: '9841234567' },
+      },
+    },
+  })
+  @ApiResponse({ status: 201, description: 'Setup complete' })
+  async setup(
+    @Body()
+    body: {
+      schoolName: string;
+      username: string;
+      email: string;
+      password: string;
+      fullName: string;
+      phone?: string;
+    },
+  ) {
+    return this.authService.setupInitialAdmin(body);
+  }
+
   @Post('logout')
   @Roles(UserRole.ADMIN)
   @Permissions(Permission.ADMIN)
