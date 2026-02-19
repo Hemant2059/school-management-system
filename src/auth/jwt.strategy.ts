@@ -34,16 +34,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       throw new UnauthorizedException('User not found');
     }
 
-    if (payload.sid) {
-      const session = await this.db.queryOne<UserSession>(
-        `SELECT * FROM user_sessions WHERE session_id = $1 AND user_id = $2`,
-        [payload.sid, user.user_id],
-      );
-      if (!session) {
-        throw new UnauthorizedException('Session invalidated or logged out');
-      }
-    }
-
     return {
       userId: payload.sub,
       username: payload.username,
