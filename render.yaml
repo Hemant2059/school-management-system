@@ -43,4 +43,4 @@ services:
       - key: LOG_LEVEL
         value: info
       - key: SWAGGER_ENABLED
-        value: 'false'
+        value: 'true'
