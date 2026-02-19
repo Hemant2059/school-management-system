@@ -4,7 +4,6 @@ import { DeoReportService } from './deo-report.service';
 
 describe('ComplianceController', () => {
   let controller: ComplianceController;
-  let deoReportService: DeoReportService;
 
   const mockDeoReportService = {
     generateEnrollmentReport: jest.fn(),
@@ -20,7 +19,6 @@ describe('ComplianceController', () => {
       ],
     }).compile();
     controller = module.get<ComplianceController>(ComplianceController);
-    deoReportService = module.get<DeoReportService>(DeoReportService);
   });
 
   it('should be defined', () => {

@@ -4,7 +4,6 @@ import { NotificationService } from './notification.service';
 
 describe('NotificationController', () => {
   let controller: NotificationController;
-  let service: NotificationService;
 
   const mockService = {
     create: jest.fn(),
@@ -23,7 +22,6 @@ describe('NotificationController', () => {
       providers: [{ provide: NotificationService, useValue: mockService }],
     }).compile();
     controller = module.get<NotificationController>(NotificationController);
-    service = module.get<NotificationService>(NotificationService);
   });
 
   it('should be defined', () => {

@@ -4,7 +4,6 @@ import { SubjectService } from './subject.service';
 
 describe('SubjectController', () => {
   let controller: SubjectController;
-  let service: SubjectService;
 
   const mockService = {
     create: jest.fn(),
@@ -21,7 +20,6 @@ describe('SubjectController', () => {
       providers: [{ provide: SubjectService, useValue: mockService }],
     }).compile();
     controller = module.get<SubjectController>(SubjectController);
-    service = module.get<SubjectService>(SubjectService);
   });
 
   it('should be defined', () => {

@@ -41,6 +41,17 @@ import { DocumentModule } from './document/document.module';
 import { HostelModule } from './hostel/hostel.module';
 import { AdmissionModule } from './admission/admission.module';
 import { EmailModule } from './email/email.module';
+import { GradeModule } from './grade/grade.module';
+import { StudentGuardianModule } from './student-guardian/student-guardian.module';
+import { PromotionModule } from './promotion/promotion.module';
+import { SmsModule } from './sms/sms.module';
+import { AuditModule } from './audit/audit.module';
+import { CertificateModule } from './certificate/certificate.module';
+import { AcademicCalendarModule } from './academic-calendar/academic-calendar.module';
+import { ExportModule } from './export/export.module';
+import { SyncModule } from './sync/sync.module';
+import { WebhookModule } from './webhook/webhook.module';
+import { AdminModule } from './admin/admin.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { RolesGuard } from './auth/roles.guard';
 import { AppController } from './app.controller';
@@ -143,6 +154,17 @@ import { redisStore } from 'cache-manager-redis-store';
     HostelModule,
     AdmissionModule,
     EmailModule,
+    GradeModule,
+    StudentGuardianModule,
+    PromotionModule,
+    SmsModule,
+    AuditModule,
+    CertificateModule,
+    AcademicCalendarModule,
+    ExportModule,
+    SyncModule,
+    WebhookModule,
+    AdminModule,
   ],
   controllers: [AppController],
   providers: [

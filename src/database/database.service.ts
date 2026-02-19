@@ -265,7 +265,7 @@ export class DatabaseService implements OnModuleDestroy {
   }
 
   // Raw query with client for complex operations
-  async getClient(): Promise<PoolClient> {
+  getClient(): Promise<PoolClient> {
     return this.pool.connect();
   }
 
@@ -286,7 +286,7 @@ export class DatabaseService implements OnModuleDestroy {
       }
     }
 
-    throw lastError;
+    throw lastError ?? new Error('Unknown error in executeWithRetry');
   }
 
   // Get schema name

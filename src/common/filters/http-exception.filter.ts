@@ -36,6 +36,7 @@ export class HttpExceptionFilter implements ExceptionFilter {
         typeof message === 'object'
           ? (message as any).message || message
           : message,
+      errors: typeof message === 'object' ? (message as any).errors : undefined,
     };
 
     // Log the error

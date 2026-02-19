@@ -149,3 +149,124 @@ export interface Expense {
   expense_date: Date;
   created_by?: number;
 }
+
+export interface LateFineRule {
+  fine_rule_id: number;
+  school_id: number;
+  rule_name: string;
+  fine_type: 'per_day' | 'flat' | 'percentage';
+  fine_amount: number;
+  grace_period_days: number;
+  max_fine_amount?: number;
+  applicable_from: Date;
+  is_active: boolean;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface StudentBalance {
+  balance_id: number;
+  school_id: number;
+  student_id: number;
+  academic_year: string;
+  brought_forward_amount: number;
+  total_paid: number;
+  total_adjusted: number;
+  total_due: number;
+  current_balance: number;
+  notes?: string;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface FeeWaiverRequest {
+  waiver_id: number;
+  school_id: number;
+  student_id: number;
+  fee_id?: number;
+  waiver_type: string;
+  requested_amount: number;
+  approved_amount?: number;
+  reason?: string;
+  supporting_documents?: string[];
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+  requested_by?: number;
+  approved_by?: number;
+  requested_at: Date;
+  approved_at?: Date;
+  remarks?: string;
+}
+
+export interface SiblingDiscount {
+  sibling_discount_id: number;
+  school_id: number;
+  family_id?: string;
+  student_id: number;
+  sibling_count: number;
+  discount_percent: number;
+  discount_amount?: number;
+  is_active: boolean;
+  academic_year: string;
+  approved_by?: number;
+  approved_at?: Date;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface Scholarship {
+  scholarship_id: number;
+  school_id: number;
+  student_id: number;
+  scholarship_type: string;
+  discount_percent?: number;
+  discount_amount?: number;
+  academic_year: string;
+  reason?: string;
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled';
+  requested_by?: number;
+  approved_by?: number;
+  requested_at: Date;
+  approved_at?: Date;
+  remarks?: string;
+}
+
+export interface EnhancedPayment extends Payment {
+  idempotency_key?: string;
+  is_reversed?: boolean;
+  reversed_by?: number;
+  reversed_at?: Date;
+  reversal_reason?: string;
+  fee_id?: number;
+  is_verified?: boolean;
+  verified_by?: number;
+  verified_at?: Date;
+}
+
+export interface EnhancedFee {
+  fee_id: number;
+  school_id: number;
+  student_id: number;
+  fee_type: string;
+  amount: number;
+  discount_amount?: number;
+  fine_amount?: number;
+  total_amount?: number;
+  due_date: Date;
+  status: string;
+  academic_year?: string;
+  class_id?: number;
+  section_id?: number;
+  invoice_number?: string;
+  discount_type?: string;
+  discount_percent?: number;
+  fine_type?: string;
+  fine_percent?: number;
+  scholarship_percent?: number;
+  notes?: string;
+  is_active: boolean;
+  paid_amount: number;
+  remaining_amount?: number;
+  is_fully_paid: boolean;
+  last_payment_date?: Date;
+  payment_history?: any[];
+}

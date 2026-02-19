@@ -4,7 +4,6 @@ import { HrService } from './hr.service';
 
 describe('HrController', () => {
   let controller: HrController;
-  let service: HrService;
 
   const mockService = {
     createStaff: jest.fn(),
@@ -25,7 +24,6 @@ describe('HrController', () => {
       providers: [{ provide: HrService, useValue: mockService }],
     }).compile();
     controller = module.get<HrController>(HrController);
-    service = module.get<HrService>(HrService);
   });
 
   it('should be defined', () => {

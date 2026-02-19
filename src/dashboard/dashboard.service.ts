@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 import { AdminStatsDto } from './dto/admin-stats.dto';
 import { StudentStatsDto } from './dto/student-stats.dto';

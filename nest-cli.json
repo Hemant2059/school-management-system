@@ -8,6 +8,14 @@
       { "include": "i18n/**/*", "outDir": "dist/src" },
       "database/seeds/final.json"
     ],
-    "watchAssets": true
-  }
+    "watchAssets": true,
+    "webpack": true,
+    "tsConfigPath": "tsconfig.build.json"
+  },
+  "generateOptions": {
+    "strict": true
+  },
+  "monorepo": false,
+  "root": "",
+  "items": []
 }

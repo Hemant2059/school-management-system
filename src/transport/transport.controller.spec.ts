@@ -4,7 +4,6 @@ import { TransportService } from './transport.service';
 
 describe('TransportController', () => {
   let controller: TransportController;
-  let service: TransportService;
 
   const mockService = {
     createVehicle: jest.fn(),
@@ -26,7 +25,6 @@ describe('TransportController', () => {
       providers: [{ provide: TransportService, useValue: mockService }],
     }).compile();
     controller = module.get<TransportController>(TransportController);
-    service = module.get<TransportService>(TransportService);
   });
 
   it('should be defined', () => {

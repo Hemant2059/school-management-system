@@ -33,7 +33,17 @@ export default tseslint.config(
       '@typescript-eslint/no-unsafe-member-access': 'off',
       '@typescript-eslint/no-unsafe-call': 'off',
       '@typescript-eslint/no-unsafe-return': 'off',
-      "prettier/prettier": ["error", { "endOfLine": "auto" }],
+      '@typescript-eslint/no-unused-vars': [
+        'error',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_',
+        },
+      ],
+      '@typescript-eslint/require-await': 'off',
+      'no-useless-assignment': 'off',
+      'prettier/prettier': ['error', { endOfLine: 'auto' }],
     },
   },
 );

@@ -4,7 +4,6 @@ import { AttendanceService } from './attendance.service';
 
 describe('AttendanceController', () => {
   let controller: AttendanceController;
-  let service: AttendanceService;
 
   const mockService = {
     create: jest.fn(),
@@ -25,7 +24,6 @@ describe('AttendanceController', () => {
       providers: [{ provide: AttendanceService, useValue: mockService }],
     }).compile();
     controller = module.get<AttendanceController>(AttendanceController);
-    service = module.get<AttendanceService>(AttendanceService);
   });
 
   it('should be defined', () => {

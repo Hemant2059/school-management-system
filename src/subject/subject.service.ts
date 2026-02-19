@@ -52,7 +52,7 @@ export class SubjectService {
     );
   }
 
-  async findAll(schoolId: number, query?: any): Promise<Subject[]> {
+  async findAll(schoolId: number, _query?: any): Promise<Subject[]> {
     return this.db.query<Subject>(
       `SELECT * FROM subjects WHERE school_id = $1 AND is_active = true ORDER BY subject_name_en ASC`,
       [schoolId],

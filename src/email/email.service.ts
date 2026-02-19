@@ -25,31 +25,31 @@ export class EmailService {
       this.configService.get('SMTP_FROM') || 'noreply@school.edu.np';
   }
 
-  async sendEmail(options: EmailOptions): Promise<boolean> {
+  sendEmail(options: EmailOptions): Promise<boolean> {
     if (!this.smtpUser || !this.smtpPass) {
       console.log('Email not configured, skipping...');
       console.log(`Would send email to: ${options.to}`);
       console.log(`Subject: ${options.subject}`);
-      return true;
+      return Promise.resolve(true);
     }
 
     try {
       console.log(`Sending email to: ${options.to}`);
-      return true;
+      return Promise.resolve(true);
     } catch (error) {
       console.error('Failed to send email:', error);
-      return false;
+      return Promise.resolve(false);
     }
   }
 
   getEmailTemplate(name: string, data: any): string {
     const templates: Record<string, (data: any) => string> = {
-      admissionConfirmation: this.admissionConfirmationTemplate,
-      admissionApproved: this.admissionApprovedTemplate,
-      passwordReset: this.passwordResetTemplate,
-      feePaymentReminder: this.feePaymentReminderTemplate,
-      examSchedule: this.examScheduleTemplate,
-      marksPublished: this.marksPublishedTemplate,
+      admissionConfirmation: (d) => this.admissionConfirmationTemplate(d),
+      admissionApproved: (d) => this.admissionApprovedTemplate(d),
+      passwordReset: (d) => this.passwordResetTemplate(d),
+      feePaymentReminder: (d) => this.feePaymentReminderTemplate(d),
+      examSchedule: (d) => this.examScheduleTemplate(d),
+      marksPublished: (d) => this.marksPublishedTemplate(d),
     };
 
     return templates[name]?.(data) || '';

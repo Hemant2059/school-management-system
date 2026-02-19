@@ -199,7 +199,7 @@ export class TeacherService {
     id: number,
     updateTeacherDto: UpdateTeacherDto,
   ): Promise<Teacher> {
-    const teacher = await this.findOne(id);
+    await this.findOne(id);
 
     const updates: string[] = [];
     const params: any[] = [];

@@ -64,7 +64,7 @@ export class PaymentService {
       throw new BadRequestException('eKhalti payment gateway not configured');
     }
 
-    const paymentData = {
+    const _paymentData = {
       amount: request.amount,
       product_identity: transactionId,
       product_name: `School Fee - Student ID: ${request.studentId}`,
@@ -97,7 +97,7 @@ export class PaymentService {
       );
     }
 
-    const paymentData = {
+    const _paymentData = {
       merchantId: this.connectIpsMerchantId,
       transactionId,
       amount: request.amount,

@@ -30,7 +30,7 @@ export class EnrollmentService {
 
   async create(
     createDto: CreateEnrollmentDto,
-    userId?: number,
+    _userId?: number,
   ): Promise<Enrollment> {
     const currentEnrollment = await this.db.queryOne<Enrollment>(
       `SELECT * FROM student_enrollments WHERE student_id = $1 AND school_id = $2 AND is_current = true AND status = 'ACTIVE'`,
@@ -117,7 +117,7 @@ export class EnrollmentService {
     id: number,
     schoolId: number,
     updateDto: UpdateEnrollmentDto,
-    userId?: number,
+    _userId?: number,
   ): Promise<Enrollment> {
     await this.findOne(id, schoolId);
 
@@ -169,8 +169,8 @@ export class EnrollmentService {
     schoolId: number,
     newClassId: number,
     academicYear: string | number,
-    newSectionId?: number | string,
-    userId?: number,
+    _newSectionId?: number | string,
+    _userId?: number,
   ): Promise<Enrollment> {
     const currentEnrollment = await this.db.queryOne<Enrollment>(
       `SELECT * FROM student_enrollments WHERE student_id = $1 AND school_id = $2 AND is_current = true`,

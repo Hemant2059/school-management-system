@@ -4,7 +4,6 @@ import { GuardianService } from './guardian.service';
 
 describe('GuardianController', () => {
   let controller: GuardianController;
-  let service: GuardianService;
 
   const mockService = {
     create: jest.fn(),
@@ -23,7 +22,6 @@ describe('GuardianController', () => {
       providers: [{ provide: GuardianService, useValue: mockService }],
     }).compile();
     controller = module.get<GuardianController>(GuardianController);
-    service = module.get<GuardianService>(GuardianService);
   });
 
   it('should be defined', () => {

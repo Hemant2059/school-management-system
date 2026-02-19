@@ -4,7 +4,6 @@ import { SectionService } from './section.service';
 
 describe('SectionController', () => {
   let controller: SectionController;
-  let service: SectionService;
 
   const mockService = {
     create: jest.fn(),
@@ -20,7 +19,6 @@ describe('SectionController', () => {
       providers: [{ provide: SectionService, useValue: mockService }],
     }).compile();
     controller = module.get<SectionController>(SectionController);
-    service = module.get<SectionService>(SectionService);
   });
 
   it('should be defined', () => {

@@ -137,7 +137,7 @@ export class UserService {
   }
 
   async update(id: number, updateUserDto: UpdateUserDto): Promise<User> {
-    const user = await this.findById(id);
+    await this.findById(id);
 
     const updates: string[] = [];
     const params: any[] = [];

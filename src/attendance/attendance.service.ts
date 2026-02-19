@@ -6,7 +6,6 @@ import {
 import { DatabaseService } from '../database/database.service';
 import { CreateAttendanceDto } from './dto/create-attendance.dto';
 import { UpdateAttendanceDto } from './dto/update-attendance.dto';
-import { Attendance as DbAttendance } from '../database/entities/interfaces';
 
 export interface Attendance {
   attendance_id: number;
@@ -82,7 +81,7 @@ export class AttendanceService {
       try {
         const record = await this.create(dto, userId);
         results.push(record);
-      } catch (e) {
+      } catch {
         // Skip duplicates
       }
     }
@@ -119,7 +118,7 @@ export class AttendanceService {
     id: number,
     schoolId: number,
     updateDto: UpdateAttendanceDto,
-    userId?: number,
+    _userId?: number,
   ): Promise<Attendance> {
     await this.findOne(id, schoolId);
 
@@ -197,11 +196,14 @@ export class AttendanceService {
   async getStudentStatistics(
     studentId: number,
     academicYearOrSchoolId: string | number,
-    academicYear?: string | number,
-    start?: Date,
-    end?: Date,
+    _academicYear?: string | number,
+    _start?: Date,
+    _end?: Date,
   ): Promise<any> {
-    const records = await this.findByStudent(studentId, String(academicYear));
+    const records = await this.findByStudent(
+      studentId,
+      String(academicYearOrSchoolId),
+    );
     const total = records.length;
     const present = records.filter((r) => r.status === 'PRESENT').length;
     const absent = records.filter((r) => r.status === 'ABSENT').length;
@@ -233,13 +235,13 @@ export class AttendanceService {
 
   async getMonthlyReport(
     schoolId: number,
-    classId?: number | string,
-    sectionId?: number | string,
+    _classId?: number | string,
+    _sectionId?: number | string,
     nepaliYear?: number | string,
     nepaliMonth?: number | string,
-    academicYear?: string,
-    start?: Date,
-    end?: Date,
+    _academicYear?: string,
+    _start?: Date,
+    _end?: Date,
   ): Promise<any[]> {
     const year = Number(nepaliYear);
     const month = Number(nepaliMonth);

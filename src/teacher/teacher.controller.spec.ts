@@ -4,7 +4,6 @@ import { TeacherService } from './teacher.service';
 
 describe('TeacherController', () => {
   let controller: TeacherController;
-  let service: TeacherService;
 
   const mockService = {
     create: jest.fn(),
@@ -23,7 +22,6 @@ describe('TeacherController', () => {
       providers: [{ provide: TeacherService, useValue: mockService }],
     }).compile();
     controller = module.get<TeacherController>(TeacherController);
-    service = module.get<TeacherService>(TeacherService);
   });
 
   it('should be defined', () => {

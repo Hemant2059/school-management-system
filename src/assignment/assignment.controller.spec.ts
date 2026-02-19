@@ -4,7 +4,6 @@ import { AssignmentService } from './assignment.service';
 
 describe('AssignmentController', () => {
   let controller: AssignmentController;
-  let service: AssignmentService;
 
   const mockService = {
     create: jest.fn(),
@@ -20,7 +19,6 @@ describe('AssignmentController', () => {
       providers: [{ provide: AssignmentService, useValue: mockService }],
     }).compile();
     controller = module.get<AssignmentController>(AssignmentController);
-    service = module.get<AssignmentService>(AssignmentService);
   });
 
   it('should be defined', () => {

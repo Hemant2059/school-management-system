@@ -4,7 +4,6 @@ import { DashboardService } from './dashboard.service';
 
 describe('DashboardController', () => {
   let controller: DashboardController;
-  let service: DashboardService;
 
   const mockService = {
     getAdminStats: jest.fn(),
@@ -20,7 +19,6 @@ describe('DashboardController', () => {
       providers: [{ provide: DashboardService, useValue: mockService }],
     }).compile();
     controller = module.get<DashboardController>(DashboardController);
-    service = module.get<DashboardService>(DashboardService);
   });
 
   it('should be defined', () => {

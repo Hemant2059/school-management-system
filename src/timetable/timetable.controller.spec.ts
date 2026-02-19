@@ -4,7 +4,6 @@ import { TimetableService } from './timetable.service';
 
 describe('TimetableController', () => {
   let controller: TimetableController;
-  let service: TimetableService;
 
   const mockService = {
     create: jest.fn(),
@@ -21,7 +20,6 @@ describe('TimetableController', () => {
       providers: [{ provide: TimetableService, useValue: mockService }],
     }).compile();
     controller = module.get<TimetableController>(TimetableController);
-    service = module.get<TimetableService>(TimetableService);
   });
 
   it('should be defined', () => {

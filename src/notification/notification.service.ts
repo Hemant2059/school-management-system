@@ -166,9 +166,9 @@ export class NotificationService {
   }
 
   async sendSmsNotification(
-    notificationId: number,
-    schoolId: number,
-    phoneNumber?: string,
+    _notificationId: number,
+    _schoolId: number,
+    _phoneNumber?: string,
   ): Promise<boolean> {
     return true;
   }

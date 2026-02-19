@@ -4,7 +4,6 @@ import { EnrollmentService } from './enrollment.service';
 
 describe('EnrollmentController', () => {
   let controller: EnrollmentController;
-  let service: EnrollmentService;
 
   const mockService = {
     create: jest.fn(),
@@ -23,7 +22,6 @@ describe('EnrollmentController', () => {
       providers: [{ provide: EnrollmentService, useValue: mockService }],
     }).compile();
     controller = module.get<EnrollmentController>(EnrollmentController);
-    service = module.get<EnrollmentService>(EnrollmentService);
   });
 
   it('should be defined', () => {

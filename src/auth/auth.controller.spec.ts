@@ -4,7 +4,6 @@ import { AuthService } from './auth.service';
 
 describe('AuthController', () => {
   let controller: AuthController;
-  let service: AuthService;
 
   const mockService = {
     login: jest.fn(),
@@ -24,7 +23,6 @@ describe('AuthController', () => {
       providers: [{ provide: AuthService, useValue: mockService }],
     }).compile();
     controller = module.get<AuthController>(AuthController);
-    service = module.get<AuthService>(AuthService);
   });
 
   it('should be defined', () => {

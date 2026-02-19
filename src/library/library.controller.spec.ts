@@ -4,7 +4,6 @@ import { LibraryService } from './library.service';
 
 describe('LibraryController', () => {
   let controller: LibraryController;
-  let service: LibraryService;
 
   const mockService = {
     createBook: jest.fn(),
@@ -27,7 +26,6 @@ describe('LibraryController', () => {
       providers: [{ provide: LibraryService, useValue: mockService }],
     }).compile();
     controller = module.get<LibraryController>(LibraryController);
-    service = module.get<LibraryService>(LibraryService);
   });
 
   it('should be defined', () => {

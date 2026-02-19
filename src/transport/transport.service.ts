@@ -250,7 +250,7 @@ export class TransportService {
     monthlyFee: number,
     admissionFee?: number,
   ): Promise<TransportFee> {
-    let fee = await this.db.queryOne<TransportFee>(
+    const fee = await this.db.queryOne<TransportFee>(
       `SELECT * FROM transport_fees WHERE route_id = $1 AND school_id = $2 AND is_active = true`,
       [routeId, schoolId],
     );

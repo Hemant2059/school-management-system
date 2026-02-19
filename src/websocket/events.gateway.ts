@@ -39,7 +39,6 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       }
 
       const decoded = this.jwtService.verify(token);
-      const userKey = `user_${decoded.userId}`;
 
       this.connectedUsers.set(client.id, {
         userId: decoded.userId,
@@ -47,8 +46,8 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
         role: decoded.role,
       });
 
-      client.join(`school_${decoded.schoolId}`);
-      client.join(`user_${decoded.userId}`);
+      void client.join(`school_${decoded.schoolId}`);
+      void client.join(`user_${decoded.userId}`);
 
       console.log(
         `Client connected: ${client.id} (User: ${decoded.userId}, Role: ${decoded.role})`,
@@ -69,7 +68,7 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody() data: { room: string },
     @ConnectedSocket() client: Socket,
   ) {
-    client.join(data.room);
+    void client.join(data.room);
     return { event: 'joined', room: data.room };
   }
 
@@ -78,7 +77,7 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @MessageBody() data: { room: string },
     @ConnectedSocket() client: Socket,
   ) {
-    client.leave(data.room);
+    void client.leave(data.room);
     return { event: 'left', room: data.room };
   }
 

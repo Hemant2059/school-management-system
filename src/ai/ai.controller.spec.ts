@@ -4,7 +4,6 @@ import { AiService } from './ai.service';
 
 describe('AiController', () => {
   let controller: AiController;
-  let service: AiService;
 
   const mockService = {
     getSuggestions: jest.fn(),
@@ -18,7 +17,6 @@ describe('AiController', () => {
       providers: [{ provide: AiService, useValue: mockService }],
     }).compile();
     controller = module.get<AiController>(AiController);
-    service = module.get<AiService>(AiService);
   });
 
   it('should be defined', () => {

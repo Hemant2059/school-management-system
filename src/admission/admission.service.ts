@@ -270,7 +270,7 @@ export class AdmissionService {
       RETURNING user_id
     `;
     const tempPassword = Math.random().toString(36).slice(-8);
-    const hashedPassword = await this.hashPassword(tempPassword);
+    const hashedPassword = this.hashPassword(tempPassword);
 
     const userResult = await this.databaseService.query(userQuery, [
       schoolId,
@@ -405,7 +405,7 @@ export class AdmissionService {
     return `STU${new Date().getFullYear()}000001`;
   }
 
-  private async hashPassword(password: string): Promise<string> {
+  private hashPassword(password: string): string {
     return password;
   }
 }

@@ -10,6 +10,7 @@ import { NepaliDateUtil } from '../utils/nepali-date.util';
 import { GOVT_FREE_SEAT_QUOTA_PERCENT } from '../common/constants/nepal.constants';
 import { PageDto } from '../common/dto/page.dto';
 import { PageMetaDto } from '../common/dto/page-meta.dto';
+import { Order } from '../common/dto/page-options.dto';
 import { GetStudentsDto } from './dto/get-students.dto';
 
 export interface Student {
@@ -243,7 +244,8 @@ export class StudentService {
       query += ` AND e.section_id = $${params.length}`;
     }
 
-    const sortOrder = getStudentsDto.order === 'ASC' ? 'ASC' : 'DESC';
+    const isAscending = getStudentsDto.order === Order.ASC;
+    const sortOrder = isAscending ? 'ASC' : 'DESC';
     query += ` ORDER BY s.created_at ${sortOrder}`;
 
     const page = getStudentsDto.page || 1;
@@ -333,7 +335,7 @@ export class StudentService {
     updateStudentDto: UpdateStudentDto,
     userId: number = 1,
   ): Promise<Student> {
-    const student = await this.findOne(id);
+    await this.findOne(id);
 
     const updates: string[] = [];
     const params: any[] = [];

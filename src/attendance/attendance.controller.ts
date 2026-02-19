@@ -9,6 +9,7 @@ import {
   Query,
   ParseIntPipe,
   BadRequestException,
+  UseGuards,
 } from '@nestjs/common';
 import { GetUser } from '../common/decorators/get-user.decorator';
 import {
@@ -19,6 +20,7 @@ import {
   ApiParam,
   ApiQuery,
   ApiBody,
+  ApiExtraModels,
 } from '@nestjs/swagger';
 import { AttendanceService } from './attendance.service';
 import { CreateAttendanceDto } from './dto/create-attendance.dto';
@@ -26,22 +28,69 @@ import { UpdateAttendanceDto } from './dto/update-attendance.dto';
 import { BulkAttendanceDto } from './dto/bulk-attendance.dto';
 import { GetAttendanceDto } from './dto/get-attendance.dto';
 import { NepaliDateUtil } from '../utils/nepali-date.util';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { RolesGuard, PermissionsGuard } from '../common/guards/roles.guard';
+import { Roles, Permissions } from '../common/decorators/roles.decorator';
+import { UserRole } from '../common/enums/user-role.enum';
+import { Permission } from '../common/decorators/roles.decorator';
 
+@ApiExtraModels(CreateAttendanceDto, UpdateAttendanceDto, BulkAttendanceDto)
 @ApiTags('Attendance Management')
 @ApiBearerAuth()
 @Controller('attendance')
+@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
 export class AttendanceController {
   constructor(private readonly attendanceService: AttendanceService) {}
 
   @Post()
+  @Roles(UserRole.ADMIN, UserRole.TEACHER)
+  @Permissions(Permission.ATTENDANCE_CREATE)
   @ApiOperation({
-    summary: 'Record attendance',
-    description: 'Record attendance for a single student.',
+    summary: 'Record Attendance',
+    description: `Record attendance for a single student.
+
+**Status Options:**
+- PRESENT: Student present
+- ABSENT: Student absent without reason
+- LATE: Arrived late
+- LEAVE: On approved leave
+- HOLIDAY: Holiday
+
+**Note:** Cannot record attendance for future dates or holidays.`,
   })
-  @ApiBody({ type: CreateAttendanceDto })
+  @ApiBody({
+    description: 'Attendance record',
+    schema: {
+      type: 'object',
+      required: ['studentId', 'date', 'status'],
+      properties: {
+        studentId: { type: 'number', example: 123 },
+        date: { type: 'string', example: '2081-10-15' },
+        status: {
+          type: 'string',
+          example: 'PRESENT',
+          enum: ['PRESENT', 'ABSENT', 'LATE', 'LEAVE', 'HOLIDAY'],
+        },
+        remarks: { type: 'string', example: 'On time' },
+      },
+    },
+  })
   @ApiResponse({
     status: 201,
     description: 'Attendance recorded successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'number', example: 1 },
+        studentId: { type: 'number', example: 123 },
+        date: { type: 'string', example: '2081-10-15' },
+        status: { type: 'string', example: 'PRESENT' },
+        message: {
+          type: 'string',
+          example: 'Attendance recorded successfully',
+        },
+      },
+    },
   })
   @ApiResponse({
     status: 400,
@@ -57,14 +106,70 @@ export class AttendanceController {
   }
 
   @Post('bulk')
+  @Roles(UserRole.ADMIN, UserRole.TEACHER)
+  @Permissions(Permission.ATTENDANCE_CREATE)
   @ApiOperation({
-    summary: 'Bulk record attendance',
-    description: 'Record attendance for multiple students at once.',
+    summary: 'Bulk Record Attendance',
+    description: `Record attendance for multiple students at once.
+
+**Use Cases:**
+- Daily class attendance
+- Bulk updates for a section
+- Import from external systems
+
+**Efficiency:** Processes up to 500 records per request.`,
   })
-  @ApiBody({ type: BulkAttendanceDto })
+  @ApiBody({
+    description: 'Bulk attendance data',
+    schema: {
+      type: 'object',
+      required: ['date', 'classId', 'sectionId', 'records'],
+      properties: {
+        date: { type: 'string', example: '2081-10-15' },
+        classId: { type: 'number', example: 10 },
+        sectionId: { type: 'number', example: 1 },
+        records: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              studentId: { type: 'number', example: 1 },
+              status: {
+                type: 'string',
+                example: 'PRESENT',
+                enum: ['PRESENT', 'ABSENT', 'LATE', 'LEAVE'],
+              },
+              remarks: {
+                type: 'string',
+                example: 'Sick leave',
+              },
+            },
+          },
+        },
+      },
+    },
+  })
   @ApiResponse({
     status: 201,
     description: 'Bulk attendance recorded successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        total: { type: 'number', example: 50 },
+        success: { type: 'number', example: 48 },
+        failed: { type: 'number', example: 2 },
+        errors: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              studentId: { type: 'number', example: 5 },
+              message: { type: 'string', example: 'Already marked' },
+            },
+          },
+        },
+      },
+    },
   })
   @ApiResponse({ status: 400, description: 'Invalid input data' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
@@ -77,13 +182,93 @@ export class AttendanceController {
   }
 
   @Get()
+  @Roles(UserRole.ADMIN, UserRole.TEACHER)
+  @Permissions(Permission.ATTENDANCE_READ)
   @ApiOperation({
-    summary: 'Get attendance records',
-    description: 'Retrieve attendance records with optional filters.',
+    summary: 'Get Attendance Records',
+    description: `Retrieve attendance records with optional filters.
+
+**Filters:**
+- schoolId: Required (from user context)
+- classId, sectionId: Filter by class
+- date, dateFrom, dateTo: Date range
+- studentId: Specific student
+- status: Attendance status
+- academicYear: Academic year`,
+  })
+  @ApiQuery({
+    name: 'classId',
+    description: 'Class ID',
+    example: 10,
+    type: Number,
+    required: false,
+  })
+  @ApiQuery({
+    name: 'sectionId',
+    description: 'Section ID',
+    example: 1,
+    type: Number,
+    required: false,
+  })
+  @ApiQuery({
+    name: 'date',
+    description: 'Specific date',
+    example: '2081-10-15',
+    type: String,
+    required: false,
+  })
+  @ApiQuery({
+    name: 'dateFrom',
+    description: 'Start date',
+    example: '2081-10-01',
+    type: String,
+    required: false,
+  })
+  @ApiQuery({
+    name: 'dateTo',
+    description: 'End date',
+    example: '2081-10-31',
+    type: String,
+    required: false,
+  })
+  @ApiQuery({
+    name: 'studentId',
+    description: 'Student ID',
+    example: 123,
+    type: Number,
+    required: false,
+  })
+  @ApiQuery({
+    name: 'status',
+    description: 'Attendance status',
+    example: 'PRESENT',
+    type: String,
+    required: false,
+  })
+  @ApiQuery({
+    name: 'academicYear',
+    description: 'Academic year',
+    example: '2081-2082',
+    type: String,
+    required: false,
   })
   @ApiResponse({
     status: 200,
     description: 'Attendance records retrieved successfully',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'number', example: 1 },
+          studentId: { type: 'number', example: 123 },
+          studentName: { type: 'string', example: 'Ram Sharma' },
+          date: { type: 'string', example: '2081-10-15' },
+          status: { type: 'string', example: 'PRESENT' },
+          remarks: { type: 'string', example: null },
+        },
+      },
+    },
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   findAll(
@@ -94,9 +279,16 @@ export class AttendanceController {
   }
 
   @Get('student/:studentId')
+  @Roles(UserRole.ADMIN, UserRole.TEACHER)
+  @Permissions(Permission.ATTENDANCE_READ)
   @ApiOperation({
-    summary: 'Get student attendance',
-    description: 'Retrieve attendance records for a specific student.',
+    summary: 'Get Student Attendance',
+    description: `Retrieve attendance records for a specific student.
+
+**Use Cases:**
+- Parent/guardian inquiry
+- Student profile attendance view
+- Leave tracking`,
   })
   @ApiParam({
     name: 'studentId',
@@ -107,22 +299,35 @@ export class AttendanceController {
   @ApiQuery({
     name: 'startDate',
     description: 'Start date filter (optional)',
-    example: '2024-01-01',
+    example: '2081-10-01',
     type: String,
     required: false,
   })
   @ApiQuery({
     name: 'endDate',
     description: 'End date filter (optional)',
-    example: '2024-01-31',
+    example: '2081-10-31',
     type: String,
     required: false,
   })
   @ApiResponse({
     status: 200,
     description: 'Student attendance retrieved successfully',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'number', example: 1 },
+          date: { type: 'string', example: '2081-10-15' },
+          status: { type: 'string', example: 'PRESENT' },
+          remarks: { type: 'string', example: null },
+        },
+      },
+    },
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Student not found' })
   findByStudent(
     @Param('studentId', ParseIntPipe) studentId: number,
     @GetUser('schoolId') schoolId: number,
@@ -140,9 +345,20 @@ export class AttendanceController {
   }
 
   @Get('student/:studentId/statistics')
+  @Roles(UserRole.ADMIN, UserRole.TEACHER)
+  @Permissions(Permission.ATTENDANCE_READ)
   @ApiOperation({
-    summary: 'Get student attendance statistics',
-    description: 'Get attendance statistics for a student.',
+    summary: 'Get Student Attendance Statistics',
+    description: `Get attendance statistics for a student.
+
+**Statistics Include:**
+- Total working days
+- Present count
+- Absent count
+- Leave count
+- Attendance percentage
+
+**Use Cases:** Reports, parent meetings, leave analysis.`,
   })
   @ApiParam({
     name: 'studentId',
@@ -155,10 +371,24 @@ export class AttendanceController {
     description: 'Academic year',
     example: '2081-2082',
     type: String,
+    required: true,
   })
   @ApiResponse({
     status: 200,
     description: 'Attendance statistics retrieved successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        studentId: { type: 'number', example: 123 },
+        academicYear: { type: 'string', example: '2081-2082' },
+        totalDays: { type: 'number', example: 180 },
+        present: { type: 'number', example: 175 },
+        absent: { type: 'number', example: 3 },
+        late: { type: 'number', example: 2 },
+        leave: { type: 'number', example: 2 },
+        percentage: { type: 'number', example: 97.22 },
+      },
+    },
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   getStudentStatistics(
@@ -174,6 +404,8 @@ export class AttendanceController {
   }
 
   @Get('monthly-report')
+  @Roles(UserRole.ADMIN, UserRole.TEACHER)
+  @Permissions(Permission.ATTENDANCE_READ)
   @ApiOperation({
     summary: 'Get monthly attendance report',
     description:
@@ -237,6 +469,8 @@ export class AttendanceController {
   }
 
   @Get('check-holiday')
+  @Roles(UserRole.ADMIN, UserRole.TEACHER)
+  @Permissions(Permission.ATTENDANCE_READ)
   @ApiOperation({
     summary: 'Check Nepal holiday',
     description: 'Check if a specific date is a Nepal public holiday.',
@@ -263,6 +497,8 @@ export class AttendanceController {
   }
 
   @Get(':id')
+  @Roles(UserRole.ADMIN, UserRole.TEACHER)
+  @Permissions(Permission.ATTENDANCE_READ)
   @ApiOperation({
     summary: 'Get attendance by ID',
     description: 'Retrieve a specific attendance record.',
@@ -287,6 +523,8 @@ export class AttendanceController {
   }
 
   @Patch(':id')
+  @Roles(UserRole.ADMIN, UserRole.TEACHER)
+  @Permissions(Permission.ATTENDANCE_CREATE)
   @ApiOperation({
     summary: 'Update attendance',
     description: 'Update an attendance record.',
@@ -316,6 +554,8 @@ export class AttendanceController {
   }
 
   @Delete(':id')
+  @Roles(UserRole.ADMIN)
+  @Permissions(Permission.ATTENDANCE_CREATE)
   @ApiOperation({
     summary: 'Delete attendance',
     description: 'Remove an attendance record.',

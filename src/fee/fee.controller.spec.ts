@@ -4,7 +4,6 @@ import { FeeService } from './fee.service';
 
 describe('FeeController', () => {
   let controller: FeeController;
-  let service: FeeService;
 
   const mockService = {
     createFeeCategory: jest.fn(),
@@ -24,7 +23,6 @@ describe('FeeController', () => {
       providers: [{ provide: FeeService, useValue: mockService }],
     }).compile();
     controller = module.get<FeeController>(FeeController);
-    service = module.get<FeeService>(FeeService);
   });
 
   it('should be defined', () => {
