@@ -21,15 +21,7 @@ export class AuthService {
   ) {}
 
   async validateUser(username: string, password: string): Promise<User> {
-    this.logger.log('Validating user: ' + username);
     const user = await this.userService.findByUsernameOrEmailOrPhone(username);
-
-    this.logger.log(
-      'User found: ' +
-        (user ? user.username : 'null') +
-        ' hash: ' +
-        (user?.password_hash?.substring(0, 20) || 'none'),
-    );
 
     if (!user) {
       this.logger.error('User not found: ' + username);
@@ -51,14 +43,6 @@ export class AuthService {
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.password_hash);
-    this.logger.log(
-      'Password check result: ' +
-        isPasswordValid +
-        ' for user: ' +
-        user.username +
-        ' hash length: ' +
-        (user.password_hash?.length || 0),
-    );
     if (!isPasswordValid) {
       await this.userService.incrementFailedLogin(user.user_id);
       if ((user.failed_login_attempts ?? 0) >= 4) {
