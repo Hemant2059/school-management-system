@@ -4,18 +4,19 @@ import { NotificationService } from './notification.service';
 import { WhatsAppService } from './whatsapp.service';
 import { DatabaseModule } from '../database/database.module';
 
-import { BullModule } from '@nestjs/bullmq';
-import { NotificationProcessor } from './notification.processor';
+// BullModule disabled - requires Redis
+// import { BullModule } from '@nestjs/bullmq';
+// import { NotificationProcessor } from './notification.processor';
 
 @Module({
   imports: [
     DatabaseModule,
-    BullModule.registerQueue({
-      name: 'notification',
-    }),
+    // BullModule.registerQueue({
+    //   name: 'notification',
+    // }),
   ],
   controllers: [NotificationController],
-  providers: [NotificationService, WhatsAppService, NotificationProcessor],
+  providers: [NotificationService, WhatsAppService],
   exports: [NotificationService],
 })
 export class NotificationModule {}
