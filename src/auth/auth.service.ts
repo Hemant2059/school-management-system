@@ -68,8 +68,26 @@ export class AuthService {
       );
       this.logger.log('User validated: ' + user.username);
 
-      // Skip session creation for now - just generate tokens
       const sessionId = crypto.randomUUID();
+      const refreshToken = crypto.randomUUID();
+      const refreshTokenHash = crypto
+        .createHash('sha256')
+        .update(refreshToken)
+        .digest('hex');
+
+      await this.db.query(
+        `INSERT INTO user_sessions (session_id, user_id, school_id, refresh_token_hash, ip_address, user_agent, device_name, last_active_at, expires_at, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW() + interval '7 days', NOW())`,
+        [
+          sessionId,
+          user.user_id,
+          user.school_id,
+          refreshTokenHash,
+          ip,
+          userAgent,
+          this.extractDevice(userAgent),
+        ],
+      );
 
       const tokens = await this.getTokens(
         user.user_id,
