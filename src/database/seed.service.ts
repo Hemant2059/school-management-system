@@ -40,19 +40,39 @@ export class SeedService implements OnModuleInit {
     try {
       const passwordHash = await bcrypt.hash('Admin123!', 10);
 
-      // Delete existing admin and create new one
+      // First ensure a school exists
+      const schools = await this.db.query(
+        `SELECT school_id FROM schools LIMIT 1`,
+      );
+      let schoolId = 1;
+      if (schools.length === 0) {
+        const newSchool = await this.db.query(
+          `INSERT INTO schools (name, address, phone, email, is_active, created_at, updated_at)
+           VALUES ('Default School', 'Kathmandu', '01-1234567', 'info@school.edu.np', true, NOW(), NOW())
+           RETURNING school_id`,
+        );
+        schoolId = newSchool[0].school_id;
+        this.logger.log('Created default school with id: ' + schoolId);
+      } else {
+        schoolId = schools[0].school_id;
+      }
+
+      // Delete existing admin for this school
       await this.db.query(
-        `DELETE FROM users WHERE user_type = 'ADMIN' AND school_id = 1`,
+        `DELETE FROM users WHERE user_type = 'ADMIN' AND school_id = $1`,
+        [schoolId],
       );
 
-      const result = await this.db.query(
+      // Create new admin
+      await this.db.query(
         `INSERT INTO users (username, email, password, password_hash, full_name, phone, user_type, school_id, is_active, is_verified, created_at, updated_at)
-         VALUES ('admin', 'admin@test.com', $1, $1, 'System Admin', '9841000001', 'ADMIN', 1, true, true, NOW(), NOW())
-         RETURNING user_id`,
-        [passwordHash],
+         VALUES ('admin', 'admin@test.com', $1, $1, 'System Admin', '9841000001', 'ADMIN', $2, true, true, NOW(), NOW())`,
+        [passwordHash, schoolId],
       );
 
-      this.logger.log('Admin user recreated with password: Admin123!');
+      this.logger.log(
+        'Admin user created with password: Admin123! for school: ' + schoolId,
+      );
     } catch (error) {
       this.logger.error('Failed to reset admin password: ' + error.message);
     }
