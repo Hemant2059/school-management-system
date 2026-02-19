@@ -253,8 +253,12 @@ export class AuthService {
     return 'Desktop/Web';
   }
 
-  async register(createUserDto: any) {
-    const user = await this.userService.create(createUserDto);
+  async register(createUserDto: any, adminSchoolId?: number) {
+    const userData = {
+      ...createUserDto,
+      schoolId: adminSchoolId || createUserDto.schoolId,
+    };
+    const user = await this.userService.create(userData);
     return {
       message: 'User registered successfully. Account is active.',
       userId: user.user_id,

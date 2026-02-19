@@ -145,22 +145,41 @@ export class AuthController {
     return this.authService.login(loginDto, ip, userAgent);
   }
 
-  @Public()
   @Post('register')
+  @Roles(UserRole.ADMIN)
+  @Permissions(Permission.USER_CREATE)
   @ApiOperation({
-    summary: 'Register New User',
-    description: `Create a new user account in the system.
+    summary: 'Register New User (Admin Only)',
+    description: `Create a new user account in the system. Only admins can register new users.
 
-**Requirements:**
-- Username must be unique
-- Valid email address required
-- Password must meet complexity requirements
-
-**Note:** This endpoint may require admin approval depending on school settings.`,
+    **Multi-tenancy:**
+    - New user's school_id is automatically set to admin's school_id
+    - This ensures proper isolation between schools
+    
+    **Requirements:**
+    - Username must be unique
+    - Valid email address required
+    - Password must meet complexity requirements`,
   })
   @ApiBody({
-    description: 'User registration data',
-    type: CreateUserDto,
+    description:
+      'User registration data (schoolId will be auto-set from admin)',
+    schema: {
+      type: 'object',
+      required: ['username', 'email', 'password', 'role'],
+      properties: {
+        username: { type: 'string', example: 'teacher1' },
+        email: { type: 'string', example: 'teacher1@school.edu.np' },
+        password: { type: 'string', example: 'SecurePass123' },
+        role: {
+          type: 'string',
+          enum: ['TEACHER', 'ACCOUNTANT', 'LIBRARIAN', 'GUARDIAN'],
+          example: 'TEACHER',
+        },
+        fullName: { type: 'string', example: 'Ram Bahadur' },
+        phone: { type: 'string', example: '9841234567' },
+      },
+    },
   })
   @ApiResponse({
     status: 201,
@@ -169,26 +188,17 @@ export class AuthController {
       type: 'object',
       properties: {
         id: { type: 'number', example: 2 },
-        username: { type: 'string', example: 'newuser' },
-        email: { type: 'string', example: 'newuser@school.edu.np' },
+        username: { type: 'string', example: 'teacher1' },
+        email: { type: 'string', example: 'teacher1@school.edu.np' },
         role: { type: 'string', example: 'TEACHER' },
-        message: { type: 'string', example: 'Registration successful' },
+        schoolId: { type: 'number', example: 1 },
+        message: { type: 'string', example: 'User registered successfully' },
       },
     },
   })
-  @ApiResponse({
-    status: 400,
-    description: 'Invalid input or username already exists',
-    schema: {
-      type: 'object',
-      properties: {
-        statusCode: { type: 'number', example: 400 },
-        message: { type: 'string', example: 'Username already exists' },
-      },
-    },
-  })
-  async register(@Body() createUserDto: CreateUserDto) {
-    return this.authService.register(createUserDto);
+  async register(@Body() createUserDto: CreateUserDto, @Request() req) {
+    const adminSchoolId = req.user.schoolId;
+    return this.authService.register(createUserDto, adminSchoolId);
   }
 
   @Post('logout')
