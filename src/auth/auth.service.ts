@@ -274,29 +274,24 @@ export class AuthService {
     phone?: string;
   }) {
     try {
-      const existingAdmins = await this.db.query(
-        `SELECT user_id FROM users WHERE user_type = 'ADMIN' LIMIT 1`,
-      );
+      this.logger.log('Starting setup...');
 
-      if (existingAdmins.length > 0) {
-        throw new UnauthorizedException(
-          'System already initialized. Please login.',
-        );
-      }
-
+      // Create school first
       this.logger.log('Creating school: ' + body.schoolName);
-      const school = await this.db.insert(
+      const schoolResult = await this.db.query(
         `INSERT INTO schools (name, is_active, created_at, updated_at)
          VALUES ($1, true, NOW(), NOW())
          RETURNING school_id, name`,
         [body.schoolName],
       );
-      const schoolId = school[0].school_id;
+      const schoolId = schoolResult[0].school_id;
+      this.logger.log('School created with ID: ' + schoolId);
 
+      // Create admin user
       this.logger.log('Creating admin user: ' + body.username);
       const hashedPassword = await bcrypt.hash(body.password, 10);
 
-      const user = await this.db.insert(
+      const userResult = await this.db.query(
         `INSERT INTO users (username, email, password, full_name, phone, user_type, school_id, is_active, is_verified, created_at, updated_at)
          VALUES ($1, $2, $3, $4, $5, 'ADMIN', $6, true, true, NOW(), NOW())
          RETURNING user_id, username, email, user_type, school_id`,
@@ -314,8 +309,8 @@ export class AuthService {
         message: 'System initialized successfully. Please login.',
         schoolId: schoolId,
         schoolName: body.schoolName,
-        userId: user[0].user_id,
-        username: user[0].username,
+        userId: userResult[0].user_id,
+        username: userResult[0].username,
       };
     } catch (error) {
       this.logger.error('Setup error: ' + error.message);
