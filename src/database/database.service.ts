@@ -81,8 +81,12 @@ export class DatabaseService implements OnModuleDestroy {
 
         -- User Sessions
         CREATE TABLE IF NOT EXISTS user_sessions (
-          session_id SERIAL PRIMARY KEY, user_id INTEGER REFERENCES users(user_id) ON DELETE CASCADE,
-          refresh_token VARCHAR(500), device_info VARCHAR(255), ip_address VARCHAR(45), user_agent TEXT,
+          session_id VARCHAR(100) PRIMARY KEY, 
+          user_id INTEGER REFERENCES users(user_id) ON DELETE CASCADE,
+          school_id INTEGER REFERENCES schools(school_id),
+          refresh_token_hash VARCHAR(500), 
+          ip_address VARCHAR(45), user_agent TEXT,
+          device_name VARCHAR(100), last_active_at TIMESTAMP,
           expires_at TIMESTAMP NOT NULL, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
