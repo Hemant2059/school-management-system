@@ -21,9 +21,16 @@ export class AuthService {
   ) {}
 
   async validateUser(username: string, password: string): Promise<User> {
+    this.logger.log('Validating user: ' + username);
     const user = await this.userService.findByUsernameOrEmailOrPhone(username);
 
-    if (!user || !user.is_active) {
+    if (!user) {
+      this.logger.error('User not found: ' + username);
+      throw new UnauthorizedException('Invalid credentials');
+    }
+
+    if (!user.is_active) {
+      this.logger.error('User not active: ' + username);
       throw new UnauthorizedException('Invalid credentials');
     }
 
@@ -54,72 +61,81 @@ export class AuthService {
   }
 
   async login(loginDto: LoginDto, ip: string, userAgent: string) {
-    const user = await this.validateUser(loginDto.username, loginDto.password);
+    try {
+      const user = await this.validateUser(
+        loginDto.username,
+        loginDto.password,
+      );
+      this.logger.log('User validated: ' + user.username);
 
-    const sessionId = crypto.randomUUID();
-    const refreshTokenHash = 'PENDING';
+      const sessionId = crypto.randomUUID();
+      const refreshTokenHash = 'PENDING';
 
-    await this.db.insert(
-      `INSERT INTO user_sessions (session_id, user_id, school_id, refresh_token_hash, ip_address, user_agent, device_name, last_active_at, expires_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW() + INTERVAL '7 days')
-       RETURNING *`,
-      [
+      await this.db.insert(
+        `INSERT INTO user_sessions (session_id, user_id, school_id, refresh_token_hash, ip_address, user_agent, device_name, last_active_at, expires_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW() + INTERVAL '7 days')
+         RETURNING *`,
+        [
+          sessionId,
+          user.user_id,
+          user.school_id,
+          refreshTokenHash,
+          ip,
+          userAgent,
+          this.extractDevice(userAgent),
+        ],
+      );
+
+      const tokens = await this.getTokens(
+        user.user_id,
+        user.username,
+        user.user_type ?? '',
+        user.school_id ?? 0,
         sessionId,
-        user.user_id,
-        user.school_id,
-        refreshTokenHash,
-        ip,
-        userAgent,
-        this.extractDevice(userAgent),
-      ],
-    );
+      );
 
-    const tokens = await this.getTokens(
-      user.user_id,
-      user.username,
-      user.user_type ?? '',
-      user.school_id ?? 0,
-      sessionId,
-    );
+      const newRefreshTokenHash = crypto
+        .createHash('sha256')
+        .update(tokens.refreshToken)
+        .digest('hex');
 
-    const newRefreshTokenHash = crypto
-      .createHash('sha256')
-      .update(tokens.refreshToken)
-      .digest('hex');
+      await this.db.query(
+        `UPDATE user_sessions SET refresh_token_hash = $2, updated_at = NOW() WHERE session_id = $1`,
+        [sessionId, newRefreshTokenHash],
+      );
 
-    await this.db.query(
-      `UPDATE user_sessions SET refresh_token_hash = $2, updated_at = NOW() WHERE session_id = $1`,
-      [sessionId, newRefreshTokenHash],
-    );
+      await this.userService.updateLastLoginInfo(user.user_id, ip, userAgent);
 
-    await this.userService.updateLastLoginInfo(user.user_id, ip, userAgent);
-
-    await this.db.insert(
-      `INSERT INTO audit_logs (user_id, school_id, action, entity_type, new_values, ip_address, user_agent)
+      await this.db.insert(
+        `INSERT INTO audit_logs (user_id, school_id, action, entity_type, new_values, ip_address, user_agent)
        VALUES ($1, $2, 'LOGIN', 'USER', $3, $4, $5)`,
-      [
-        user.user_id,
-        user.school_id,
-        JSON.stringify({ sessionId }),
-        ip,
-        userAgent,
-      ],
-    );
+        [
+          user.user_id,
+          user.school_id,
+          JSON.stringify({ sessionId }),
+          ip,
+          userAgent,
+        ],
+      );
 
-    return {
-      ...tokens,
-      sessionId,
-      user: {
-        id: user.user_id,
-        schoolId: user.school_id,
-        username: user.username,
-        fullName: user.full_name,
-        userType: user.user_type,
-        email: user.email,
-        phone: user.phone,
-        isVerified: user.is_verified,
-      },
-    };
+      return {
+        ...tokens,
+        sessionId,
+        user: {
+          id: user.user_id,
+          schoolId: user.school_id,
+          username: user.username,
+          fullName: user.full_name,
+          userType: user.user_type,
+          email: user.email,
+          phone: user.phone,
+          isVerified: user.is_verified,
+        },
+      };
+    } catch (error) {
+      this.logger.error('Login error: ' + error.message);
+      throw error;
+    }
   }
 
   async logout(userId: number, refreshToken: string) {
