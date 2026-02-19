@@ -273,11 +273,39 @@ export class AuthService {
     fullName: string;
     phone?: string;
   }) {
-    try {
-      this.logger.log('Starting setup...');
+    this.logger.log('=== Starting setup ===');
+    this.logger.log('School: ' + body.schoolName);
+    this.logger.log('User: ' + body.username);
 
-      // Create school first
-      this.logger.log('Creating school: ' + body.schoolName);
+    try {
+      // Check if tables exist
+      const tables = await this.db.query(`
+        SELECT table_name FROM information_schema.tables 
+        WHERE table_schema = 'public' AND table_name IN ('schools', 'users')
+      `);
+
+      this.logger.log('Found tables: ' + JSON.stringify(tables));
+
+      if (tables.length < 2) {
+        this.logger.error('Tables not created. Run migrations first.');
+        throw new Error(
+          'Database tables not initialized. Please contact admin.',
+        );
+      }
+
+      // Check if admin exists
+      const existingAdmins = await this.db.query(
+        `SELECT user_id FROM users WHERE user_type = 'ADMIN' LIMIT 1`,
+      );
+
+      if (existingAdmins.length > 0) {
+        throw new UnauthorizedException(
+          'System already initialized. Please login.',
+        );
+      }
+
+      // Create school
+      this.logger.log('Creating school...');
       const schoolResult = await this.db.query(
         `INSERT INTO schools (name, is_active, created_at, updated_at)
          VALUES ($1, true, NOW(), NOW())
@@ -285,10 +313,10 @@ export class AuthService {
         [body.schoolName],
       );
       const schoolId = schoolResult[0].school_id;
-      this.logger.log('School created with ID: ' + schoolId);
+      this.logger.log('School created: ' + schoolId);
 
       // Create admin user
-      this.logger.log('Creating admin user: ' + body.username);
+      this.logger.log('Creating admin user...');
       const hashedPassword = await bcrypt.hash(body.password, 10);
 
       const userResult = await this.db.query(
@@ -304,6 +332,8 @@ export class AuthService {
           schoolId,
         ],
       );
+
+      this.logger.log('Admin created: ' + userResult[0].user_id);
 
       return {
         message: 'System initialized successfully. Please login.',
