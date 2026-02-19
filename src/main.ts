@@ -15,6 +15,7 @@ import helmet from '@fastify/helmet';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { TimeoutInterceptor } from './common/interceptors/timeout.interceptor';
+import { MultiTenancyInterceptor } from './common/guards/multitenancy.guard';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
@@ -83,6 +84,11 @@ async function bootstrap() {
   app.useGlobalFilters(new HttpExceptionFilter());
   app.useGlobalInterceptors(new TimeoutInterceptor());
   app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
+
+  // ============================================================
+  // MULTI-TENANCY - Auto-set school_id from authenticated user
+  // ============================================================
+  app.useGlobalInterceptors(new MultiTenancyInterceptor());
 
   // ============================================================
   // COMPREHENSIVE SWAGGER DOCUMENTATION
