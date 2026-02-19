@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-// import { BullModule } from '@nestjs/bullmq';
+import { BullModule } from '@nestjs/bullmq';
 import { CacheModule } from '@nestjs/cache-manager';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
@@ -91,18 +91,23 @@ try {
         };
       },
     }),
-    // BullModule commented out - requires Redis
-    // Uncomment when REDIS_HOST is configured
-    // BullModule.forRootAsync({
-    //   imports: [ConfigModule],
-    //   useFactory: (configService: ConfigService) => ({
-    //     connection: {
-    //       host: configService.get('REDIS_HOST'),
-    //       port: configService.get('REDIS_PORT') || 6379,
-    //     },
-    //   }),
-    //   inject: [ConfigService],
-    // }),
+    BullModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: (configService: ConfigService) => {
+        const redisHost = configService.get('REDIS_HOST');
+        const redisPort = configService.get('REDIS_PORT') || '6379';
+        const redisPassword = configService.get('REDIS_PASSWORD');
+
+        return {
+          connection: {
+            host: redisHost || 'localhost',
+            port: parseInt(redisPort),
+            password: redisPassword || undefined,
+          },
+        };
+      },
+      inject: [ConfigService],
+    }),
     ThrottlerModule.forRoot([
       {
         name: 'short',
