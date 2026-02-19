@@ -12,6 +12,20 @@ export class SeedService implements OnModuleInit {
     const shouldSeed = process.env.SEED_DATA === 'true';
     if (shouldSeed) {
       await this.seedAll();
+      await this.resetAdminPassword();
+    }
+  }
+
+  async resetAdminPassword() {
+    try {
+      const passwordHash = await bcrypt.hash('admin123', 10);
+      await this.db.query(
+        `UPDATE users SET password_hash = $1, password = $1 WHERE user_type = 'ADMIN' AND school_id = 1`,
+        [passwordHash],
+      );
+      this.logger.log('Admin password reset to: admin123');
+    } catch (error) {
+      this.logger.error('Failed to reset admin password: ' + error.message);
     }
   }
 
@@ -71,22 +85,61 @@ export class SeedService implements OnModuleInit {
 
     const passwordHash = await bcrypt.hash('password123', 10);
 
-    await this.db.query(
-      `
-      INSERT INTO users (username, email, password, password_hash, full_name, phone, user_type, school_id, is_active, is_verified, created_at, updated_at)
-      VALUES 
-        ('principal', 'principal@nepalprimary.edu.np', $1, $1, 'Ram Kumar Shrestha', '9841000001', 'ADMIN', 1, true, true, NOW(), NOW()),
-        ('teacher1', 'teacher1@nepalprimary.edu.np', $1, $1, 'Shyam Prasad Bhatta', '9841000002', 'TEACHER', 1, true, true, NOW(), NOW()),
-        ('teacher2', 'teacher2@nepalprimary.edu.np', $1, $1, 'Geeta Kumari Joshi', '9841000003', 'TEACHER', 1, true, true, NOW(), NOW()),
-        ('teacher3', 'teacher3@nepalprimary.edu.np', $1, $1, 'Dipak Kumar Yadav', '9841000004', 'TEACHER', 1, true, true, NOW(), NOW()),
-        ('accountant', 'accountant@nepalprimary.edu.np', $1, $1, 'Sita Devi Sharma', '9841000005', 'ACCOUNTANT', 1, true, true, NOW(), NOW()),
-        ('admin2', 'admin2@litlestars.edu.np', $1, $1, 'Hari Prasad Paudel', '9842000001', 'ADMIN', 2, true, true, NOW(), NOW()),
-        ('admin3', 'admin3@gardenview.edu.np', $1, $1, 'Maya Kumari Thapa', '9843000001', 'ADMIN', 3, true, true, NOW(), NOW()),
-        ('admin4', 'admin4@everest.edu.np', $1, $1, 'Niraj Kumar Joshi', '9844000001', 'ADMIN', 4, true, true, NOW(), NOW()),
-        ('admin5', 'admin5@bharatpurmodel.edu.np', $1, $1, 'Anita Devi Chaudhary', '9845000001', 'ADMIN', 5, true, true, NOW(), NOW())
-    `,
-      [passwordHash],
-    );
+    const users = [
+      [
+        'principal',
+        'principal@nepalprimary.edu.np',
+        passwordHash,
+        'Ram Kumar Shrestha',
+        '9841000001',
+        'ADMIN',
+        1,
+      ],
+      [
+        'teacher1',
+        'teacher1@nepalprimary.edu.np',
+        passwordHash,
+        'Shyam Prasad Bhatta',
+        '9841000002',
+        'TEACHER',
+        1,
+      ],
+      [
+        'teacher2',
+        'teacher2@nepalprimary.edu.np',
+        passwordHash,
+        'Geeta Kumari Joshi',
+        '9841000003',
+        'TEACHER',
+        1,
+      ],
+      [
+        'teacher3',
+        'teacher3@nepalprimary.edu.np',
+        passwordHash,
+        'Dipak Kumar Yadav',
+        '9841000004',
+        'TEACHER',
+        1,
+      ],
+      [
+        'accountant',
+        'accountant@nepalprimary.edu.np',
+        passwordHash,
+        'Sita Devi Sharma',
+        '9841000005',
+        'ACCOUNTANT',
+        1,
+      ],
+    ];
+
+    for (const u of users) {
+      await this.db.query(
+        `INSERT INTO users (username, email, password, password_hash, full_name, phone, user_type, school_id, is_active, is_verified, created_at, updated_at)
+         VALUES ($1, $2, $3, $3, $4, $5, $6, $7, true, true, NOW(), NOW())`,
+        u,
+      );
+    }
     this.logger.log('Users seeded');
   }
 
