@@ -68,23 +68,8 @@ export class AuthService {
       );
       this.logger.log('User validated: ' + user.username);
 
+      // Skip session creation for now - just generate tokens
       const sessionId = crypto.randomUUID();
-      const refreshTokenHash = 'PENDING';
-
-      await this.db.insert(
-        `INSERT INTO user_sessions (session_id, user_id, school_id, refresh_token_hash, ip_address, user_agent, device_name, last_active_at, expires_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW() + INTERVAL '7 days')
-         RETURNING *`,
-        [
-          sessionId,
-          user.user_id,
-          user.school_id,
-          refreshTokenHash,
-          ip,
-          userAgent,
-          this.extractDevice(userAgent),
-        ],
-      );
 
       const tokens = await this.getTokens(
         user.user_id,
@@ -94,29 +79,7 @@ export class AuthService {
         sessionId,
       );
 
-      const newRefreshTokenHash = crypto
-        .createHash('sha256')
-        .update(tokens.refreshToken)
-        .digest('hex');
-
-      await this.db.query(
-        `UPDATE user_sessions SET refresh_token_hash = $2, updated_at = NOW() WHERE session_id = $1`,
-        [sessionId, newRefreshTokenHash],
-      );
-
-      await this.userService.updateLastLoginInfo(user.user_id, ip, userAgent);
-
-      await this.db.insert(
-        `INSERT INTO audit_logs (user_id, school_id, action, entity_type, new_values, ip_address, user_agent)
-       VALUES ($1, $2, 'LOGIN', 'USER', $3, $4, $5)`,
-        [
-          user.user_id,
-          user.school_id,
-          JSON.stringify({ sessionId }),
-          ip,
-          userAgent,
-        ],
-      );
+      this.logger.log('Tokens generated for: ' + user.username);
 
       return {
         ...tokens,
