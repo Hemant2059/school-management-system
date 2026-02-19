@@ -1,0 +1,54 @@
+services:
+  # PostgreSQL Database
+  - type: database
+    name: sms-postgres
+    plan: free
+    postgresVersion: 16
+    region: oregon
+
+  # Redis Cache
+  - type: redis
+    name: sms-redis
+    plan: free
+    region: oregon
+
+  # NestJS API
+  - type: web
+    name: sms-api
+    env: docker
+    region: oregon
+    buildCommand: docker build -t sms-api .
+    startCommand: docker run -p 3001:3001 sms-api
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3001
+      - key: DB_HOST
+        fromDatabase:
+          name: sms-postgres
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: sms-postgres
+          property: port
+      - key: DB_USERNAME
+        fromDatabase:
+          name: sms-postgres
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: sms-postgres
+          property: password
+      - key: DB_NAME
+        fromDatabase:
+          name: sms-postgres
+          property: database
+      - key: REDIS_HOST
+        fromRedis:
+          name: sms-redis
+          property: host
+      - key: REDIS_PORT
+        fromRedis:
+          name: sms-redis
+          property: port
