@@ -44,3 +44,7 @@ services:
         value: info
       - key: SWAGGER_ENABLED
         value: 'true'
+      - key: SEED_DATA
+        value: 'true'
+      - key: DB_SSL
+        value: 'false'
