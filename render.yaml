@@ -29,11 +29,11 @@ services:
       - key: REDIS_PASSWORD
         value: JjSiK5di1qGWjSiL4EPvSJuQkh6t5SBw
       - key: JWT_SECRET
-        value: your-super-secure-jwt-secret-min-32-chars
+        value: 5eaf684a3818af89dea3dae77ea612c7
       - key: JWT_EXPIRES_IN
         value: 2h
       - key: JWT_REFRESH_SECRET
-        value: your-refresh-secret-min-32-chars
+        value: 2831d22cd2227a72267ebe9c97a0b9a1
       - key: JWT_REFRESH_EXPIRES_IN
         value: 7d
       - key: TIMEZONE
