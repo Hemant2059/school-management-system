@@ -320,8 +320,8 @@ export class AuthService {
       const hashedPassword = await bcrypt.hash(body.password, 10);
 
       const userResult = await this.db.query(
-        `INSERT INTO users (username, email, password, full_name, phone, user_type, school_id, is_active, is_verified, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, 'ADMIN', $6, true, true, NOW(), NOW())
+        `INSERT INTO users (username, email, password, password_hash, full_name, phone, user_type, school_id, is_active, is_verified, created_at, updated_at)
+         VALUES ($1, $2, $3, $3, $4, $5, 'ADMIN', $6, true, true, NOW(), NOW())
          RETURNING user_id, username, email, user_type, school_id`,
         [
           body.username,

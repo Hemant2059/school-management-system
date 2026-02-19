@@ -66,14 +66,16 @@ export class DatabaseService implements OnModuleDestroy {
           is_active BOOLEAN DEFAULT true, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
-        -- Users
+        -- Users (updated with all required columns)
         CREATE TABLE IF NOT EXISTS users (
           user_id SERIAL PRIMARY KEY,
-          username VARCHAR(50) UNIQUE NOT NULL, email VARCHAR(255) UNIQUE NOT NULL, password VARCHAR(255) NOT NULL,
+          username VARCHAR(50) UNIQUE NOT NULL, email VARCHAR(255) UNIQUE NOT NULL, 
+          password VARCHAR(255) NOT NULL, password_hash VARCHAR(255),
           full_name VARCHAR(100), phone VARCHAR(20), user_type VARCHAR(20) NOT NULL,
           school_id INTEGER REFERENCES schools(school_id),
           is_active BOOLEAN DEFAULT true, is_verified BOOLEAN DEFAULT false, is_system BOOLEAN DEFAULT false,
-          last_login_at TIMESTAMP, last_login_ip VARCHAR(45), failed_attempts INTEGER DEFAULT 0, locked_until TIMESTAMP,
+          last_login_at TIMESTAMP, last_login_ip VARCHAR(45), 
+          failed_login_attempts INTEGER DEFAULT 0, locked_until TIMESTAMP,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, deleted_at TIMESTAMP
         );
 
