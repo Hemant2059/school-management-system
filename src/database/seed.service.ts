@@ -9,11 +9,8 @@ export class SeedService implements OnModuleInit {
   constructor(private db: DatabaseService) {}
 
   async onModuleInit() {
-    const shouldSeed = process.env.SEED_DATA === 'true';
-    if (shouldSeed) {
-      await this.seedAll();
-    }
-    await this.resetAdminPassword();
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+    await this.seedAll();
   }
 
   async seedAll() {

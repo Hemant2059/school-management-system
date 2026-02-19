@@ -1,12 +1,18 @@
-import { Injectable, OnModuleDestroy, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  OnModuleDestroy,
+  OnModuleInit,
+  Logger,
+} from '@nestjs/common';
 import { Pool, PoolConfig, PoolClient } from 'pg';
 import * as dotenv from 'dotenv';
 dotenv.config();
 
 @Injectable()
-export class DatabaseService implements OnModuleDestroy {
+export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(DatabaseService.name);
   private pool: Pool;
+  private schemaInitialized = false;
 
   constructor() {
     const config: PoolConfig = {
@@ -31,8 +37,10 @@ export class DatabaseService implements OnModuleDestroy {
     this.pool.on('error', (err) => {
       console.error('Unexpected database pool error:', err);
     });
+  }
 
-    this.initSchema();
+  async onModuleInit() {
+    await this.initSchema();
   }
 
   private async initSchema() {

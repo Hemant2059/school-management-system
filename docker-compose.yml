@@ -59,7 +59,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-      target: runner
     container_name: sms_api
     restart: unless-stopped
     ports:
