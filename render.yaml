@@ -1,9 +1,9 @@
 # School Management System - Render Blueprint
 #
-# IMPORTANT: Due to Render limitations, create database and Redis manually:
-# 1. Go to Render Dashboard → New → PostgreSQL
-# 2. Go to Render Dashboard → New → Redis
-# 3. Then use this blueprint for the API service only
+# Deploy steps:
+# 1. Create PostgreSQL manually: Dashboard → New → PostgreSQL
+# 2. Create Redis manually: Dashboard → New → Redis
+# 3. Use this blueprint
 
 services:
   - type: web
@@ -11,31 +11,26 @@ services:
     env: docker
     region: oregon
     plan: free
-    buildCommand: docker build -t sms-api .
-    startCommand: docker run -p 3001:3001 sms-api
+    dockerfilePath: Dockerfile
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
-        value: 3001
+        value: '3001'
       - key: DB_HOST
         value: # TODO: Add your PostgreSQL internal hostname
       - key: DB_PORT
-        value: 5432
+        value: '5432'
       - key: DB_USERNAME
-        value: # TODO: Add your PostgreSQL username
+        value: postgres
       - key: DB_PASSWORD
         value: # TODO: Add your PostgreSQL password
       - key: DB_NAME
         value: # TODO: Add your PostgreSQL database name
-      - key: DB_SCHEMA
-        value: public
-      - key: DB_SSL
-        value: 'false'
       - key: REDIS_HOST
         value: # TODO: Add your Redis internal hostname
       - key: REDIS_PORT
-        value: 6379
+        value: '6379'
       - key: JWT_SECRET
         value: your-super-secure-jwt-secret-min-32-chars
       - key: JWT_EXPIRES_IN
@@ -46,8 +41,6 @@ services:
         value: 7d
       - key: TIMEZONE
         value: Asia/Kathmandu
-      - key: DEFAULT_LANGUAGE
-        value: ne
       - key: ALLOWED_ORIGINS
         value: '*'
       - key: LOG_LEVEL
