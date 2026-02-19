@@ -40,6 +40,24 @@ export class DatabaseService implements OnModuleDestroy {
       this.logger.log('Initializing database schema...');
 
       await this.pool.query(`
+        -- Drop existing tables for clean slate (only in dev)
+        DROP TABLE IF EXISTS user_sessions CASCADE;
+        DROP TABLE IF EXISTS student_guardians CASCADE;
+        DROP TABLE IF EXISTS guardians CASCADE;
+        DROP TABLE IF EXISTS marks CASCADE;
+        DROP TABLE IF EXISTS exams CASCADE;
+        DROP TABLE IF EXISTS attendance CASCADE;
+        DROP TABLE IF EXISTS payments CASCADE;
+        DROP TABLE IF EXISTS fees CASCADE;
+        DROP TABLE IF EXISTS students CASCADE;
+        DROP TABLE IF EXISTS subjects CASCADE;
+        DROP TABLE IF EXISTS sections CASCADE;
+        DROP TABLE IF EXISTS classes CASCADE;
+        DROP TABLE IF EXISTS users CASCADE;
+        DROP TABLE IF EXISTS schools CASCADE;
+      `);
+
+      await this.pool.query(`
         -- Schools
         CREATE TABLE IF NOT EXISTS schools (
           school_id SERIAL PRIMARY KEY,
