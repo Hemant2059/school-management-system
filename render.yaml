@@ -1,9 +1,4 @@
 # School Management System - Render Blueprint
-#
-# Deploy steps:
-# 1. Create PostgreSQL manually: Dashboard → New → PostgreSQL
-# 2. Create Redis manually: Dashboard → New → Redis
-# 3. Use this blueprint
 
 services:
   - type: web
@@ -28,9 +23,11 @@ services:
       - key: DB_NAME
         value: # TODO: Add your PostgreSQL database name
       - key: REDIS_HOST
-        value: # TODO: Add your Redis internal hostname
+        value: redis-10110.crce276.ap-south-1-3.ec2.cloud.redislabs.com
       - key: REDIS_PORT
-        value: '6379'
+        value: '10110'
+      - key: REDIS_PASSWORD
+        value: JjSiK5di1qGWjSiL4EPvSJuQkh6t5SBw
       - key: JWT_SECRET
         value: your-super-secure-jwt-secret-min-32-chars
       - key: JWT_EXPIRES_IN

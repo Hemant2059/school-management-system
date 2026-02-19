@@ -80,6 +80,7 @@ try {
               socket: {
                 host: redisHost,
                 port: parseInt(process.env.REDIS_PORT || '6379'),
+                password: process.env.REDIS_PASSWORD || undefined,
               },
             }),
             ttl: parseInt(process.env.REDIS_TTL || '3600'),
