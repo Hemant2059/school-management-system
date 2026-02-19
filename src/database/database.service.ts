@@ -196,6 +196,71 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
+        -- Teachers
+        CREATE TABLE IF NOT EXISTS teachers (
+          teacher_id SERIAL PRIMARY KEY,
+          school_id INTEGER REFERENCES schools(school_id),
+          teacher_code VARCHAR(50) NOT NULL,
+          employee_id VARCHAR(50) NOT NULL,
+          first_name_en VARCHAR(100) NOT NULL,
+          middle_name_en VARCHAR(100),
+          last_name_en VARCHAR(100) NOT NULL,
+          first_name_np VARCHAR(100),
+          middle_name_np VARCHAR(100),
+          last_name_np VARCHAR(100),
+          display_name VARCHAR(200),
+          date_of_birth DATE,
+          date_of_birth_bs VARCHAR(20),
+          gender VARCHAR(10) NOT NULL,
+          blood_group VARCHAR(10),
+          nationality VARCHAR(50),
+          religion VARCHAR(50),
+          highest_qualification VARCHAR(200),
+          specialization VARCHAR(200),
+          university_board VARCHAR(200),
+          passing_year INTEGER,
+          teaching_license_number VARCHAR(100),
+          license_expiry_date DATE,
+          personal_mobile VARCHAR(20),
+          official_mobile VARCHAR(20),
+          personal_email VARCHAR(100),
+          official_email VARCHAR(100),
+          joining_date DATE,
+          joining_date_bs VARCHAR(20),
+          employment_type VARCHAR(50),
+          department VARCHAR(100),
+          designation VARCHAR(100),
+          current_status VARCHAR(20) DEFAULT 'ACTIVE',
+          is_active BOOLEAN DEFAULT true,
+          citizenship_number VARCHAR(50),
+          citizenship_issue_district VARCHAR(100),
+          citizenship_issue_date DATE,
+          citizenship_issue_date_bs VARCHAR(20),
+          pan_number VARCHAR(50),
+          ssf_number VARCHAR(50),
+          bank_name VARCHAR(100),
+          bank_account_number VARCHAR(50),
+          bank_branch VARCHAR(100),
+          emergency_contact_name VARCHAR(100),
+          emergency_contact_phone VARCHAR(20),
+          emergency_contact_relation VARCHAR(50),
+          caste_ethnicity_code VARCHAR(20),
+          caste_ethnicity_name VARCHAR(100),
+          marital_status VARCHAR(20),
+          profile_photo_url VARCHAR(500),
+          permanent_province_id INTEGER,
+          permanent_district_id INTEGER,
+          permanent_municipality_id INTEGER,
+          permanent_ward_no INTEGER,
+          permanent_tole_en VARCHAR(200),
+          permanent_address_en TEXT,
+          permanent_tole_np VARCHAR(200),
+          permanent_address_np TEXT,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          deleted_at TIMESTAMP
+        );
+
         -- Indexes
         CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
         CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
@@ -209,6 +274,8 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         CREATE INDEX IF NOT EXISTS idx_payments_student ON payments(student_id);
         CREATE INDEX IF NOT EXISTS idx_attendance_student ON attendance(student_id);
         CREATE INDEX IF NOT EXISTS idx_marks_student ON marks(student_id);
+        CREATE INDEX IF NOT EXISTS idx_teachers_school ON teachers(school_id);
+        CREATE INDEX IF NOT EXISTS idx_teachers_employee ON teachers(employee_id);
       `);
 
       this.logger.log('Database schema initialized successfully');

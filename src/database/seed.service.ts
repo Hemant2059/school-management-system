@@ -9,9 +9,27 @@ export class SeedService implements OnModuleInit {
   constructor(private db: DatabaseService) {}
 
   async onModuleInit() {
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    await this.waitForSchema();
     await this.seedAll();
     await this.resetAdminPassword();
+  }
+
+  private async waitForSchema(): Promise<void> {
+    this.logger.log('Waiting for database schema to be ready...');
+    let retries = 30;
+    while (retries > 0) {
+      try {
+        await this.db.query('SELECT 1 FROM schools LIMIT 1');
+        this.logger.log('Database schema is ready');
+        return;
+      } catch {
+        retries--;
+        if (retries === 0) {
+          throw new Error('Database schema initialization timeout');
+        }
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+    }
   }
 
   async seedAll() {
@@ -30,6 +48,7 @@ export class SeedService implements OnModuleInit {
       await this.seedAttendance();
       await this.seedExams();
       await this.seedMarks();
+      await this.seedTeachers();
       this.logger.log('Seed data completed successfully');
     } catch (error) {
       this.logger.error('Seed error: ' + error.message);
@@ -629,5 +648,257 @@ export class SeedService implements OnModuleInit {
       );
     }
     this.logger.log('Marks seeded');
+  }
+
+  async seedTeachers() {
+    const existing = await this.db.query(
+      'SELECT teacher_id FROM teachers WHERE school_id = 1 LIMIT 1',
+    );
+    if (existing.length > 0) {
+      this.logger.log('Teachers already seeded');
+      return;
+    }
+
+    const teachers = [
+      [
+        'TCH001',
+        'EMP001',
+        'Ram',
+        'Kumar',
+        'Sharma',
+        'राम',
+        'शर्मा',
+        'Male',
+        '1985-05-15',
+        '1985-05-15',
+        'B+',
+        'Nepali',
+        'Hindu',
+        'Masters in Education',
+        'Science',
+        'Tribhuvan University',
+        2010,
+        '9841000001',
+        'ram.sharma@school.edu.np',
+        '2015-01-01',
+        'PERMANENT',
+      ],
+      [
+        'TCH002',
+        'EMP002',
+        'Shyam',
+        'Prasad',
+        'Bhatta',
+        'श्याम',
+        'भट्ट',
+        'Male',
+        '1988-08-20',
+        '1988-08-20',
+        'A+',
+        'Nepali',
+        'Brahmin',
+        'Masters in Nepali',
+        'Nepali',
+        'Tribhuvan University',
+        2012,
+        '9841000002',
+        'shyam.bhatta@school.edu.np',
+        '2016-03-15',
+        'PERMANENT',
+      ],
+      [
+        'TCH003',
+        'EMP003',
+        'Geeta',
+        'Kumari',
+        'Joshi',
+        'गीता',
+        'जोशी',
+        'Female',
+        '1990-03-10',
+        '1990-03-10',
+        'O+',
+        'Nepali',
+        'Chhetri',
+        'Masters in Math',
+        'Mathematics',
+        'Tribhuvan University',
+        2014,
+        '9841000003',
+        'geeta.joshi@school.edu.np',
+        '2017-07-01',
+        'PERMANENT',
+      ],
+      [
+        'TCH004',
+        'EMP004',
+        'Hari',
+        'Bahadur',
+        'Thapa',
+        'हरि',
+        'थापा',
+        'Male',
+        '1982-11-25',
+        '1982-11-25',
+        'A+',
+        'Nepali',
+        'Gurung',
+        'Masters in English',
+        'English',
+        'Tribhuvan University',
+        2008,
+        '9841000004',
+        'hari.thapa@school.edu.np',
+        '2010-04-01',
+        'PERMANENT',
+      ],
+      [
+        'TCH005',
+        'EMP005',
+        'Maya',
+        'Devi',
+        'Poudel',
+        'माया',
+        'पौडेल',
+        'Female',
+        '1992-07-18',
+        '1992-07-18',
+        'B+',
+        'Nepali',
+        'Brahmin',
+        'Masters in Science',
+        'Science',
+        'Tribhuvan University',
+        2016,
+        '9841000005',
+        'maya.poudel@school.edu.np',
+        '2018-01-15',
+        'PERMANENT',
+      ],
+      [
+        'TCH006',
+        'EMP006',
+        'Niraj',
+        'Kumar',
+        'Maharjan',
+        'निरज',
+        'महर्जन',
+        'Male',
+        '1987-09-12',
+        '1987-09-12',
+        'A+',
+        'Nepali',
+        'Newar',
+        'Masters in Social',
+        'Social Studies',
+        'Tribhuvan University',
+        2011,
+        '9841000006',
+        'niraj.maharjan@school.edu.np',
+        '2014-06-01',
+        'PERMANENT',
+      ],
+      [
+        'TCH007',
+        'EMP007',
+        'Sita',
+        '',
+        'Rai',
+        'सिता',
+        'राई',
+        'Female',
+        '1991-04-05',
+        '1991-04-05',
+        'O+',
+        'Nepali',
+        'Rai',
+        'Masters in Education',
+        'English',
+        'Tribhuvan University',
+        2015,
+        '9841000007',
+        'sita.rai@school.edu.np',
+        '2019-02-01',
+        'PERMANENT',
+      ],
+      [
+        'TCH008',
+        'EMP008',
+        'Deepak',
+        'Bahadur',
+        'Chhetri',
+        'दीपक',
+        'छेत्री',
+        'Male',
+        '1984-12-30',
+        '1984-12-30',
+        'AB+',
+        'Nepali',
+        'Chhetri',
+        'Masters in Math',
+        'Mathematics',
+        'Tribhuvan University',
+        2009,
+        '9841000008',
+        'deepak.chhetri@school.edu.np',
+        '2012-09-01',
+        'PERMANENT',
+      ],
+      [
+        'TCH009',
+        'EMP009',
+        'Anita',
+        'Kumari',
+        'Basnet',
+        'अनिता',
+        'बस्नेत',
+        'Female',
+        '1993-06-22',
+        '1993-06-22',
+        'B+',
+        'Nepali',
+        'Chhetri',
+        'Masters in Nepali',
+        'Nepali',
+        'Tribhuvan University',
+        2017,
+        '9841000009',
+        'anita.basnet@school.edu.np',
+        '2020-01-10',
+        'CONTRACT',
+      ],
+      [
+        'TCH010',
+        'EMP010',
+        'Prakash',
+        'Kumar',
+        'Yadav',
+        'प्रकाश',
+        'यादव',
+        'Male',
+        '1989-02-14',
+        '1989-02-14',
+        'A+',
+        'Nepali',
+        'Yadav',
+        'Masters in Science',
+        'Science',
+        'Tribhuvan University',
+        2013,
+        '9841000010',
+        'prakash.yadav@school.edu.np',
+        '2016-11-01',
+        'PERMANENT',
+      ],
+    ];
+
+    for (const t of teachers) {
+      await this.db.query(
+        `INSERT INTO teachers (school_id, teacher_code, employee_id, first_name_en, middle_name_en, last_name_en, first_name_np, last_name_np, gender, date_of_birth, date_of_birth_bs, blood_group, nationality, religion, highest_qualification, specialization, university_board, passing_year, personal_mobile, official_email, joining_date, employment_type, current_status, is_active, created_at)
+         VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, 'ACTIVE', true, NOW())`,
+        t,
+      );
+    }
+    this.logger.log('Teachers seeded');
   }
 }
