@@ -40,13 +40,13 @@ export class SeedService implements OnModuleInit {
 
   async resetAdminPassword() {
     try {
-      const passwordHash = await bcrypt.hash('admin123', 10);
+      const passwordHash = await bcrypt.hash('Admin123!', 10);
       const result = await this.db.query(
         `UPDATE users SET password_hash = $1, password = $1 WHERE user_type = 'ADMIN' AND school_id = 1 RETURNING user_id`,
         [passwordHash],
       );
       if (result.length > 0) {
-        this.logger.log('Admin password reset to: admin123');
+        this.logger.log('Admin password reset to: Admin123!');
       }
     } catch (error) {
       this.logger.error('Failed to reset admin password: ' + error.message);
