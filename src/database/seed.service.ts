@@ -12,21 +12,8 @@ export class SeedService implements OnModuleInit {
     const shouldSeed = process.env.SEED_DATA === 'true';
     if (shouldSeed) {
       await this.seedAll();
-      await this.resetAdminPassword();
     }
-  }
-
-  async resetAdminPassword() {
-    try {
-      const passwordHash = await bcrypt.hash('admin123', 10);
-      await this.db.query(
-        `UPDATE users SET password_hash = $1, password = $1 WHERE user_type = 'ADMIN' AND school_id = 1`,
-        [passwordHash],
-      );
-      this.logger.log('Admin password reset to: admin123');
-    } catch (error) {
-      this.logger.error('Failed to reset admin password: ' + error.message);
-    }
+    await this.resetAdminPassword();
   }
 
   async seedAll() {
@@ -48,6 +35,21 @@ export class SeedService implements OnModuleInit {
       this.logger.log('Seed data completed successfully');
     } catch (error) {
       this.logger.error('Seed error: ' + error.message);
+    }
+  }
+
+  async resetAdminPassword() {
+    try {
+      const passwordHash = await bcrypt.hash('admin123', 10);
+      const result = await this.db.query(
+        `UPDATE users SET password_hash = $1, password = $1 WHERE user_type = 'ADMIN' AND school_id = 1 RETURNING user_id`,
+        [passwordHash],
+      );
+      if (result.length > 0) {
+        this.logger.log('Admin password reset to: admin123');
+      }
+    } catch (error) {
+      this.logger.error('Failed to reset admin password: ' + error.message);
     }
   }
 
