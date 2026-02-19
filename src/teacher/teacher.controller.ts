@@ -113,7 +113,7 @@ export class TeacherController {
 
   @Get()
   @Roles(UserRole.ADMIN)
-  @Permissions(Permission.TEACHER_READ)
+  // @Permissions(Permission.TEACHER_READ)
   @ApiOperation({
     summary: 'Get All Teachers (Paginated)',
     description: `Retrieve paginated list of all teachers for a specific school.
