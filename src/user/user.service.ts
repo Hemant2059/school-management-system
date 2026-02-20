@@ -18,8 +18,12 @@ export class UserService {
 
   async create(createUserDto: CreateUserDto): Promise<User> {
     const existing = await this.db.queryOne<User>(
-      `SELECT * FROM users WHERE username = $1 OR email = $2 OR phone = $3`,
-      [createUserDto.username, createUserDto.email, createUserDto.phone],
+      `SELECT * FROM users WHERE username = $1 OR (email = $2 AND $2 IS NOT NULL) OR (phone = $3 AND $3 IS NOT NULL)`,
+      [
+        createUserDto.username,
+        createUserDto.email || null,
+        createUserDto.phone || null,
+      ],
     );
 
     if (existing) {
@@ -30,18 +34,24 @@ export class UserService {
 
     const passwordHash = await bcrypt.hash(createUserDto.password, 10);
 
+    const schoolId = createUserDto.schoolId || createUserDto.school_id || 1;
+    const email =
+      createUserDto.email || `${createUserDto.username}@school.edu.np`;
+    const phone = createUserDto.phone || null;
+    const userType = createUserDto.userType || 'TEACHER';
+
     const user = await this.db.insert<User>(
-      `INSERT INTO users (school_id, username, email, phone, password_hash, full_name, user_type, is_verified, is_active, failed_login_attempts)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, false, true, 0)
+      `INSERT INTO users (school_id, username, email, phone, password, password_hash, full_name, user_type, is_verified, is_active, failed_login_attempts)
+       VALUES ($1, $2, $3, $4, $5, $5, $6, $7, false, true, 0)
        RETURNING *`,
       [
-        createUserDto.schoolId,
+        schoolId,
         createUserDto.username,
-        createUserDto.email,
-        createUserDto.phone,
+        email,
+        phone,
         passwordHash,
         createUserDto.fullName,
-        createUserDto.userType,
+        userType,
       ],
     );
 

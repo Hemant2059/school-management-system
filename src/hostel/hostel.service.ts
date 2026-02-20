@@ -156,7 +156,7 @@ export class HostelService {
 
   async deleteHostel(id: number, schoolId: number): Promise<void> {
     const query =
-      'UPDATE hostels SET is_active = false WHERE id = $1 AND school_id = $2';
+      'UPDATE hostels SET is_active = false WHERE id = $1 AND school_id = $2 RETURNING id';
     const result = await this.databaseService.query(query, [id, schoolId]);
 
     if (result.length === 0) {
@@ -261,7 +261,7 @@ export class HostelService {
 
   async getHostelStudents(schoolId: number, hostelId?: number): Promise<any[]> {
     let query = `
-      SELECT hs.*, s.first_name_en, s.last_name_en, s.student_code, 
+      SELECT hs.*, s.first_name_en, s.last_name_en, s.admission_number, 
              hr.room_number, hr.floor, h.name as hostel_name
       FROM hostel_students hs
       JOIN students s ON hs.student_id = s.student_id

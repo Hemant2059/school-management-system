@@ -102,8 +102,9 @@ export class ReportCardService {
         });
 
         doc.end();
-      } catch {
-        reject(new Error('PDF generation timed out'));
+      } catch (err) {
+        console.error('PDF generation error:', err);
+        reject(new Error('PDF generation failed: ' + err.message));
       }
     });
   }

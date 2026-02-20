@@ -6,18 +6,30 @@ import {
   MinLength,
   Matches,
   IsNumber,
+  IsOptional,
 } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateUserDto {
   @ApiProperty({
-    description: 'School ID this user belongs to',
+    description: 'School ID (auto-set from auth for register)',
     example: 1,
     type: Number,
+    required: false,
   })
-  @IsNotEmpty()
+  @IsOptional()
   @IsNumber()
-  schoolId: number;
+  schoolId?: number;
+
+  @ApiProperty({
+    description: 'School ID snake_case (auto-set from auth)',
+    example: 1,
+    type: Number,
+    required: false,
+  })
+  @IsOptional()
+  @IsNumber()
+  school_id?: number;
 
   @ApiProperty({
     description: 'Unique username for the user account',
@@ -53,24 +65,29 @@ export class CreateUserDto {
     example: 'john.doe@school.edu.np',
     type: String,
     format: 'email',
+    required: false,
   })
+  @IsOptional()
   @IsEmail()
-  email: string;
+  email?: string;
 
   @ApiProperty({
     description: 'Nepali mobile number (10 digits starting with 98, 97, or 96)',
     example: '9841234567',
     type: String,
-    pattern: '^(98|97|96)\\d{8}$',
+    required: false,
   })
+  @IsOptional()
   @Matches(/^(98|97|96)\d{8}$/, { message: 'Invalid Nepali mobile number' })
-  phone: string;
+  phone?: string;
 
   @ApiProperty({
     description: 'Role/type of the user in the system',
     example: 'TEACHER',
     enum: ['ADMIN', 'TEACHER', 'STAFF', 'STUDENT', 'PARENT', 'ACCOUNTANT'],
+    required: false,
   })
+  @IsOptional()
   @IsEnum(['ADMIN', 'TEACHER', 'STAFF', 'STUDENT', 'PARENT', 'ACCOUNTANT'])
-  userType: string;
+  userType?: string;
 }

@@ -105,13 +105,14 @@ export class TransportService {
 
     const result = await this.db.insert<Vehicle>(
       `INSERT INTO vehicles (
-        school_id, vehicle_number, vehicle_name, vehicle_type, capacity,
+        school_id, transport_id, vehicle_number, vehicle_name, vehicle_type, capacity,
         manufacturer, year, color, chassis_number, engine_number,
         insurance_expiry, permit_expiry, is_active
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       RETURNING *`,
       [
         createDto.schoolId,
+        createDto.transportId || 1,
         createDto.vehicleNumber,
         createDto.vehicleName,
         createDto.vehicleType,

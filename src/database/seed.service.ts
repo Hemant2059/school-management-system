@@ -5,13 +5,20 @@ import * as bcrypt from 'bcryptjs';
 @Injectable()
 export class SeedService implements OnModuleInit {
   private readonly logger = new Logger(SeedService.name);
+  private seeded = false;
 
   constructor(private db: DatabaseService) {}
 
   async onModuleInit() {
+    if (this.seeded) {
+      this.logger.log('Seed already completed, skipping...');
+      return;
+    }
+
     await this.waitForSchema();
     await this.seedAll();
     await this.resetAdminPassword();
+    this.seeded = true;
   }
 
   private async waitForSchema(): Promise<void> {
@@ -76,11 +83,16 @@ export class SeedService implements OnModuleInit {
         schoolId = schools[0].school_id;
       }
 
-      // Delete existing admin for this school
-      await this.db.query(
-        `DELETE FROM users WHERE user_type = 'ADMIN' AND school_id = $1`,
+      // Check if admin already exists
+      const existingAdmin = await this.db.query(
+        `SELECT user_id FROM users WHERE user_type = 'ADMIN' AND school_id = $1 LIMIT 1`,
         [schoolId],
       );
+
+      if (existingAdmin.length > 0) {
+        this.logger.log('Admin user already exists, skipping creation');
+        return;
+      }
 
       // Create new admin
       await this.db.query(

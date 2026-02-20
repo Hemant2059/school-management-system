@@ -121,7 +121,8 @@ export class DocumentService {
   }
 
   async deleteDocument(id: number, schoolId: number): Promise<void> {
-    const query = 'DELETE FROM documents WHERE id = $1 AND school_id = $2';
+    const query =
+      'DELETE FROM documents WHERE id = $1 AND school_id = $2 RETURNING id';
     const result = await this.databaseService.query(query, [id, schoolId]);
 
     if (result.length === 0) {

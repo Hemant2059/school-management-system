@@ -15,6 +15,7 @@ import type { CreateAdmissionDto, OnlineAdmission } from './admission.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
+import { UserRole } from '../common/enums/user-role.enum';
 
 @Controller('admissions')
 export class AdmissionController {
@@ -47,7 +48,7 @@ export class AdmissionController {
 
   @Get('statistics')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
+  @Roles(UserRole.ADMIN)
   async getStatistics(@Req() req) {
     return this.admissionService.getAdmissionStatistics(req.user.schoolId);
   }
@@ -63,7 +64,7 @@ export class AdmissionController {
 
   @Put(':id/review')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
+  @Roles(UserRole.ADMIN)
   async reviewApplication(
     @Param('id') id: number,
     @Body()
@@ -81,7 +82,7 @@ export class AdmissionController {
 
   @Post(':id/enroll')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
+  @Roles(UserRole.ADMIN)
   async enrollStudent(
     @Param('id') id: number,
     @Body() body: { sectionId?: number },
@@ -96,7 +97,7 @@ export class AdmissionController {
 
   @Delete(':id')
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles('admin')
+  @Roles(UserRole.ADMIN)
   async deleteApplication(
     @Param('id') id: number,
     @Req() req,

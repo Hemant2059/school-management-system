@@ -74,9 +74,12 @@ async function bootstrap() {
 
   app.useGlobalPipes(
     new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
+      whitelist: false,
+      forbidNonWhitelisted: false,
       transform: true,
+      transformOptions: {
+        enableImplicitConversion: true,
+      },
       errorHttpStatusCode: 422,
     }),
   );
@@ -417,7 +420,7 @@ submit   verify    check     approve    publish   lock
 
   await app.listen(port, '0.0.0.0');
 
-  logger.log(`Application is running on: http://localhost:${port}/api`);
+  logger.log(`Application is running on: http://localhost:${port}/api/v1`);
   logger.log(`Health check: http://localhost:${port}/api/v1/health`);
 }
 void bootstrap();

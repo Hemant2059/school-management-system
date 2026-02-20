@@ -18,6 +18,11 @@ export class CreateVehicleDto {
   @IsInt()
   readonly schoolId: number;
 
+  @ApiPropertyOptional({ description: 'Transport ID', example: 1 })
+  @IsOptional()
+  @IsInt()
+  readonly transportId?: number;
+
   @ApiProperty({ description: 'Vehicle name', example: 'Tata Marcopolo' })
   @IsNotEmpty()
   @IsString()

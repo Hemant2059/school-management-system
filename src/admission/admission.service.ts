@@ -122,7 +122,7 @@ export class AdmissionService {
         province_id, district_id, municipality_id, ward_number, address,
         previous_school, previous_class, previous_grade, transfer_certificate,
         class_id, photo_url, status, documents, applied_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, 'pending', '[]', NOW())
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, 'pending', '[]', NOW())
       RETURNING *
     `;
 
@@ -264,60 +264,65 @@ export class AdmissionService {
 
     await this.databaseService.query('BEGIN');
 
-    const userQuery = `
-      INSERT INTO users (school_id, email, password, role, is_active, must_change_password, created_at)
-      VALUES ($1, $2, $3, 'student', true, true, NOW())
-      RETURNING user_id
-    `;
     const tempPassword = Math.random().toString(36).slice(-8);
     const hashedPassword = this.hashPassword(tempPassword);
+    const username = `student${Date.now()}`;
+
+    const userQuery = `
+      INSERT INTO users (school_id, username, email, password, user_type, is_active, must_change_password, is_verified, created_at)
+      VALUES ($1, $2, $3, $4, 'STUDENT', true, true, true, NOW())
+      RETURNING user_id
+    `;
 
     const userResult = await this.databaseService.query(userQuery, [
       schoolId,
-      application.email || `student${Date.now()}@sms.local`,
+      username,
+      application.email || `${username}@sms.local`,
       hashedPassword,
     ]);
 
     const studentQuery = `
       INSERT INTO students (
-        school_id, user_id, student_code, first_name_en, middle_name_en, last_name_en,
+        school_id, user_id, admission_number, student_code, first_name_en, middle_name_en, last_name_en,
         first_name_np, middle_name_np, last_name_np,
         gender, date_of_birth, nationality, phone, mobile, email,
         father_name, father_phone, mother_name, mother_phone,
         province_id, district_id, municipality_id, ward_number, address,
         profile_image, is_active, created_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, true, NOW())
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, true, NOW())
       RETURNING student_id
     `;
 
     const studentCode = await this.generateStudentCode(schoolId);
 
+    const app = application as any;
     const studentResult = await this.databaseService.query(studentQuery, [
       schoolId,
       userResult[0].user_id,
       studentCode,
-      application.firstName,
-      application.middleName,
-      application.lastName,
-      application.firstNameNp,
-      application.middleNameNp,
-      application.lastNameNp,
-      application.gender,
-      application.dateOfBirth,
-      application.nationality,
-      application.phone,
-      application.mobile,
-      application.email,
-      application.fatherName,
-      application.fatherPhone,
-      application.motherName,
-      application.motherPhone,
-      application.provinceId,
-      application.districtId,
-      application.municipalityId,
-      application.wardNumber,
-      application.address,
-      application.photoUrl,
+      studentCode,
+      app.first_name,
+      app.middle_name,
+      app.last_name,
+      app.first_name_np,
+      app.middle_name_np,
+      app.last_name_np,
+      app.gender,
+      app.date_of_birth,
+      app.nationality,
+      app.phone,
+      app.mobile,
+      app.email,
+      app.father_name,
+      app.father_phone,
+      app.mother_name,
+      app.mother_phone,
+      app.province_id,
+      app.district_id,
+      app.municipality_id,
+      app.ward_number,
+      app.address,
+      app.photo_url,
     ]);
 
     const enrollmentQuery = `
@@ -329,7 +334,7 @@ export class AdmissionService {
     await this.databaseService.query(enrollmentQuery, [
       studentResult[0].student_id,
       schoolId,
-      application.classId,
+      app.class_id,
       sectionId,
       academicYear,
     ]);

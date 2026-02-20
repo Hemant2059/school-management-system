@@ -1,6 +1,7 @@
 import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
+import * as jwt from 'jsonwebtoken';
 import { DatabaseService } from '../database/database.service';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
@@ -68,11 +69,14 @@ export class AuthService {
       this.logger.log('User validated: ' + user.username);
 
       const sessionId = crypto.randomUUID();
-      const refreshToken = crypto.randomUUID();
-      const refreshTokenHash = crypto
-        .createHash('sha256')
-        .update(refreshToken)
-        .digest('hex');
+
+      const tokens = await this.getTokens(
+        user.user_id,
+        user.username,
+        user.user_type ?? '',
+        user.school_id ?? 0,
+        sessionId,
+      );
 
       await this.db.query(
         `INSERT INTO user_sessions (session_id, user_id, school_id, refresh_token_hash, ip_address, user_agent, device_name, last_active_at, expires_at, created_at)
@@ -81,19 +85,11 @@ export class AuthService {
           sessionId,
           user.user_id,
           user.school_id,
-          refreshTokenHash,
+          sessionId,
           ip,
           userAgent,
           this.extractDevice(userAgent),
         ],
-      );
-
-      const tokens = await this.getTokens(
-        user.user_id,
-        user.username,
-        user.user_type ?? '',
-        user.school_id ?? 0,
-        sessionId,
       );
 
       this.logger.log('Tokens generated for: ' + user.username);
@@ -119,14 +115,20 @@ export class AuthService {
   }
 
   async logout(userId: number, refreshToken: string) {
-    const refreshTokenHash = crypto
-      .createHash('sha256')
-      .update(refreshToken)
-      .digest('hex');
+    let payload: any;
+    try {
+      payload = await this.jwtService.verifyAsync(refreshToken, {
+        secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+      });
+    } catch {
+      return;
+    }
+
+    const sessionId = payload.sid;
 
     await this.db.query(
-      `DELETE FROM user_sessions WHERE user_id = $1 AND refresh_token_hash = $2`,
-      [userId, refreshTokenHash],
+      `DELETE FROM user_sessions WHERE user_id = $1 AND session_id = $2`,
+      [userId, sessionId],
     );
   }
 
@@ -152,30 +154,26 @@ export class AuthService {
   async refreshTokens(refreshToken: string, ip: string, userAgent: string) {
     let payload: any;
     try {
-      payload = await this.jwtService.verifyAsync(refreshToken, {
-        secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
-      });
-    } catch {
-      throw new UnauthorizedException('Invalid session');
-    }
-
-    const refreshTokenHash = crypto
-      .createHash('sha256')
-      .update(refreshToken)
-      .digest('hex');
-
-    const session = await this.db.queryOne<UserSession>(
-      `SELECT * FROM user_sessions WHERE user_id = $1 AND refresh_token_hash = $2`,
-      [payload.sub, refreshTokenHash],
-    );
-
-    if (!session || !session.expires_at || new Date() > session.expires_at) {
-      if (session) {
-        await this.db.query(`DELETE FROM user_sessions WHERE session_id = $1`, [
-          session.session_id,
-        ]);
+      const secret = this.configService.get<string>('JWT_REFRESH_SECRET');
+      if (!secret) {
+        throw new Error('JWT_REFRESH_SECRET is not configured');
       }
-      throw new UnauthorizedException('Session expired or invalidated');
+      this.logger.log(
+        `Using refresh secret: found, token length: ${refreshToken?.length || 0}`,
+      );
+      this.logger.log(
+        `Token preview: ${refreshToken?.substring(0, 50) || 'EMPTY'}`,
+      );
+      payload = jwt.verify(refreshToken, secret) as any;
+      this.logger.log('JWT verified successfully, user: ' + payload.sub);
+    } catch (err) {
+      this.logger.error(
+        'JWT verification failed: ' +
+          err.message +
+          ' | token received: ' +
+          (refreshToken ? 'yes' : 'no'),
+      );
+      throw new UnauthorizedException('Invalid session');
     }
 
     const user = await this.userService.findOne(payload.sub);
@@ -183,25 +181,20 @@ export class AuthService {
       throw new UnauthorizedException('User account inactive');
     }
 
+    const sessionId = crypto.randomUUID();
+
     const tokens = await this.getTokens(
       user.user_id,
       user.username,
       user.user_type ?? '',
       user.school_id ?? 0,
-      String(session.session_id),
+      sessionId,
     );
 
-    const newRefreshTokenHash = crypto
-      .createHash('sha256')
-      .update(tokens.refreshToken)
-      .digest('hex');
-
-    await this.db.query(
-      `UPDATE user_sessions SET refresh_token_hash = $2, last_active_at = NOW(), ip_address = $3, user_agent = $4, updated_at = NOW() WHERE session_id = $1`,
-      [session.session_id, newRefreshTokenHash, ip, userAgent],
-    );
-
-    return tokens;
+    return {
+      ...tokens,
+      sessionId,
+    };
   }
 
   async getTokens(

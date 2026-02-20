@@ -241,8 +241,6 @@ export class AuthController {
   }
 
   @Post('logout')
-  @Roles(UserRole.ADMIN)
-  @Permissions(Permission.ADMIN)
   @ApiOperation({
     summary: 'User Logout',
     description: `Invalidate current session.
@@ -289,8 +287,6 @@ export class AuthController {
   }
 
   @Post('logout-all')
-  @Roles(UserRole.ADMIN)
-  @Permissions(Permission.ADMIN)
   @ApiOperation({
     summary: 'Logout from all devices',
     description: 'Invalidates all active sessions for the current user.',

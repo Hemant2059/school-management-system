@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DatabaseService } from '../database/database.service';
 
@@ -25,13 +25,14 @@ export interface LiveClass {
 }
 
 export interface CreateLiveClassDto {
-  classId: number;
-  subjectId: number;
+  classId?: number;
+  subjectId?: number;
+  teacherId?: number;
   title: string;
   description?: string;
   scheduledAt: string;
-  duration: number;
-  platform: 'jitsi' | 'zoom' | 'meet';
+  duration?: number;
+  platform?: 'jitsi' | 'zoom' | 'meet';
   recordingEnabled?: boolean;
 }
 
@@ -52,11 +53,22 @@ export class VideoClassService {
 
   async createLiveClass(
     schoolId: number,
-    teacherId: number,
+    userId: number,
     dto: CreateLiveClassDto,
   ): Promise<LiveClass> {
+    // Find teacher by user_id, or use provided teacherId
+    let teacherId = dto.teacherId;
+    if (!teacherId) {
+      const teacher = await this.databaseService.queryOne<{
+        teacher_id: number;
+      }>('SELECT teacher_id FROM teachers WHERE user_id = $1', [userId]);
+      if (teacher) {
+        teacherId = teacher.teacher_id;
+      }
+    }
+
     const { meetingId, meetingUrl, hostUrl, password } =
-      this.generateMeetingDetails(dto.platform);
+      this.generateMeetingDetails(dto.platform || 'zoom');
 
     const query = `
       INSERT INTO live_classes (
@@ -128,18 +140,28 @@ export class VideoClassService {
     schoolId: number,
     recordingUrl?: string,
   ): Promise<LiveClass> {
-    const query = `
-      UPDATE live_classes 
-      SET status = 'ended', ended_at = NOW(), recording_url = $3
-      WHERE id = $1 AND school_id = $2
-      RETURNING *
-    `;
-    const result = await this.databaseService.query(query, [
-      id,
-      schoolId,
-      recordingUrl,
-    ]);
-    return result[0];
+    try {
+      const query = `
+        UPDATE live_classes 
+        SET status = 'ended', actual_end = NOW(), recording_url = $3
+        WHERE id = $1 AND school_id = $2
+        RETURNING *
+      `;
+      const result = await this.databaseService.query(query, [
+        id,
+        schoolId,
+        recordingUrl || null,
+      ]);
+
+      if (!result || result.length === 0 || !result[0]) {
+        throw new NotFoundException('Live class not found');
+      }
+
+      return result[0];
+    } catch (error) {
+      console.error('Error ending live class:', error);
+      throw error;
+    }
   }
 
   async deleteLiveClass(id: number, schoolId: number): Promise<void> {
