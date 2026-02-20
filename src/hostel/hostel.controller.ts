@@ -11,14 +11,7 @@ import {
   Req,
 } from '@nestjs/common';
 import { HostelService } from './hostel.service';
-import type {
-  CreateHostelDto,
-  CreateRoomDto,
-  AssignStudentDto,
-  Hostel,
-  Room,
-  HostelStudent,
-} from './hostel.service';
+import type { Hostel, Room, HostelStudent } from './hostel.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -31,6 +24,12 @@ import {
   ApiQuery,
   ApiBody,
 } from '@nestjs/swagger';
+import {
+  CreateHostelDto,
+  CreateRoomDto,
+  AssignStudentDto,
+  UpdateHostelDto,
+} from './dto/hostel.dto';
 
 @ApiTags('Hostel Management')
 @ApiBearerAuth()
@@ -45,18 +44,16 @@ export class HostelController {
     summary: 'Create hostel',
     description: 'Create a new hostel/building in the system.',
   })
-  @ApiBody({ type: Object })
+  @ApiBody({ type: CreateHostelDto })
   @ApiResponse({
     status: 201,
     description: 'Hostel created successfully',
+    type: Object,
   })
   @ApiResponse({ status: 400, description: 'Invalid input data' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden - Admin role required' })
-  async createHostel(
-    @Body() dto: CreateHostelDto,
-    @Req() req,
-  ): Promise<Hostel> {
+  async createHostel(@Body() dto: CreateHostelDto, @Req() req) {
     return this.hostelService.createHostel(req.user.schoolId, dto);
   }
 
@@ -70,7 +67,7 @@ export class HostelController {
     description: 'List of hostels retrieved successfully',
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async getHostels(@Req() req): Promise<Hostel[]> {
+  async getHostels(@Req() req) {
     return this.hostelService.getHostels(req.user.schoolId);
   }
 
@@ -107,7 +104,7 @@ export class HostelController {
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Hostel not found' })
-  async getHostelById(@Param('id') id: number, @Req() req): Promise<Hostel> {
+  async getHostelById(@Param('id') id: number, @Req() req) {
     return this.hostelService.getHostelById(id, req.user.schoolId);
   }
 
@@ -123,7 +120,7 @@ export class HostelController {
     example: 1,
     type: Number,
   })
-  @ApiBody({ type: Object })
+  @ApiBody({ type: UpdateHostelDto })
   @ApiResponse({
     status: 200,
     description: 'Hostel updated successfully',
@@ -134,9 +131,9 @@ export class HostelController {
   @ApiResponse({ status: 404, description: 'Hostel not found' })
   async updateHostel(
     @Param('id') id: number,
-    @Body() dto: Partial<CreateHostelDto>,
+    @Body() dto: UpdateHostelDto,
     @Req() req,
-  ): Promise<Hostel> {
+  ) {
     return this.hostelService.updateHostel(id, req.user.schoolId, dto);
   }
 
