@@ -320,10 +320,14 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         -- Documents
         CREATE TABLE IF NOT EXISTS documents (
           document_id SERIAL PRIMARY KEY, school_id INTEGER REFERENCES schools(school_id),
+          student_id INTEGER REFERENCES students(student_id), teacher_id INTEGER REFERENCES teachers(teacher_id),
+          staff_id INTEGER REFERENCES staff(staff_id),
           title VARCHAR(200) NOT NULL, description TEXT, document_type VARCHAR(50),
           file_path VARCHAR(500), file_url VARCHAR(500), file_size INTEGER,
-          mime_type VARCHAR(100), uploaded_by INTEGER, is_active BOOLEAN DEFAULT true,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          file_name VARCHAR(255), file_type VARCHAR(50), mime_type VARCHAR(100), 
+          uploaded_by INTEGER, is_active BOOLEAN DEFAULT true,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          deleted_at TIMESTAMP, type VARCHAR(50)
         );
 
         -- Student Documents
@@ -338,10 +342,18 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
           id SERIAL PRIMARY KEY, school_id INTEGER REFERENCES schools(school_id),
           class_name VARCHAR(200) NOT NULL, description TEXT, teacher_id BIGINT,
           subject_id INTEGER REFERENCES subjects(subject_id), class_id INTEGER REFERENCES classes(class_id),
+          section_id INTEGER,
           scheduled_start TIMESTAMP, scheduled_end TIMESTAMP, actual_start TIMESTAMP, actual_end TIMESTAMP,
-          status VARCHAR(20) DEFAULT 'scheduled', meeting_link VARCHAR(500),
-          recording_url VARCHAR(500), is_active BOOLEAN DEFAULT true,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          scheduled_at TIMESTAMP NOT NULL, scheduled_at_bs VARCHAR(20),
+          duration INTEGER, platform VARCHAR(50),
+          meeting_id VARCHAR(100), meeting_url VARCHAR(500), host_url VARCHAR(500), host_id VARCHAR(100),
+          password VARCHAR(100), status VARCHAR(20) DEFAULT 'scheduled',
+          recording_enabled BOOLEAN DEFAULT false, is_recording_enabled BOOLEAN DEFAULT false,
+          recording_url VARCHAR(500), started_at TIMESTAMP,
+          is_active BOOLEAN DEFAULT true,
+          created_by INTEGER,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+          deleted_at TIMESTAMP
         );
 
         -- Libraries
