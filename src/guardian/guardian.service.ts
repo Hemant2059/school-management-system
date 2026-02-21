@@ -37,7 +37,7 @@ export class GuardianService {
 
   async create(createGuardianDto: CreateGuardianDto): Promise<Guardian> {
     const existing = await this.db.queryOne<Guardian>(
-      `SELECT * FROM guardians WHERE mobile = $1 AND school_id = $2 AND is_active = true`,
+      `SELECT * FROM guardians WHERE phone = $1 AND school_id = $2 AND is_active = true`,
       [createGuardianDto.mobile, createGuardianDto.schoolId],
     );
 
@@ -160,7 +160,7 @@ export class GuardianService {
     schoolId: number,
   ): Promise<Guardian | null> {
     return this.db.queryOne<Guardian>(
-      `SELECT * FROM guardians WHERE mobile = $1 AND school_id = $2 AND is_active = true`,
+      `SELECT * FROM guardians WHERE phone = $1 AND school_id = $2 AND is_active = true`,
       [mobile, schoolId],
     );
   }
