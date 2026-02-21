@@ -452,9 +452,21 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
 
         -- Leave Types
         CREATE TABLE IF NOT EXISTS leave_types (
-          id SERIAL PRIMARY KEY, school_id INTEGER REFERENCES schools(school_id),
+          id SERIAL PRIMARY KEY, school_id BIGINT NOT NULL REFERENCES schools(school_id),
           name VARCHAR(100) NOT NULL, max_days_per_year INTEGER, is_paid BOOLEAN DEFAULT false,
-          is_active BOOLEAN DEFAULT true
+          is_active BOOLEAN DEFAULT true, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+
+        -- Leave Requests
+        CREATE TABLE IF NOT EXISTS leave_requests (
+          leave_request_id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+          school_id BIGINT NOT NULL REFERENCES schools(school_id),
+          staff_id BIGINT NOT NULL REFERENCES staff(staff_id),
+          leave_type_id BIGINT NOT NULL REFERENCES leave_types(id),
+          start_date DATE NOT NULL, end_date DATE NOT NULL, days_requested INTEGER NOT NULL,
+          reason TEXT, status VARCHAR(50) DEFAULT 'PENDING',
+          approved_by BIGINT, approved_at TIMESTAMP,
+          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
         -- Payroll
