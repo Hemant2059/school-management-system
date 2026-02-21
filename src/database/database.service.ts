@@ -162,9 +162,16 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         -- Guardians
         CREATE TABLE IF NOT EXISTS guardians (
           guardian_id SERIAL PRIMARY KEY, school_id INTEGER REFERENCES schools(school_id),
+          guardian_code VARCHAR(50),
           first_name VARCHAR(100) NOT NULL, middle_name VARCHAR(100), last_name VARCHAR(100),
-          phone VARCHAR(20), email VARCHAR(255), occupation VARCHAR(100),
-          relationship VARCHAR(50), is_active BOOLEAN DEFAULT true, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+          first_name_en VARCHAR(100), middle_name_en VARCHAR(100), last_name_en VARCHAR(100),
+          first_name_np VARCHAR(100), middle_name_np VARCHAR(100), last_name_np VARCHAR(100),
+          display_name VARCHAR(200),
+          relation_to_student VARCHAR(50), occupation VARCHAR(100), education_level VARCHAR(100),
+          mobile VARCHAR(20), alternate_mobile VARCHAR(20), email VARCHAR(255),
+          annual_income DECIMAL(10,2),
+          phone VARCHAR(20), relationship VARCHAR(50), 
+          is_active BOOLEAN DEFAULT true, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
         -- Student Guardians

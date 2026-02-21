@@ -58,7 +58,7 @@ export class VideoClassService {
   ): Promise<LiveClass> {
     // Find teacher by user_id, or use provided teacherId
     let teacherId = dto.teacherId;
-    if (!teacherId) {
+    if (!teacherId && userId) {
       const teacher = await this.databaseService.queryOne<{
         teacher_id: number;
       }>('SELECT teacher_id FROM teachers WHERE user_id = $1', [userId]);
@@ -81,15 +81,15 @@ export class VideoClassService {
 
     const result = await this.databaseService.query(query, [
       schoolId,
-      dto.classId,
-      dto.subjectId,
-      teacherId,
+      dto.classId || null,
+      dto.subjectId || null,
+      teacherId || null,
       dto.title,
-      dto.description,
-      new Date(dto.scheduledAt),
-      dto.scheduledAt,
-      dto.duration,
-      dto.platform,
+      dto.description || null,
+      dto.scheduledAt ? new Date(dto.scheduledAt) : null,
+      dto.scheduledAt || null,
+      dto.duration || null,
+      dto.platform || null,
       meetingId,
       meetingUrl,
       hostUrl,
