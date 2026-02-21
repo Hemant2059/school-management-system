@@ -37,7 +37,7 @@ export class SubjectService {
     }
 
     return this.db.insert<Subject>(
-      `INSERT INTO subjects (school_id, subject_code, subject_name, subject_name_nepali, subject_type, subject_group, credit_hours, is_active)
+      `INSERT INTO subjects (school_id, subject_code, subject_name_en, subject_name_np, subject_type, subject_group, credit_hours, is_active)
        VALUES ($1, $2, $3, $4, $5, $6, $7, true)
        RETURNING *`,
       [
