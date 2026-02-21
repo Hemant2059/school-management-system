@@ -197,8 +197,11 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         CREATE TABLE IF NOT EXISTS payments (
           payment_id SERIAL PRIMARY KEY, school_id INTEGER REFERENCES schools(school_id),
           student_id INTEGER REFERENCES students(student_id), fee_id INTEGER REFERENCES fees(fee_id),
-          amount DECIMAL(10,2) NOT NULL, payment_date DATE, payment_method VARCHAR(50),
-          transaction_id VARCHAR(100), received_by INTEGER, bank_name VARCHAR(100), cheque_number VARCHAR(50),
+          invoice_id VARCHAR(50),
+          amount DECIMAL(10,2) NOT NULL, payment_date DATE, payment_date_bs VARCHAR(20),
+          payment_method VARCHAR(50), transaction_id VARCHAR(100), transaction_uuid VARCHAR(100),
+          gateway_name VARCHAR(50), received_by INTEGER, bank_name VARCHAR(100), branch_name VARCHAR(100),
+          cheque_number VARCHAR(50), cheque_date DATE, reference_number VARCHAR(100),
           remarks TEXT, idempotency_key VARCHAR(100), is_verified BOOLEAN DEFAULT false,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
@@ -664,14 +667,6 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
           id SERIAL PRIMARY KEY, school_id INTEGER REFERENCES schools(school_id),
           name VARCHAR(100) NOT NULL, template_text TEXT NOT NULL, event_type VARCHAR(50),
           is_active BOOLEAN DEFAULT true, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-
-        -- Payments
-        CREATE TABLE IF NOT EXISTS payments (
-          payment_id SERIAL PRIMARY KEY, school_id INTEGER REFERENCES schools(school_id),
-          student_id INTEGER REFERENCES students(student_id), amount DECIMAL(10,2) NOT NULL,
-          payment_method VARCHAR(50), transaction_id VARCHAR(100), status VARCHAR(20) DEFAULT 'pending',
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
         -- Districts
