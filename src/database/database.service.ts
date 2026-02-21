@@ -206,14 +206,6 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
-        -- Attendance
-        CREATE TABLE IF NOT EXISTS attendance (
-          attendance_id SERIAL PRIMARY KEY, school_id INTEGER REFERENCES schools(school_id),
-          student_id INTEGER REFERENCES students(student_id), attendance_date DATE NOT NULL,
-          status VARCHAR(20) NOT NULL, remarks TEXT, marked_by INTEGER,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-
         -- Exams
         CREATE TABLE IF NOT EXISTS exams (
           exam_id SERIAL PRIMARY KEY, school_id INTEGER REFERENCES schools(school_id),
@@ -442,14 +434,6 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
           is_active BOOLEAN DEFAULT true, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
-        -- Leave Requests
-        CREATE TABLE IF NOT EXISTS leave_requests (
-          leave_id SERIAL PRIMARY KEY, staff_id INTEGER REFERENCES staff(staff_id),
-          leave_type VARCHAR(50), start_date DATE, end_date DATE, total_days INTEGER,
-          reason TEXT, status VARCHAR(20) DEFAULT 'pending', approved_by INTEGER,
-          created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-
         -- Leave Types
         CREATE TABLE IF NOT EXISTS leave_types (
           id SERIAL PRIMARY KEY, school_id BIGINT NOT NULL REFERENCES schools(school_id),
@@ -489,13 +473,6 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
           insurance_expiry DATE, permit_expiry DATE,
           is_active BOOLEAN DEFAULT true, deleted_at TIMESTAMP,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-
-        -- Leave Types
-        CREATE TABLE IF NOT EXISTS leave_types (
-          id SERIAL PRIMARY KEY, school_id INTEGER REFERENCES schools(school_id),
-          name VARCHAR(100) NOT NULL, max_days_per_year INTEGER, is_paid BOOLEAN DEFAULT false,
-          is_active BOOLEAN DEFAULT true
         );
 
         -- Notifications
@@ -754,12 +731,6 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
-        -- Leave Types
-        CREATE TABLE IF NOT EXISTS leave_types (
-          id SERIAL PRIMARY KEY, school_id INTEGER REFERENCES schools(school_id),
-          name VARCHAR(100) NOT NULL, max_days_per_year INTEGER, is_paid BOOLEAN DEFAULT false,
-          is_active BOOLEAN DEFAULT true
-        );
       `);
 
       this.schemaInitialized = true;
