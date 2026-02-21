@@ -32,13 +32,13 @@ export class TimetableService {
   async create(createDto: CreateTimetableDto): Promise<Timetable> {
     const conflict = await this.db.queryOne<Timetable>(
       `SELECT timetable_id FROM timetables 
-       WHERE school_id = $1 AND class_id = $2 AND section_id = $3 
+       WHERE school_id = $1 AND class_id = $2 AND (section_id = $3 OR ($3 IS NULL AND section_id IS NULL))
        AND day_of_week = $4 AND period_number = $5 AND is_active = true AND deleted_at IS NULL`,
       [
         createDto.schoolId,
         createDto.classId,
-        createDto.sectionId,
-        createDto.dayOfWeek,
+        createDto.sectionId || null,
+        String(createDto.dayOfWeek),
         createDto.periodNumber,
       ],
     );
@@ -56,14 +56,14 @@ export class TimetableService {
       [
         createDto.schoolId,
         createDto.classId,
-        createDto.sectionId,
-        createDto.subjectId,
-        createDto.teacherId,
-        createDto.dayOfWeek,
+        createDto.sectionId || null,
+        createDto.subjectId || null,
+        createDto.teacherId || null,
+        String(createDto.dayOfWeek),
         createDto.startTime,
         createDto.endTime,
         createDto.periodNumber,
-        createDto.roomNumber,
+        createDto.roomNumber || null,
         true,
       ],
     );
