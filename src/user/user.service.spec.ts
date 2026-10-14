@@ -131,7 +131,7 @@ describe('UserService', () => {
       await service.findAll(pageOptionsDto);
 
       expect(mockDatabaseService.query).toHaveBeenCalledWith(
-        expect.stringContaining('LIMIT $1 OFFSET $2'),
+        expect.stringContaining('LIMIT $1::int OFFSET $2::int'),
         [10, 0],
       );
     });

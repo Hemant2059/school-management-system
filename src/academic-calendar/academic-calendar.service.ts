@@ -112,28 +112,30 @@ export class AcademicCalendarService {
         title = COALESCE($2, title),
         title_np = COALESCE($3, title_np),
         event_type = COALESCE($4, event_type),
-        start_date = COALESCE($5, start_date),
-        start_date_bs = COALESCE($6, start_date_bs),
-        end_date = COALESCE($7, end_date),
-        end_date_bs = COALESCE($8, end_date_bs),
-        description = COALESCE($9, description),
-        description_np = COALESCE($10, description_np),
-        is_holiday = COALESCE($11, is_holiday),
-        is_exam = COALESCE($12, is_exam),
-        is_event = COALESCE($13, is_event),
+        academic_year = COALESCE($5, academic_year),
+        start_date = COALESCE($6, start_date),
+        start_date_bs = COALESCE($7, start_date_bs),
+        end_date = COALESCE($8, end_date),
+        end_date_bs = COALESCE($9, end_date_bs),
+        description = COALESCE($10, description),
+        description_np = COALESCE($11, description_np),
+        is_holiday = COALESCE($12, is_holiday),
+        is_exam = COALESCE($13, is_exam),
+        is_event = COALESCE($14, is_event),
         updated_at = NOW()
-       WHERE id = $1 AND school_id = $14`,
+       WHERE id = $1 AND school_id = $15`,
       [
         id,
-        dto.title || null,
-        dto.titleNp || null,
-        dto.eventType || null,
-        dto.startDate || null,
-        dto.startDateBs || null,
-        dto.endDate || null,
-        dto.endDateBs || null,
-        dto.description || null,
-        dto.descriptionNp || null,
+        dto.title ?? null,
+        dto.titleNp ?? null,
+        dto.eventType ?? null,
+        dto.academicYear ?? null,
+        dto.startDate ?? null,
+        dto.startDateBs ?? null,
+        dto.endDate ?? null,
+        dto.endDateBs ?? null,
+        dto.description ?? null,
+        dto.descriptionNp ?? null,
         dto.isHoliday ?? null,
         dto.isExam ?? null,
         dto.isEvent ?? null,
@@ -203,13 +205,19 @@ export class AcademicCalendarService {
     );
   }
 
-  async getUpcoming(schoolId: number, days = 30): Promise<AcademicCalendar[]> {
+  async getUpcoming(
+    schoolId: number,
+    days: number | string = 30,
+  ): Promise<AcademicCalendar[]> {
+    let n = parseInt(String(days), 10);
+    if (!Number.isFinite(n) || n < 1) n = 30;
+    n = Math.min(n, 365);
     return this.db.query<AcademicCalendar>(
       `SELECT * FROM academic_calendars 
        WHERE school_id = $1 AND is_active = true 
-       AND start_date >= CURRENT_DATE AND start_date <= CURRENT_DATE + INTERVAL '${days} days'
+       AND start_date >= CURRENT_DATE AND start_date <= CURRENT_DATE + make_interval(days => $2::int)
        ORDER BY start_date ASC`,
-      [schoolId],
+      [schoolId, n],
     );
   }
 }

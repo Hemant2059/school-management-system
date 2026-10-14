@@ -29,6 +29,25 @@ export class StudentGuardianService {
     isPrimary?: boolean;
     isEmergencyContact?: boolean;
   }): Promise<StudentGuardian> {
+    const relationshipType = (createDto.relationshipType || '').toUpperCase();
+    const allowedRelations = [
+      'FATHER',
+      'MOTHER',
+      'GRANDFATHER',
+      'GRANDMOTHER',
+      'UNCLE',
+      'AUNT',
+      'BROTHER',
+      'SISTER',
+      'GUARDIAN',
+      'OTHER',
+    ];
+    if (!allowedRelations.includes(relationshipType)) {
+      throw new BadRequestException(
+        `Invalid relationshipType. Allowed: ${allowedRelations.join(', ')}`,
+      );
+    }
+
     const student = await this.db.queryOne(
       `SELECT * FROM students WHERE student_id = $1 AND school_id = $2 AND is_active = true`,
       [createDto.studentId, createDto.schoolId],
@@ -46,10 +65,10 @@ export class StudentGuardianService {
     }
 
     const existing = await this.db.queryOne<StudentGuardian>(
-      `SELECT * FROM student_guardians WHERE student_id = $1 AND guardian_id = $2 AND is_active = true`,
+      `SELECT * FROM student_guardians WHERE student_id = $1 AND guardian_id = $2`,
       [createDto.studentId, createDto.guardianId],
     );
-    if (existing) {
+    if (existing?.is_active) {
       throw new BadRequestException(
         'Guardian is already linked to this student',
       );
@@ -69,6 +88,27 @@ export class StudentGuardianService {
       );
     }
 
+    // Re-link after a soft-unlink: reactivate the same pair instead of
+    // violating uq_sg_pair (student_id, guardian_id).
+    if (existing) {
+      return this.db.insert<StudentGuardian>(
+        `UPDATE student_guardians SET
+          relationship_type = $2,
+          is_primary = $3,
+          is_emergency_contact = $4,
+          is_active = true,
+          updated_at = NOW()
+         WHERE student_guardian_id = $1
+         RETURNING *`,
+        [
+          existing.student_guardian_id,
+          relationshipType,
+          createDto.isPrimary || false,
+          createDto.isEmergencyContact || false,
+        ],
+      );
+    }
+
     return this.db.insert<StudentGuardian>(
       `INSERT INTO student_guardians (student_id, guardian_id, relationship_type, is_primary, is_emergency_contact, is_active)
        VALUES ($1, $2, $3, $4, $5, true)
@@ -76,7 +116,7 @@ export class StudentGuardianService {
       [
         createDto.studentId,
         createDto.guardianId,
-        createDto.relationshipType,
+        relationshipType,
         createDto.isPrimary || false,
         createDto.isEmergencyContact || false,
       ],
@@ -86,11 +126,13 @@ export class StudentGuardianService {
   async unlinkGuardian(
     studentId: number,
     guardianId: number,
-    _schoolId: number,
+    schoolId: number,
   ): Promise<void> {
     const link = await this.db.queryOne<StudentGuardian>(
-      `SELECT * FROM student_guardians WHERE student_id = $1 AND guardian_id = $2 AND is_active = true`,
-      [studentId, guardianId],
+      `SELECT sg.* FROM student_guardians sg
+       JOIN students s ON s.student_id = sg.student_id
+       WHERE sg.student_id = $1 AND sg.guardian_id = $2 AND s.school_id = $3 AND sg.is_active = true`,
+      [studentId, guardianId, schoolId],
     );
 
     if (!link) {
@@ -152,8 +194,10 @@ export class StudentGuardianService {
     },
   ): Promise<StudentGuardian> {
     const link = await this.db.queryOne<StudentGuardian>(
-      `SELECT * FROM student_guardians WHERE student_id = $1 AND guardian_id = $2 AND is_active = true`,
-      [studentId, guardianId],
+      `SELECT sg.* FROM student_guardians sg
+       JOIN students s ON s.student_id = sg.student_id
+       WHERE sg.student_id = $1 AND sg.guardian_id = $2 AND s.school_id = $3 AND sg.is_active = true`,
+      [studentId, guardianId, schoolId],
     );
 
     if (!link) {
@@ -176,14 +220,13 @@ export class StudentGuardianService {
 
     await this.db.query(
       `UPDATE student_guardians SET 
-        relationship_type = COALESCE($3, relationship_type),
-        is_primary = COALESCE($4, is_primary),
-        is_emergency_contact = COALESCE($5, is_emergency_contact),
+        relationship_type = COALESCE($2, relationship_type),
+        is_primary = COALESCE($3, is_primary),
+        is_emergency_contact = COALESCE($4, is_emergency_contact),
         updated_at = NOW()
        WHERE student_guardian_id = $1`,
       [
         link.student_guardian_id,
-        schoolId,
         updateDto.relationshipType || null,
         updateDto.isPrimary ?? null,
         updateDto.isEmergencyContact ?? null,

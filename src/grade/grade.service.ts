@@ -32,6 +32,41 @@ export type GradeScale = GradeBand;
 
 const NEB_TEMPLATE_CODE = 'NEB-2078';
 
+/** Bands are closed to the NEB set (see chk_grade_name). */
+const ALLOWED_GRADES = ['A+', 'A', 'B+', 'B', 'C+', 'C', 'D', 'NG'];
+
+function assertBandDto(dto: {
+  gradeName?: string;
+  minPercentage?: number;
+  maxPercentage?: number;
+  gradePoint?: number;
+}): void {
+  if (dto.gradeName !== undefined && !ALLOWED_GRADES.includes(dto.gradeName)) {
+    throw new BadRequestException(
+      `Grade must be one of ${ALLOWED_GRADES.join(', ')}`,
+    );
+  }
+  const lo = dto.minPercentage;
+  const hi = dto.maxPercentage;
+  if (lo !== undefined && (lo < 0 || lo > 100)) {
+    throw new BadRequestException('minPercentage must be between 0 and 100');
+  }
+  if (hi !== undefined && (hi < 0 || hi > 100)) {
+    throw new BadRequestException('maxPercentage must be between 0 and 100');
+  }
+  if (lo !== undefined && hi !== undefined && lo > hi) {
+    throw new BadRequestException(
+      'minPercentage cannot be greater than maxPercentage',
+    );
+  }
+  if (
+    dto.gradePoint !== undefined &&
+    (dto.gradePoint < 0 || dto.gradePoint > 4)
+  ) {
+    throw new BadRequestException('gradePoint must be between 0 and 4.0');
+  }
+}
+
 @Injectable()
 export class GradeService {
   constructor(private db: DatabaseService) {}
@@ -108,6 +143,7 @@ export class GradeService {
     description?: string;
     remarkNp?: string;
   }): Promise<GradeBand> {
+    assertBandDto(createDto);
     const scaleId = await this.requireOwnScaleId(createDto.schoolId);
     const existing = await this.db.queryOne<GradeBand>(
       `SELECT * FROM grade_scale_lines WHERE scale_id = $1 AND grade = $2`,
@@ -150,6 +186,7 @@ export class GradeService {
       remarkNp?: string;
     },
   ): Promise<GradeBand> {
+    assertBandDto(updateDto);
     await this.findOne(id, schoolId);
 
     const updates: string[] = [];

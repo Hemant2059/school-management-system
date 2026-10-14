@@ -16,8 +16,8 @@ export interface Webhook {
 }
 
 export interface WebhookLog {
-  log_id: number;
   id: number;
+  webhook_id: number;
   event_type: string;
   payload: Record<string, unknown> | null;
   response_status: number | null;

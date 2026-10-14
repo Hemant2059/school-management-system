@@ -38,7 +38,7 @@ export interface TransferCertificate {
 }
 
 export interface BonafideCertificate {
-  bonafide_id: number;
+  id: number;
   certificate_id: number;
   school_id: number;
   student_id: number;
@@ -50,7 +50,7 @@ export interface BonafideCertificate {
 }
 
 export interface CharacterCertificate {
-  character_id: number;
+  id: number;
   certificate_id: number;
   school_id: number;
   student_id: number;
@@ -173,8 +173,8 @@ export class CertificateService {
         certificateNumber,
         dto.issuedTo || 'PARENT',
         dto.issuedToNp || null,
-        dto.remarks ? false : true,
-        dto.remarks ? false : true,
+        true,
+        true,
         dto.remarks || null,
         dto.remarksNp || null,
       ],
@@ -282,7 +282,7 @@ export class CertificateService {
     return this.db.query<Certificate>(
       `SELECT c.*, s.first_name_en, s.last_name_en, s.admission_number
        FROM certificates c
-       LEFT JOIN students s ON c.student_id = s.student_id
+       LEFT JOIN students s ON c.student_id = s.student_id AND s.school_id = c.school_id
        WHERE c.student_id = $1 AND c.school_id = $2 AND c.is_active = true
        ORDER BY c.created_at DESC`,
       [studentId, schoolId],
@@ -296,7 +296,7 @@ export class CertificateService {
     const certificate = await this.db.queryOne<Certificate>(
       `SELECT c.*, s.first_name_en, s.last_name_en, s.admission_number, s.date_of_birth_ad, s.date_of_birth_bs
        FROM certificates c
-       LEFT JOIN students s ON c.student_id = s.student_id
+       LEFT JOIN students s ON c.student_id = s.student_id AND s.school_id = c.school_id
        WHERE c.certificate_id = $1 AND c.school_id = $2`,
       [certificateId, schoolId],
     );
@@ -309,18 +309,18 @@ export class CertificateService {
 
     if (certificate.certificate_type === 'TC') {
       details = await this.db.queryOne<TransferCertificate>(
-        `SELECT * FROM transfer_certificates WHERE certificate_id = $1`,
-        [certificateId],
+        `SELECT * FROM transfer_certificates WHERE certificate_id = $1 AND school_id = $2`,
+        [certificateId, schoolId],
       );
     } else if (certificate.certificate_type === 'BONAFIDE') {
       details = await this.db.queryOne<BonafideCertificate>(
-        `SELECT * FROM bonafide_certificates WHERE certificate_id = $1`,
-        [certificateId],
+        `SELECT * FROM bonafide_certificates WHERE certificate_id = $1 AND school_id = $2`,
+        [certificateId, schoolId],
       );
     } else if (certificate.certificate_type === 'CHARACTER') {
       details = await this.db.queryOne<CharacterCertificate>(
-        `SELECT * FROM character_certificates WHERE certificate_id = $1`,
-        [certificateId],
+        `SELECT * FROM character_certificates WHERE certificate_id = $1 AND school_id = $2`,
+        [certificateId, schoolId],
       );
     }
 

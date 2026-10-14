@@ -22,6 +22,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { PageOptionsDto } from '../common/dto/page-options.dto';
 import { PageDto } from '../common/dto/page.dto';
 import { User } from './entities/interfaces';
+import { GetUser } from '../common/decorators/get-user.decorator';
 
 import { Roles } from '../common/decorators/roles.decorator';
 import { UserRole } from '../common/enums/user-role.enum';
@@ -66,8 +67,11 @@ export class UserController {
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden - Admin role required' })
-  findAll(@Query() pageOptionsDto: PageOptionsDto): Promise<PageDto<User>> {
-    return this.userService.findAll(pageOptionsDto);
+  findAll(
+    @Query() pageOptionsDto: PageOptionsDto,
+    @GetUser('schoolId') schoolId?: number,
+  ): Promise<PageDto<User>> {
+    return this.userService.findAll(pageOptionsDto, schoolId);
   }
 
   @Get(':id')

@@ -133,9 +133,9 @@ export class ExamService {
     }
 
     if (updates.length > 0) {
-      params.push(id);
+      params.push(id, schoolId);
       await this.db.query(
-        `UPDATE exams SET ${updates.join(', ')}, updated_at = NOW() WHERE exam_id = $${paramIndex}`,
+        `UPDATE exams SET ${updates.join(', ')}, updated_at = NOW() WHERE exam_id = $${paramIndex} AND school_id = $${paramIndex + 1}`,
         params,
       );
     }
@@ -146,8 +146,8 @@ export class ExamService {
   async remove(id: number, schoolId: number): Promise<void> {
     await this.findOne(id, schoolId);
     await this.db.query(
-      `UPDATE exams SET is_active = false, deleted_at = NOW() WHERE exam_id = $1`,
-      [id],
+      `UPDATE exams SET is_active = false, deleted_at = NOW() WHERE exam_id = $1 AND school_id = $2`,
+      [id, schoolId],
     );
   }
 
@@ -178,7 +178,7 @@ export class ExamService {
         createDto.endTime || null,
         createDto.roomNumber || null,
         createDto.fullMarks,
-        createDto.passMarks || null,
+        createDto.passMarks ?? 0,
       ],
     );
   }
@@ -217,6 +217,7 @@ export class ExamService {
     schoolId: number;
     examId: number;
     studentId: number;
+    subjectId: number;
     theoryMarks?: number;
     practicalMarks?: number;
     totalMarks?: number;
@@ -227,8 +228,8 @@ export class ExamService {
     academicYear?: string;
   }): Promise<Mark> {
     return this.db.insert<Mark>(
-      `INSERT INTO marks (school_id, exam_id, student_id, theory_marks, practical_marks, total_marks, grade, academic_year)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO marks (school_id, exam_id, student_id, subject_id, theory_marks, practical_marks, total_marks, grade, academic_year)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        ON CONFLICT (school_id, exam_id, student_id, subject_id) DO UPDATE SET
          theory_marks = EXCLUDED.theory_marks,
          practical_marks = EXCLUDED.practical_marks,
@@ -240,9 +241,10 @@ export class ExamService {
         createDto.schoolId,
         createDto.examId,
         createDto.studentId,
-        createDto.theoryMarks || null,
-        createDto.practicalMarks || null,
-        createDto.totalMarks || null,
+        createDto.subjectId,
+        createDto.theoryMarks ?? null,
+        createDto.practicalMarks ?? null,
+        createDto.totalMarks ?? null,
         createDto.grade || null,
         createDto.academicYear || null,
       ],
@@ -252,14 +254,27 @@ export class ExamService {
   async getStudentMarks(
     examId: number,
     studentId: number,
+    schoolId?: number,
   ): Promise<Mark | null> {
+    if (schoolId !== undefined) {
+      return this.db.queryOne<Mark>(
+        `SELECT * FROM marks WHERE exam_id = $1 AND student_id = $2 AND school_id = $3`,
+        [examId, studentId, schoolId],
+      );
+    }
     return this.db.queryOne<Mark>(
       `SELECT * FROM marks WHERE exam_id = $1 AND student_id = $2`,
       [examId, studentId],
     );
   }
 
-  async getExamMarks(examId: number): Promise<Mark[]> {
+  async getExamMarks(examId: number, schoolId?: number): Promise<Mark[]> {
+    if (schoolId !== undefined) {
+      return this.db.query<Mark>(
+        `SELECT * FROM marks WHERE exam_id = $1 AND school_id = $2 ORDER BY student_id`,
+        [examId, schoolId],
+      );
+    }
     return this.db.query<Mark>(
       `SELECT * FROM marks WHERE exam_id = $1 ORDER BY student_id`,
       [examId],
@@ -304,7 +319,14 @@ export class ExamService {
   async getStudentReportCard(
     studentId: number,
     examId: number,
+    schoolId?: number,
   ): Promise<ReportCard | null> {
+    if (schoolId !== undefined) {
+      return this.db.queryOne<ReportCard>(
+        `SELECT * FROM report_cards WHERE student_id = $1 AND exam_id = $2 AND school_id = $3`,
+        [studentId, examId, schoolId],
+      );
+    }
     return this.db.queryOne<ReportCard>(
       `SELECT * FROM report_cards WHERE student_id = $1 AND exam_id = $2`,
       [studentId, examId],

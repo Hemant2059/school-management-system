@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DatabaseService } from '../database/database.service';
 
@@ -89,9 +93,9 @@ export class DocumentService {
 
     const result = await this.databaseService.query(query, [
       schoolId,
-      dto.studentId,
-      dto.teacherId,
-      dto.staffId,
+      dto.studentId ?? null,
+      dto.teacherId ?? null,
+      dto.staffId ?? null,
       dto.type,
       dto.title,
       (dto as any).titleNp || null,
@@ -99,8 +103,8 @@ export class DocumentService {
       (dto as any).descriptionNp || null,
       dto.fileName,
       dto.filePath,
-      dto.fileSize,
-      dto.mimeType,
+      dto.fileSize ?? null,
+      dto.mimeType ?? null,
       uploadedBy,
     ]);
 
@@ -113,7 +117,8 @@ export class DocumentService {
     entityId?: number,
     entityType?: 'student' | 'teacher' | 'staff',
   ): Promise<Document[]> {
-    let query = 'SELECT * FROM documents WHERE school_id = $1';
+    let query =
+      'SELECT * FROM documents WHERE school_id = $1 AND is_active = true AND deleted_at IS NULL';
     const params: any[] = [schoolId];
 
     if (type) {
@@ -139,7 +144,7 @@ export class DocumentService {
 
   async getDocumentById(id: number, schoolId: number): Promise<Document> {
     const query =
-      'SELECT * FROM documents WHERE document_id = $1 AND school_id = $2';
+      'SELECT * FROM documents WHERE document_id = $1 AND school_id = $2 AND is_active = true AND deleted_at IS NULL';
     const result = await this.databaseService.query(query, [id, schoolId]);
 
     if (!result[0]) {
@@ -151,7 +156,7 @@ export class DocumentService {
 
   async deleteDocument(id: number, schoolId: number): Promise<void> {
     const query =
-      'DELETE FROM documents WHERE document_id = $1 AND school_id = $2 RETURNING document_id';
+      'UPDATE documents SET is_active = false, deleted_at = NOW() WHERE document_id = $1 AND school_id = $2 AND deleted_at IS NULL RETURNING document_id';
     const result = await this.databaseService.query(query, [id, schoolId]);
 
     if (result.length === 0) {
@@ -233,7 +238,10 @@ export class DocumentService {
     return result[0];
   }
 
-  async getTemplateById(id: number, schoolId: number): Promise<DocumentTemplate> {
+  async getTemplateById(
+    id: number,
+    schoolId: number,
+  ): Promise<DocumentTemplate> {
     const result = await this.databaseService.query(
       `SELECT * FROM document_templates WHERE id = $1 AND school_id = $2`,
       [id, schoolId],
@@ -260,7 +268,7 @@ export class DocumentService {
   ): Promise<Document[]> {
     const query = `
       SELECT * FROM documents 
-      WHERE school_id = $1 AND student_id = $2
+      WHERE school_id = $1 AND student_id = $2 AND is_active = true AND deleted_at IS NULL
       ORDER BY created_at DESC
     `;
     return this.databaseService.query(query, [schoolId, studentId]);
@@ -272,7 +280,7 @@ export class DocumentService {
   ): Promise<Document[]> {
     const query = `
       SELECT * FROM documents 
-      WHERE school_id = $1 AND teacher_id = $2
+      WHERE school_id = $1 AND teacher_id = $2 AND is_active = true AND deleted_at IS NULL
       ORDER BY created_at DESC
     `;
     return this.databaseService.query(query, [schoolId, teacherId]);

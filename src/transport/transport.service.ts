@@ -64,7 +64,7 @@ export interface Route {
 }
 
 export interface RouteStop {
-  route_stop_id: number;
+  stop_id: number;
   school_id: number;
   route_id: number;
   stop_name: string;
@@ -332,7 +332,18 @@ export class TransportService {
     }
   }
 
-  async createRouteStop(createDto: CreateRouteStopDto): Promise<RouteStop> {    const result = await this.db.insert<RouteStop>(
+  async createRouteStop(createDto: CreateRouteStopDto): Promise<RouteStop> {
+    const route = await this.db.queryOne<{ route_id: number }>(
+      `SELECT route_id FROM routes WHERE route_id = $1 AND school_id = $2 AND deleted_at IS NULL`,
+      [createDto.routeId, createDto.schoolId],
+    );
+    if (!route) {
+      throw new NotFoundException(
+        `Route with ID ${createDto.routeId} not found in this school`,
+      );
+    }
+
+    const result = await this.db.insert<RouteStop>(
       `INSERT INTO route_stops (
         school_id, route_id, stop_name, stop_name_np, stop_order, latitude, longitude,
         pickup_time, drop_time, is_active
@@ -344,10 +355,10 @@ export class TransportService {
         createDto.stopName,
         createDto.stopNameNp ?? null,
         createDto.stopOrder,
-        createDto.latitude,
-        createDto.longitude,
-        createDto.arrivalTime,
-        createDto.departureTime,
+        createDto.latitude ?? null,
+        createDto.longitude ?? null,
+        createDto.arrivalTime ?? null,
+        createDto.departureTime ?? null,
         true,
       ],
     );
@@ -384,18 +395,48 @@ export class TransportService {
       );
     }
 
+    const student = await this.db.queryOne<{ student_id: number }>(
+      `SELECT student_id FROM students WHERE student_id = $1 AND school_id = $2 AND is_active = true`,
+      [assignDto.studentId, assignDto.schoolId],
+    );
+    if (!student) {
+      throw new NotFoundException('Student not found in this school');
+    }
+    const route = await this.db.queryOne<{ route_id: number }>(
+      `SELECT route_id FROM routes WHERE route_id = $1 AND school_id = $2 AND deleted_at IS NULL`,
+      [assignDto.routeId, assignDto.schoolId],
+    );
+    if (!route) {
+      throw new NotFoundException('Route not found in this school');
+    }
+    const stop = await this.db.queryOne<{ stop_id: number }>(
+      `SELECT stop_id FROM route_stops WHERE stop_id = $1 AND route_id = $2 AND school_id = $3 AND is_active = true`,
+      [assignDto.stopId, assignDto.routeId, assignDto.schoolId],
+    );
+    if (!stop) {
+      throw new NotFoundException('Stop not found on this route');
+    }
+    const vehicle = await this.db.queryOne<{ vehicle_id: number }>(
+      `SELECT vehicle_id FROM vehicles WHERE vehicle_id = $1 AND school_id = $2 AND deleted_at IS NULL`,
+      [assignDto.vehicleId, assignDto.schoolId],
+    );
+    if (!vehicle) {
+      throw new NotFoundException('Vehicle not found in this school');
+    }
+
     // BS date comes from the frontend — the backend stores it as given.
     const bsDate = assignDto.assignmentDateBs || null;
 
     const result = await this.db.insert<TransportAssignment>(
       `INSERT INTO transport_assignments (
-        school_id, student_id, route_id, vehicle_id, assignment_date, assignment_date_bs, is_active
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+        school_id, student_id, route_id, stop_id, vehicle_id, assignment_date, assignment_date_bs, is_active
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING *`,
       [
         assignDto.schoolId,
         assignDto.studentId,
         assignDto.routeId,
+        assignDto.stopId,
         assignDto.vehicleId,
         assignDto.assignmentDate,
         bsDate,

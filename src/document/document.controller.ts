@@ -326,10 +326,7 @@ export class DocumentController {
     },
   })
   @ApiResponse({ status: 201, description: 'Template created successfully' })
-  async createTemplate(
-    @Body() dto: CreateDocumentTemplateDto,
-    @Req() req,
-  ) {
+  async createTemplate(@Body() dto: CreateDocumentTemplateDto, @Req() req) {
     return this.documentService.createTemplate(req.user.schoolId, dto);
   }
 

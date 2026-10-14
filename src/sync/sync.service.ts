@@ -2,9 +2,10 @@ import { Injectable, BadRequestException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 
 export interface SyncQueue {
-  sync_id: number;
+  id: number;
   school_id: number;
   device_id: string | null;
+  sync_id: string | null;
   entity_type: string;
   entity_id: number;
   operation: string;
@@ -17,7 +18,7 @@ export interface SyncQueue {
 }
 
 export interface SyncLog {
-  log_id: number;
+  id: number;
   school_id: number;
   device_id: string | null;
   operation: string;
@@ -105,6 +106,9 @@ export class SyncService {
     entityTypes?: string[],
     since?: string,
   ): Promise<{ data: any[]; timestamp: string }> {
+    // NOTE: deviceId intentionally does not filter rows. Pull returns all
+    // pending school changes so a new/reinstalled device can initial-sync.
+    // Per-device acknowledgement happens in acknowledge().
     let query = `SELECT * FROM sync_queue WHERE school_id = $1 AND status = 'PENDING'`;
     const params: any[] = [schoolId];
 
@@ -132,7 +136,7 @@ export class SyncService {
     if (syncIds.length === 0) return;
 
     await this.db.query(
-      `UPDATE sync_queue SET status = 'COMPLETED', synced_at = NOW() WHERE sync_id = ANY($1) AND school_id = $2`,
+      `UPDATE sync_queue SET status = 'COMPLETED', synced_at = NOW() WHERE id = ANY($1) AND school_id = $2`,
       [syncIds, schoolId],
     );
   }
@@ -146,13 +150,13 @@ export class SyncService {
 
   async retryFailed(schoolId: number, syncId: number): Promise<SyncQueue> {
     await this.db.query(
-      `UPDATE sync_queue SET status = 'PENDING', retry_count = retry_count + 1 WHERE sync_id = $1 AND school_id = $2`,
+      `UPDATE sync_queue SET status = 'PENDING', retry_count = retry_count + 1 WHERE id = $1 AND school_id = $2`,
       [syncId, schoolId],
     );
 
     const result = await this.db.queryOne<SyncQueue>(
-      `SELECT * FROM sync_queue WHERE sync_id = $1`,
-      [syncId],
+      `SELECT * FROM sync_queue WHERE id = $1 AND school_id = $2`,
+      [syncId, schoolId],
     );
     if (!result) {
       throw new BadRequestException('Sync record not found');

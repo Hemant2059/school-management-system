@@ -7,7 +7,7 @@ import { DatabaseService } from '../database/database.service';
 import { User } from './entities/interfaces';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
-import { PageOptionsDto } from '../common/dto/page-options.dto';
+import { PageOptionsDto, Order } from '../common/dto/page-options.dto';
 import { PageDto } from '../common/dto/page.dto';
 import { PageMetaDto } from '../common/dto/page-meta.dto';
 import * as bcrypt from 'bcryptjs';
@@ -59,18 +59,28 @@ export class UserService {
     return user;
   }
 
-  async findAll(pageOptionsDto: PageOptionsDto): Promise<PageDto<User>> {
+  async findAll(
+    pageOptionsDto: PageOptionsDto,
+    schoolId?: number,
+  ): Promise<PageDto<User>> {
     const page = pageOptionsDto.page || 1;
     const take = pageOptionsDto.take || 10;
     const offset = (page - 1) * take;
+    // Enum-validated, but never interpolate raw input into ORDER BY.
+    const order = pageOptionsDto.order === Order.ASC ? 'ASC' : 'DESC';
+    const schoolFilter =
+      schoolId !== undefined && schoolId !== null ? ` AND school_id = $3` : '';
 
     const users = await this.db.query<User>(
-      `SELECT * FROM users WHERE is_active = true ORDER BY created_at ${pageOptionsDto.order || 'DESC'} LIMIT $1 OFFSET $2`,
-      [take, offset],
+      `SELECT * FROM users WHERE is_active = true${schoolFilter} ORDER BY created_at ${order} LIMIT $1::int OFFSET $2::int`,
+      schoolId !== undefined && schoolId !== null
+        ? [take, offset, schoolId]
+        : [take, offset],
     );
 
     const [countResult] = await this.db.query<{ count: string }>(
-      `SELECT COUNT(*) as count FROM users WHERE is_active = true`,
+      `SELECT COUNT(*) as count FROM users WHERE is_active = true${schoolId !== undefined && schoolId !== null ? ' AND school_id = $1' : ''}`,
+      schoolId !== undefined && schoolId !== null ? [schoolId] : [],
     );
 
     const itemCount = parseInt(countResult.count, 10);
@@ -141,8 +151,10 @@ export class UserService {
   }
 
   async updatePassword(userId: number, passwordHash: string): Promise<void> {
+    // users.password and users.password_hash carry the same bcrypt hash
+    // (see create) — keep both in sync so no stale credential lingers.
     await this.db.query(
-      `UPDATE users SET password_hash = $2, updated_at = NOW() WHERE user_id = $1`,
+      `UPDATE users SET password_hash = $2, password = $2, updated_at = NOW() WHERE user_id = $1`,
       [userId, passwordHash],
     );
   }
@@ -172,6 +184,8 @@ export class UserService {
     }
     if (updateUserDto.password) {
       const passwordHash = await bcrypt.hash(updateUserDto.password, 10);
+      updates.push(`password = $${paramIndex++}`);
+      params.push(passwordHash);
       updates.push(`password_hash = $${paramIndex++}`);
       params.push(passwordHash);
     }

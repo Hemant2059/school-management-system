@@ -58,9 +58,9 @@ describe('DocumentService templates', () => {
 
     it('should throw for missing template', async () => {
       mockDatabaseService.query.mockResolvedValue([]);
-      await expect(
-        service.updateTemplate(1, 1, { name: 'x' }),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.updateTemplate(1, 1, { name: 'x' })).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 

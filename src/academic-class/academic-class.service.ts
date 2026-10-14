@@ -105,9 +105,9 @@ export class AcademicClassService {
     }
 
     if (updates.length > 0) {
-      params.push(id);
+      params.push(id, schoolId);
       await this.db.query(
-        `UPDATE classes SET ${updates.join(', ')}, updated_at = NOW() WHERE class_id = $${paramIndex}`,
+        `UPDATE classes SET ${updates.join(', ')}, updated_at = NOW() WHERE class_id = $${paramIndex} AND school_id = $${paramIndex + 1}`,
         params,
       );
     }
@@ -118,8 +118,8 @@ export class AcademicClassService {
   async remove(id: number, schoolId: number): Promise<void> {
     await this.findOne(id, schoolId);
     await this.db.query(
-      `UPDATE classes SET is_active = false, deleted_at = NOW() WHERE class_id = $1`,
-      [id],
+      `UPDATE classes SET is_active = false, deleted_at = NOW() WHERE class_id = $1 AND school_id = $2`,
+      [id, schoolId],
     );
   }
 

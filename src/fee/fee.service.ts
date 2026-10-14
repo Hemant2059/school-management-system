@@ -103,11 +103,14 @@ export class FeeService {
     );
   }
 
-  async findFeeCategory(id: number): Promise<FeeCategory> {
-    const category = await this.db.queryOne<FeeCategory>(
-      `SELECT * FROM fee_categories WHERE id = $1 AND is_active = true`,
-      [id],
-    );
+  async findFeeCategory(id: number, schoolId?: number): Promise<FeeCategory> {
+    const params: any[] = [id];
+    let query = `SELECT * FROM fee_categories WHERE id = $1 AND is_active = true`;
+    if (schoolId !== undefined) {
+      params.push(schoolId);
+      query += ` AND school_id = $2`;
+    }
+    const category = await this.db.queryOne<FeeCategory>(query, params);
 
     if (!category) {
       throw new NotFoundException(`Fee category with ID ${id} not found`);
@@ -116,12 +119,15 @@ export class FeeService {
     return category;
   }
 
-  async removeFeeCategory(id: number): Promise<void> {
-    await this.findFeeCategory(id);
-    await this.db.query(
-      `UPDATE fee_categories SET is_active = false, deleted_at = NOW() WHERE id = $1`,
-      [id],
-    );
+  async removeFeeCategory(id: number, schoolId?: number): Promise<void> {
+    await this.findFeeCategory(id, schoolId);
+    const params: any[] = [id];
+    let query = `UPDATE fee_categories SET is_active = false, deleted_at = NOW() WHERE id = $1`;
+    if (schoolId !== undefined) {
+      params.push(schoolId);
+      query += ` AND school_id = $2`;
+    }
+    await this.db.query(query, params);
   }
 
   async createFeeStructure(createDto: {
@@ -275,8 +281,8 @@ export class FeeService {
   ): Promise<EnhancedPayment> {
     if (createDto.idempotencyKey) {
       const existing = await this.db.queryOne<EnhancedPayment>(
-        `SELECT * FROM payments WHERE idempotency_key = $1`,
-        [createDto.idempotencyKey],
+        `SELECT * FROM payments WHERE idempotency_key = $1 AND school_id = $2`,
+        [createDto.idempotencyKey, createDto.schoolId],
       );
       if (existing) {
         return existing;
@@ -372,8 +378,7 @@ export class FeeService {
     }
 
     const feeTotal = fee.total_amount ?? fee.amount;
-    const remaining =
-      (fee.remaining_amount ?? feeTotal) - (fee.paid_amount ?? 0);
+    const remaining = fee.remaining_amount ?? feeTotal - (fee.paid_amount ?? 0);
     if (createDto.amount > remaining) {
       throw new BadRequestException(
         `Payment amount exceeds remaining balance. Remaining: NPR ${remaining}`,
@@ -457,7 +462,14 @@ export class FeeService {
       `INSERT INTO student_balances (school_id, student_id, academic_year, brought_forward_amount, total_paid, total_adjusted, total_due, current_balance, notes, notes_np)
        VALUES ($1, $2, $3, $4, 0, 0, 0, $4, $5, $6)
        RETURNING *`,
-      [student.school_id, studentId, toAcademicYear, amount, notes || null, notesNp || null],
+      [
+        student.school_id,
+        studentId,
+        toAcademicYear,
+        amount,
+        notes || null,
+        notesNp || null,
+      ],
     );
   }
 
@@ -628,9 +640,9 @@ export class FeeService {
       }
     }
     if (updates.length === 0) return existing;
-    params.push(id);
+    params.push(id, schoolId);
     return this.db.insert<DiscountRule>(
-      `UPDATE discount_rules SET ${updates.join(', ')} WHERE discount_rule_id = $${i} RETURNING *`,
+      `UPDATE discount_rules SET ${updates.join(', ')} WHERE discount_rule_id = $${i} AND school_id = $${i + 1} RETURNING *`,
       params,
     );
   }
@@ -719,9 +731,9 @@ export class FeeService {
       }
     }
     if (updates.length === 0) return existing;
-    params.push(id);
+    params.push(id, schoolId);
     return this.db.insert<PenaltyRule>(
-      `UPDATE penalty_rules SET ${updates.join(', ')} WHERE penalty_rule_id = $${i} RETURNING *`,
+      `UPDATE penalty_rules SET ${updates.join(', ')} WHERE penalty_rule_id = $${i} AND school_id = $${i + 1} RETURNING *`,
       params,
     );
   }
@@ -797,9 +809,7 @@ export class FeeService {
         [schoolId, studentId],
       );
       if (!invoice) {
-        throw new NotFoundException(
-          'No open invoice found for this student',
-        );
+        throw new NotFoundException('No open invoice found for this student');
       }
     }
     if (!['ISSUED', 'PARTIAL', 'OVERDUE'].includes(invoice.status)) {
@@ -817,7 +827,9 @@ export class FeeService {
         ? (subtotal * parseFloat(String(rule.value))) / 100
         : parseFloat(String(rule.value));
     const amount =
-      Math.round(Math.min(raw, Math.max(subtotal - alreadyDiscounted - paid, 0)) * 100) / 100;
+      Math.round(
+        Math.min(raw, Math.max(subtotal - alreadyDiscounted - paid, 0)) * 100,
+      ) / 100;
     if (amount <= 0) {
       throw new BadRequestException('Nothing left to discount on this invoice');
     }
@@ -924,7 +936,10 @@ export class FeeService {
     });
   }
 
-  async rejectInvoiceDiscount(id: number, approvedBy: number): Promise<InvoiceDiscount> {
+  async rejectInvoiceDiscount(
+    id: number,
+    approvedBy: number,
+  ): Promise<InvoiceDiscount> {
     const rec = await this.db.queryOne<InvoiceDiscount>(
       `SELECT * FROM student_fee_discounts WHERE student_discount_id = $1`,
       [id],
@@ -1130,7 +1145,13 @@ export class FeeService {
       `UPDATE fee_waiver_requests SET status = 'approved', approved_amount = $1, approved_by = $2, approved_at = NOW(), remarks = $3, remarks_np = $4
        WHERE waiver_id = $5
        RETURNING *`,
-      [approvedAmount, approvedBy, remarks || null, remarksNp || null, waiverId],
+      [
+        approvedAmount,
+        approvedBy,
+        remarks || null,
+        remarksNp || null,
+        waiverId,
+      ],
     );
 
     if (waiver.fee_id) {
@@ -1140,10 +1161,7 @@ export class FeeService {
       );
       if (fee) {
         const newDiscount = (fee.discount_amount || 0) + approvedAmount;
-        const newTotal = Math.max(
-          0,
-          (fee.total_amount || fee.amount) - newDiscount,
-        );
+        const newTotal = Math.max(0, fee.amount - newDiscount);
         await this.db.update(
           `UPDATE fees SET discount_amount = $1, total_amount = $2, remaining_amount = $2 - paid_amount WHERE fee_id = $3`,
           [newDiscount, newTotal, waiver.fee_id],
@@ -1209,12 +1227,12 @@ export class FeeService {
     const overdueDays = daysOverdue || 0;
     return this.db.query<EnhancedFee>(
       `SELECT f.* FROM fees f
-       WHERE f.school_id = $1 
-       AND f.is_active = true 
+       WHERE f.school_id = $1
+       AND f.is_active = true
        AND f.is_fully_paid = false
-       AND f.due_date < NOW() - INTERVAL '${overdueDays} days'
+       AND f.due_date < NOW() - ($2 || ' days')::interval
        ORDER BY f.due_date ASC`,
-      [schoolId],
+      [schoolId, String(overdueDays)],
     );
   }
 

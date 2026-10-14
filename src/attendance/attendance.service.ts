@@ -6,6 +6,7 @@ import {
 import { DatabaseService } from '../database/database.service';
 import { CreateAttendanceDto } from './dto/create-attendance.dto';
 import { UpdateAttendanceDto } from './dto/update-attendance.dto';
+import { NepaliDateUtil } from '../utils/nepali-date.util';
 
 export interface Attendance {
   attendance_id: number;
@@ -48,8 +49,13 @@ export class AttendanceService {
     userId?: number,
   ): Promise<Attendance> {
     const existing = await this.db.queryOne<Attendance>(
-      `SELECT * FROM attendance WHERE student_id = $1 AND academic_year = $2 AND attendance_date = $3`,
-      [createDto.studentId, createDto.academicYear, createDto.attendanceDate],
+      `SELECT * FROM attendance WHERE student_id = $1 AND academic_year = $2 AND attendance_date = $3 AND school_id = $4 AND deleted_at IS NULL`,
+      [
+        createDto.studentId,
+        createDto.academicYear,
+        createDto.attendanceDate,
+        createDto.schoolId,
+      ],
     );
 
     if (existing) {
@@ -59,8 +65,8 @@ export class AttendanceService {
     }
 
     return this.db.insert<Attendance>(
-      `INSERT INTO attendance (school_id, student_id, class_id, section_id, academic_year, attendance_date, attendance_date_bs, status, remarks, remarks_np, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      `INSERT INTO attendance (school_id, student_id, class_id, section_id, academic_year, attendance_date, attendance_date_bs, status, session, remarks, remarks_np, check_in_time, check_out_time, biometric_device_id, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
        RETURNING *`,
       [
         createDto.schoolId,
@@ -71,21 +77,42 @@ export class AttendanceService {
         createDto.attendanceDate,
         createDto.attendanceDateBs || null,
         createDto.status,
+        createDto.session || null,
         createDto.remarks || null,
         createDto.remarksNp || null,
+        createDto.checkInTime || null,
+        createDto.checkOutTime || null,
+        createDto.biometricDeviceId || null,
         userId || null,
       ],
     );
   }
 
   async createBulk(bulkDto: any, userId?: number): Promise<Attendance[]> {
+    const records = bulkDto?.records;
+    if (!Array.isArray(records) || records.length === 0) {
+      return [];
+    }
     const results: Attendance[] = [];
-    for (const dto of bulkDto.records) {
+    for (const dto of records) {
+      // Bulk payload carries shared fields at the top level; merge them
+      // into each record so single-create receives a complete DTO.
+      const merged = {
+        ...dto,
+        schoolId: dto.schoolId ?? bulkDto.schoolId,
+        classId: dto.classId ?? bulkDto.classId,
+        sectionId: dto.sectionId ?? bulkDto.sectionId,
+        academicYear: dto.academicYear ?? bulkDto.academicYear,
+        attendanceDate: dto.attendanceDate ?? bulkDto.attendanceDate,
+        session: dto.session ?? bulkDto.session,
+      };
       try {
-        const record = await this.create(dto, userId);
+        const record = await this.create(merged, userId);
         results.push(record);
-      } catch {
-        // Skip duplicates
+      } catch (error) {
+        // Skip duplicates only — real errors must surface, not vanish.
+        if (error instanceof BadRequestException) continue;
+        throw error;
       }
     }
     return results;
@@ -96,10 +123,36 @@ export class AttendanceService {
     if (!academicYear) {
       return [];
     }
-    return this.db.query<Attendance>(
-      `SELECT * FROM attendance WHERE school_id = $1 AND academic_year = $2 ORDER BY attendance_date DESC`,
-      [schoolId, academicYear],
-    );
+    let sql = `SELECT * FROM attendance WHERE school_id = $1 AND academic_year = $2 AND deleted_at IS NULL`;
+    const params: any[] = [schoolId, academicYear];
+
+    if (query?.classId) {
+      params.push(query.classId);
+      sql += ` AND class_id = $${params.length}`;
+    }
+    if (query?.sectionId) {
+      params.push(query.sectionId);
+      sql += ` AND section_id = $${params.length}`;
+    }
+    if (query?.studentId) {
+      params.push(query.studentId);
+      sql += ` AND student_id = $${params.length}`;
+    }
+    if (query?.status) {
+      params.push(query.status);
+      sql += ` AND status = $${params.length}`;
+    }
+    if (query?.startDate) {
+      params.push(query.startDate);
+      sql += ` AND attendance_date >= $${params.length}`;
+    }
+    if (query?.endDate) {
+      params.push(query.endDate);
+      sql += ` AND attendance_date <= $${params.length}`;
+    }
+
+    sql += ` ORDER BY attendance_date DESC`;
+    return this.db.query<Attendance>(sql, params);
   }
 
   async findOne(id: number, schoolId?: number): Promise<Attendance> {
@@ -121,7 +174,7 @@ export class AttendanceService {
     id: number,
     schoolId: number,
     updateDto: UpdateAttendanceDto,
-    _userId?: number,
+    userId?: number,
   ): Promise<Attendance> {
     await this.findOne(id, schoolId);
 
@@ -145,10 +198,15 @@ export class AttendanceService {
       }
     }
 
+    if (userId !== undefined) {
+      updates.push(`updated_by = $${paramIndex++}`);
+      params.push(userId);
+    }
+
     if (updates.length > 0) {
-      params.push(id);
+      params.push(id, schoolId);
       await this.db.query(
-        `UPDATE attendance SET ${updates.join(', ')}, updated_at = NOW() WHERE attendance_id = $${paramIndex}`,
+        `UPDATE attendance SET ${updates.join(', ')}, updated_at = NOW() WHERE attendance_id = $${paramIndex} AND school_id = $${paramIndex + 1}`,
         params,
       );
     }
@@ -171,7 +229,7 @@ export class AttendanceService {
     end?: Date,
     academicYear?: string,
   ): Promise<Attendance[]> {
-    let query = `SELECT * FROM attendance WHERE student_id = $1 AND school_id = $2`;
+    let query = `SELECT * FROM attendance WHERE student_id = $1 AND school_id = $2 AND deleted_at IS NULL`;
     const params: any[] = [studentId, schoolId];
 
     if (academicYear) {
@@ -224,7 +282,7 @@ export class AttendanceService {
     academicYear: string,
   ): Promise<any> {
     const records = await this.db.query<Attendance>(
-      `SELECT * FROM attendance WHERE student_id = $1 AND attendance_date BETWEEN $2 AND $3 AND academic_year = $4`,
+      `SELECT * FROM attendance WHERE student_id = $1 AND attendance_date BETWEEN $2 AND $3 AND academic_year = $4 AND deleted_at IS NULL`,
       [studentId, start, end, academicYear],
     );
 
@@ -234,23 +292,50 @@ export class AttendanceService {
 
   async getMonthlyReport(
     schoolId: number,
-    _classId?: number | string,
-    _sectionId?: number | string,
+    classId?: number | string,
+    sectionId?: number | string,
     nepaliYear?: number | string,
     nepaliMonth?: number | string,
-    _academicYear?: string,
+    academicYear?: string,
     _start?: Date,
     _end?: Date,
   ): Promise<any[]> {
     const year = Number(nepaliYear);
     const month = Number(nepaliMonth);
-    const startDate = new Date(year, month - 1, 1);
-    const endDate = new Date(year, month, 0);
-
-    return this.db.query<any>(
-      `SELECT * FROM attendance WHERE school_id = $1 AND attendance_date BETWEEN $2 AND $3`,
-      [schoolId, startDate, endDate],
+    if (!Number.isInteger(year) || !Number.isInteger(month)) {
+      throw new BadRequestException('nepaliYear and nepaliMonth are required');
+    }
+    if (month < 1 || month > 12) {
+      throw new BadRequestException('Nepali month must be between 1 and 12');
+    }
+    // Convert the BS month window to AD (all date math uses AD columns):
+    // 1st of the BS month .. 1st of the next BS month, end-exclusive.
+    const nextMonth = month === 12 ? 1 : month + 1;
+    const nextYear = month === 12 ? year + 1 : year;
+    const startAd = NepaliDateUtil.bsToAd(
+      `${year}-${String(month).padStart(2, '0')}-01`,
     );
+    const endAd = NepaliDateUtil.bsToAd(
+      `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`,
+    );
+
+    let sql = `SELECT * FROM attendance WHERE school_id = $1 AND deleted_at IS NULL AND attendance_date >= $2 AND attendance_date < $3`;
+    const params: any[] = [schoolId, startAd, endAd];
+    if (classId !== undefined && classId !== null && classId !== '') {
+      params.push(classId);
+      sql += ` AND class_id = $${params.length}`;
+    }
+    if (sectionId !== undefined && sectionId !== null && sectionId !== '') {
+      params.push(sectionId);
+      sql += ` AND section_id = $${params.length}`;
+    }
+    if (academicYear) {
+      params.push(academicYear);
+      sql += ` AND academic_year = $${params.length}`;
+    }
+    sql += ` ORDER BY attendance_date DESC`;
+
+    return this.db.query<any>(sql, params);
   }
 
   isNepalHoliday(date: Date): boolean {

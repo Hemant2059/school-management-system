@@ -73,7 +73,8 @@ export class TimetableController {
   findAll(
     @GetUser('schoolId') schoolId: number,
     @Query('classId', ParseIntPipe) classId: number,
-    @Query('sectionId', ParseIntPipe) sectionId?: number,
+    @Query('sectionId', new ParseIntPipe({ optional: true }))
+    sectionId?: number,
   ) {
     return this.timetableService.findAll(schoolId, classId, sectionId);
   }
@@ -105,7 +106,8 @@ export class TimetableController {
   getWeeklyTimetable(
     @GetUser('schoolId') schoolId: number,
     @Query('classId', ParseIntPipe) classId: number,
-    @Query('sectionId', ParseIntPipe) sectionId?: number,
+    @Query('sectionId', new ParseIntPipe({ optional: true }))
+    sectionId?: number,
   ) {
     return this.timetableService.getWeeklyTimetable(
       schoolId,

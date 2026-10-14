@@ -12,7 +12,7 @@ export interface SmsTemplate {
 }
 
 export interface SmsLog {
-  sms_log_id: number;
+  id: number;
   school_id: number;
   recipient_phone: string;
   recipient_name: string;
@@ -198,11 +198,15 @@ export class SmsService {
       recipients = students.map((s: any) => s.phone).filter(Boolean);
     }
 
-    if (
-      dto.targetType === 'ALL' ||
-      dto.targetType === 'TEACHERS' ||
-      dto.targetType === 'STAFF'
-    ) {
+    if (dto.targetType === 'ALL' || dto.targetType === 'TEACHERS') {
+      const teachers = await this.db.query(
+        `SELECT DISTINCT COALESCE(official_mobile, personal_mobile) as mobile FROM teachers WHERE school_id = $1 AND is_active = true AND (official_mobile IS NOT NULL OR personal_mobile IS NOT NULL)`,
+        [schoolId],
+      );
+      recipients = [...recipients, ...teachers.map((s: any) => s.mobile)];
+    }
+
+    if (dto.targetType === 'ALL' || dto.targetType === 'STAFF') {
       const staff = await this.db.query(
         `SELECT phone AS mobile FROM staff WHERE school_id = $1 AND is_active = true AND phone IS NOT NULL`,
         [schoolId],

@@ -95,7 +95,7 @@ describe('GuardianService', () => {
       await service.create(createGuardianDto);
 
       const insertCall = mockDatabaseService.insert.mock.calls[0];
-      const guardianCode = insertCall[1][1];
+      const guardianCode = insertCall[1][2];
       expect(guardianCode).toContain('GRD-26');
       expect(guardianCode).toContain('00006');
     });
@@ -114,7 +114,7 @@ describe('GuardianService', () => {
       await service.create(dtoWithNpNames);
 
       const insertCall = mockDatabaseService.insert.mock.calls[0];
-      const displayName = insertCall[1][8];
+      const displayName = insertCall[1][9];
       expect(displayName).toBe('जेन स्मिथ');
     });
 
@@ -126,7 +126,7 @@ describe('GuardianService', () => {
       await service.create(createGuardianDto);
 
       const insertCall = mockDatabaseService.insert.mock.calls[0];
-      const displayName = insertCall[1][8];
+      const displayName = insertCall[1][9];
       expect(displayName).toBe('Jane Smith');
     });
   });
@@ -191,6 +191,7 @@ describe('GuardianService', () => {
     it('should update guardian fields', async () => {
       mockDatabaseService.queryOne
         .mockResolvedValueOnce(mockGuardian)
+        .mockResolvedValueOnce(null)
         .mockResolvedValueOnce({ ...mockGuardian, ...updateGuardianDto });
       mockDatabaseService.query.mockResolvedValue(null);
 
@@ -228,7 +229,7 @@ describe('GuardianService', () => {
 
       expect(mockDatabaseService.query).toHaveBeenCalledWith(
         expect.stringContaining('UPDATE guardians SET is_active = false'),
-        [1],
+        [1, 1],
       );
     });
 

@@ -38,24 +38,35 @@ export class PromotionService {
       remarksNp?: string;
     },
   ): Promise<{ promoted: number; failed: number; results: any[] }> {
+    if (
+      !dto.fromClassId ||
+      !dto.toClassId ||
+      !dto.fromAcademicYear ||
+      !dto.toAcademicYear ||
+      !dto.promotedBy
+    ) {
+      throw new BadRequestException(
+        'fromClassId, toClassId, fromAcademicYear, toAcademicYear and promotedBy are required',
+      );
+    }
     let students: any[];
 
     if (dto.promoteAll) {
       students = await this.db.query(
-        `SELECT e.*, s.first_name_en, s.last_name_en, s.roll_number as current_roll
+        `SELECT e.*, s.first_name_en, s.last_name_en, e.roll_number as current_roll
          FROM student_enrollments e
          JOIN students s ON e.student_id = s.student_id
          WHERE e.school_id = $1 AND e.class_id = $2 AND e.academic_year = $3 
-           AND e.status = 'ACTIVE' AND e.is_current = true`,
+           AND UPPER(e.status) = 'ACTIVE' AND e.is_current = true`,
         [schoolId, dto.fromClassId, dto.fromAcademicYear],
       );
     } else if (dto.studentIds && dto.studentIds.length > 0) {
       students = await this.db.query(
-        `SELECT e.*, s.first_name_en, s.last_name_en, s.roll_number as current_roll
+        `SELECT e.*, s.first_name_en, s.last_name_en, e.roll_number as current_roll
          FROM student_enrollments e
          JOIN students s ON e.student_id = s.student_id
          WHERE e.student_id = ANY($1) AND e.school_id = $2 AND e.class_id = $3 AND e.academic_year = $4
-           AND e.status = 'ACTIVE'`,
+           AND UPPER(e.status) = 'ACTIVE'`,
         [dto.studentIds, schoolId, dto.fromClassId, dto.fromAcademicYear],
       );
     } else {
@@ -155,9 +166,22 @@ export class PromotionService {
     const results: any[] = [];
     let demoted = 0;
 
+    if (
+      !dto.classId ||
+      !dto.toClassId ||
+      !dto.academicYear ||
+      !dto.demotedBy ||
+      !dto.studentIds ||
+      dto.studentIds.length === 0
+    ) {
+      throw new BadRequestException(
+        'classId, toClassId, academicYear, demotedBy and a non-empty studentIds are required',
+      );
+    }
+
     for (const studentId of dto.studentIds) {
       const enrollment = await this.db.queryOne(
-        `SELECT * FROM student_enrollments WHERE student_id = $1 AND school_id = $2 AND class_id = $3 AND academic_year = $4 AND status = 'ACTIVE'`,
+        `SELECT * FROM student_enrollments WHERE student_id = $1 AND school_id = $2 AND class_id = $3 AND academic_year = $4 AND UPPER(status) = 'ACTIVE'`,
         [studentId, schoolId, dto.classId, dto.academicYear],
       );
 
@@ -198,7 +222,7 @@ export class PromotionService {
           enrollment.roll_number,
           enrollment.roll_number,
           dto.demotedBy,
-          dto.reason,
+          dto.reason ?? null,
           dto.reasonNp || dto.remarksNp || null,
         ],
       );

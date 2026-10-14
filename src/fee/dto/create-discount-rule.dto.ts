@@ -24,7 +24,10 @@ export class CreateDiscountRuleDto {
   @MaxLength(30)
   readonly code: string;
 
-  @ApiProperty({ description: 'Rule name in English', example: 'Sibling Discount' })
+  @ApiProperty({
+    description: 'Rule name in English',
+    example: 'Sibling Discount',
+  })
   @IsNotEmpty()
   @IsString()
   @MaxLength(150)
@@ -44,7 +47,10 @@ export class CreateDiscountRuleDto {
   @IsIn(['PERCENT', 'FIXED'])
   readonly discountType: 'PERCENT' | 'FIXED';
 
-  @ApiProperty({ description: 'Discount value (percent or flat NPR)', example: 10 })
+  @ApiProperty({
+    description: 'Discount value (percent or flat NPR)',
+    example: 10,
+  })
   @IsNotEmpty()
   @IsNumber()
   readonly value: number;
@@ -60,7 +66,10 @@ export class CreateDiscountRuleDto {
   @IsInt()
   readonly minSiblings?: number;
 
-  @ApiPropertyOptional({ description: 'Valid from (AD)', example: '2025-04-14' })
+  @ApiPropertyOptional({
+    description: 'Valid from (AD)',
+    example: '2025-04-14',
+  })
   @IsOptional()
   @IsDate()
   @Type(() => Date)
@@ -88,7 +97,10 @@ export class CreateDiscountRuleDto {
   @IsString()
   readonly validToBs?: string;
 
-  @ApiPropertyOptional({ description: 'Can stack with other rules', example: false })
+  @ApiPropertyOptional({
+    description: 'Can stack with other rules',
+    example: false,
+  })
   @IsOptional()
   @IsBoolean()
   readonly isStackable?: boolean;

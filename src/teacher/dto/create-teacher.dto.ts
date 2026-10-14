@@ -196,7 +196,8 @@ export class CreateTeacherDto {
   readonly highestQualification?: string;
 
   @ApiPropertyOptional({
-    description: 'Highest educational qualification (Nepali, provided by frontend)',
+    description:
+      'Highest educational qualification (Nepali, provided by frontend)',
     example: 'शिक्षामा स्नातकोत्तर',
     type: String,
   })

@@ -78,7 +78,8 @@ export class CreateSchoolDto {
   ownershipTypeNp?: string;
 
   @ApiPropertyOptional({
-    description: 'School name (Nepali twin of legacy name column, provided by frontend)',
+    description:
+      'School name (Nepali twin of legacy name column, provided by frontend)',
     example: 'एभरेस्ट उच्च माध्यमिक विद्यालय',
     type: String,
   })

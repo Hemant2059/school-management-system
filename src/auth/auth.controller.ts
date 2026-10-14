@@ -368,8 +368,6 @@ export class AuthController {
   }
 
   @Get('profile')
-  @Roles(UserRole.ADMIN)
-  @Permissions(Permission.USER_READ)
   @ApiOperation({
     summary: 'Get User Profile',
     description: `Retrieve authenticated user profile information with school details.
@@ -408,8 +406,6 @@ export class AuthController {
   }
 
   @Post('change-password')
-  @Roles(UserRole.ADMIN)
-  @Permissions(Permission.USER_UPDATE)
   @ApiOperation({
     summary: 'Change Password',
     description: `Change user password.

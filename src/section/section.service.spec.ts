@@ -229,7 +229,7 @@ describe('SectionService', () => {
 
       expect(mockDatabaseService.query).toHaveBeenCalledWith(
         expect.stringContaining('UPDATE sections SET is_active = false'),
-        [1],
+        [1, 1],
       );
     });
 

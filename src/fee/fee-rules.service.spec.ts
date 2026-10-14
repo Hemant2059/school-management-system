@@ -37,7 +37,10 @@ describe('FeeService rules (discount + penalty)', () => {
 
     it('should create with EN+NP stored verbatim', async () => {
       mockDatabaseService.queryOne.mockResolvedValue(null);
-      mockDatabaseService.insert.mockResolvedValue({ ...dto, discount_rule_id: 1 });
+      mockDatabaseService.insert.mockResolvedValue({
+        ...dto,
+        discount_rule_id: 1,
+      });
       const result = await service.createDiscountRule(dto);
       expect(result.discount_rule_id).toBe(1);
       const params = mockDatabaseService.insert.mock.calls[0][1];
@@ -62,7 +65,10 @@ describe('FeeService rules (discount + penalty)', () => {
 
     it('should update only provided fields', async () => {
       mockDatabaseService.queryOne.mockResolvedValue({ discount_rule_id: 1 });
-      mockDatabaseService.insert.mockResolvedValue({ discount_rule_id: 1, value: 15 });
+      mockDatabaseService.insert.mockResolvedValue({
+        discount_rule_id: 1,
+        value: 15,
+      });
       const result = await service.updateDiscountRule(1, 1, { value: 15 });
       expect(result.value).toBe(15);
       const sql = mockDatabaseService.insert.mock.calls[0][0];
@@ -99,7 +105,10 @@ describe('FeeService rules (discount + penalty)', () => {
 
     it('should create with EN+NP stored verbatim', async () => {
       mockDatabaseService.queryOne.mockResolvedValue(null);
-      mockDatabaseService.insert.mockResolvedValue({ ...dto, penalty_rule_id: 1 });
+      mockDatabaseService.insert.mockResolvedValue({
+        ...dto,
+        penalty_rule_id: 1,
+      });
       const result = await service.createPenaltyRule(dto);
       expect(result.penalty_rule_id).toBe(1);
       const params = mockDatabaseService.insert.mock.calls[0][1];

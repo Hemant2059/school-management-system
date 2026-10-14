@@ -102,40 +102,46 @@ export class AssignmentService {
     // BS date comes from the frontend — the backend stores it as given.
     // If the AD due date changes without a BS value, clear the stale twin
     // rather than silently deriving a possibly wrong one.
-    let dueDateBs = assignment.due_date_bs;
+    let dueDateBs: string | null = assignment.due_date_bs;
+    let bsChanged = false;
     if (updateDto.dueDateBs !== undefined) {
-      dueDateBs = updateDto.dueDateBs;
+      dueDateBs = updateDto.dueDateBs ?? null;
+      bsChanged = dueDateBs !== assignment.due_date_bs;
     } else if (
       updateDto.dueDate &&
-      updateDto.dueDate !== assignment.due_date
+      new Date(updateDto.dueDate).getTime() !==
+        new Date(assignment.due_date).getTime()
     ) {
       dueDateBs = null;
+      bsChanged = assignment.due_date_bs !== null;
     }
 
     const updates: string[] = [];
     const params: any[] = [];
     let paramIndex = 1;
 
-    const fields = [
-      'title',
-      'description',
-      'class_id',
-      'section_id',
-      'subject_id',
-      'teacher_id',
-      'due_date',
-      'total_marks',
-    ];
+    // DTO keys are camelCase — map them to snake_case columns.
+    const fieldMap: Record<string, string> = {
+      title: 'title',
+      description: 'description',
+      classId: 'class_id',
+      sectionId: 'section_id',
+      subjectId: 'subject_id',
+      teacherId: 'teacher_id',
+      dueDate: 'due_date',
+      totalMarks: 'total_marks',
+    };
 
-    for (const field of fields) {
-      if ((updateDto as any)[field] !== undefined) {
-        updates.push(`${field} = $${paramIndex}`);
-        params.push((updateDto as any)[field]);
+    for (const [key, dbField] of Object.entries(fieldMap)) {
+      const value = (updateDto as any)[key];
+      if (value !== undefined) {
+        updates.push(`${dbField} = $${paramIndex}`);
+        params.push(value ?? null);
         paramIndex++;
       }
     }
 
-    if (dueDateBs && dueDateBs !== assignment.due_date_bs) {
+    if (bsChanged) {
       updates.push(`due_date_bs = $${paramIndex}`);
       params.push(dueDateBs);
       paramIndex++;
@@ -157,9 +163,10 @@ export class AssignmentService {
 
     if (updates.length === 0) return assignment;
 
-    params.push(id);
+    updates.push(`updated_at = NOW()`);
+    params.push(id, schoolId);
     await this.db.update(
-      `UPDATE assignments SET ${updates.join(', ')} WHERE id = $${paramIndex}`,
+      `UPDATE assignments SET ${updates.join(', ')} WHERE id = $${paramIndex} AND school_id = $${paramIndex + 1}`,
       params,
     );
 
@@ -169,16 +176,16 @@ export class AssignmentService {
   async remove(id: number, schoolId: number): Promise<void> {
     await this.findOne(id, schoolId);
     await this.db.update(
-      `UPDATE assignments SET is_active = false, deleted_at = NOW() WHERE id = $1`,
-      [id],
+      `UPDATE assignments SET is_active = false, deleted_at = NOW(), updated_at = NOW() WHERE id = $1 AND school_id = $2`,
+      [id, schoolId],
     );
   }
 
   async publishAssignment(id: number, schoolId: number): Promise<Assignment> {
     await this.findOne(id, schoolId);
     await this.db.update(
-      `UPDATE assignments SET is_published = true WHERE id = $1`,
-      [id],
+      `UPDATE assignments SET is_published = true, updated_at = NOW() WHERE id = $1 AND school_id = $2`,
+      [id, schoolId],
     );
     return this.findOne(id, schoolId);
   }
@@ -188,14 +195,18 @@ export class AssignmentService {
     nepaliYear: number,
     nepaliMonth: number,
   ): Promise<Assignment[]> {
+    // End-exclusive window: 1st of the BS month .. 1st of the next BS month,
+    // converted to AD for the query (all date math uses AD columns).
+    const nextMonth = nepaliMonth === 12 ? 1 : nepaliMonth + 1;
+    const nextYear = nepaliMonth === 12 ? nepaliYear + 1 : nepaliYear;
     const startDateBs = `${nepaliYear}-${String(nepaliMonth).padStart(2, '0')}-01`;
-    const endDateBs = `${nepaliYear}-${String(nepaliMonth).padStart(2, '0')}-32`;
+    const endDateBs = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`;
     const startDateAd = NepaliDateUtil.bsToAd(startDateBs);
     const endDateAd = NepaliDateUtil.bsToAd(endDateBs);
 
     return this.db.query<Assignment>(
       `SELECT * FROM assignments 
-       WHERE school_id = $1 AND due_date BETWEEN $2 AND $3 
+       WHERE school_id = $1 AND due_date >= $2 AND due_date < $3 
        AND is_active = true AND deleted_at IS NULL
        ORDER BY due_date ASC`,
       [schoolId, startDateAd, endDateAd],

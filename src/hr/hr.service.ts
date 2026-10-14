@@ -122,8 +122,9 @@ export class HrService {
       `INSERT INTO staff (
         school_id, user_id, staff_code, employee_id, first_name, last_name, email, mobile,
         department, designation, employment_type, joining_date, current_status, is_active,
+        first_name_en, middle_name_en, last_name_en,
         first_name_np, middle_name_np, last_name_np, department_np, designation_np, employment_type_np
-      ) VALUES ($1, $2, $3, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+      ) VALUES ($1, $2, $3, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
       RETURNING *`,
       [
         createDto.schoolId,
@@ -139,6 +140,9 @@ export class HrService {
         createDto.hireDate,
         'ACTIVE',
         true,
+        createDto.firstNameEn,
+        createDto.middleNameEn ?? null,
+        createDto.lastNameEn,
         createDto.firstNameNp ?? null,
         createDto.middleNameNp ?? null,
         createDto.lastNameNp ?? null,
@@ -418,9 +422,9 @@ export class HrService {
       }
     }
     if (updates.length === 0) return existing;
-    params.push(id);
+    params.push(id, schoolId);
     return this.db.insert<LeaveType>(
-      `UPDATE leave_types SET ${updates.join(', ')} WHERE id = $${i} RETURNING *`,
+      `UPDATE leave_types SET ${updates.join(', ')} WHERE id = $${i} AND school_id = $${i + 1} RETURNING *`,
       params,
     );
   }
@@ -447,10 +451,13 @@ export class HrService {
   async approveLeaveRequest(
     leaveRequestId: number,
     approvedBy: number,
+    schoolId?: number,
   ): Promise<LeaveRequest> {
     const leaveRequest = await this.db.queryOne<LeaveRequest>(
-      `SELECT * FROM leave_requests WHERE leave_request_id = $1`,
-      [leaveRequestId],
+      schoolId === undefined
+        ? `SELECT * FROM leave_requests WHERE leave_request_id = $1`
+        : `SELECT * FROM leave_requests WHERE leave_request_id = $1 AND school_id = $2`,
+      schoolId === undefined ? [leaveRequestId] : [leaveRequestId, schoolId],
     );
     if (!leaveRequest) throw new NotFoundException('Leave request not found');
     if (leaveRequest.status !== 'PENDING') {
@@ -458,8 +465,12 @@ export class HrService {
     }
 
     const result = await this.db.insert<LeaveRequest>(
-      `UPDATE leave_requests SET status = 'APPROVED', approved_by = $1 WHERE leave_request_id = $2 RETURNING *`,
-      [approvedBy, leaveRequestId],
+      schoolId === undefined
+        ? `UPDATE leave_requests SET status = 'APPROVED', approved_by = $1 WHERE leave_request_id = $2 RETURNING *`
+        : `UPDATE leave_requests SET status = 'APPROVED', approved_by = $1 WHERE leave_request_id = $2 AND school_id = $3 RETURNING *`,
+      schoolId === undefined
+        ? [approvedBy, leaveRequestId]
+        : [approvedBy, leaveRequestId, schoolId],
     );
     return result;
   }
@@ -468,10 +479,13 @@ export class HrService {
     leaveRequestId: number,
     rejectionReason: string,
     rejectionReasonNp?: string,
+    schoolId?: number,
   ): Promise<LeaveRequest> {
     const leaveRequest = await this.db.queryOne<LeaveRequest>(
-      `SELECT * FROM leave_requests WHERE leave_request_id = $1`,
-      [leaveRequestId],
+      schoolId === undefined
+        ? `SELECT * FROM leave_requests WHERE leave_request_id = $1`
+        : `SELECT * FROM leave_requests WHERE leave_request_id = $1 AND school_id = $2`,
+      schoolId === undefined ? [leaveRequestId] : [leaveRequestId, schoolId],
     );
     if (!leaveRequest) throw new NotFoundException('Leave request not found');
     if (leaveRequest.status !== 'PENDING') {
@@ -479,8 +493,17 @@ export class HrService {
     }
 
     const result = await this.db.insert<LeaveRequest>(
-      `UPDATE leave_requests SET status = 'REJECTED', rejection_reason = $1, rejection_reason_np = $2 WHERE leave_request_id = $3 RETURNING *`,
-      [rejectionReason, rejectionReasonNp || null, leaveRequestId],
+      schoolId === undefined
+        ? `UPDATE leave_requests SET status = 'REJECTED', rejection_reason = $1, rejection_reason_np = $2 WHERE leave_request_id = $3 RETURNING *`
+        : `UPDATE leave_requests SET status = 'REJECTED', rejection_reason = $1, rejection_reason_np = $2 WHERE leave_request_id = $3 AND school_id = $4 RETURNING *`,
+      schoolId === undefined
+        ? [rejectionReason, rejectionReasonNp || null, leaveRequestId]
+        : [
+            rejectionReason,
+            rejectionReasonNp || null,
+            leaveRequestId,
+            schoolId,
+          ],
     );
     return result;
   }

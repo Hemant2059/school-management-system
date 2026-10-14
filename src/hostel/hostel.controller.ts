@@ -178,8 +178,8 @@ export class HostelController {
   @ApiResponse({ status: 400, description: 'Invalid input data' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Forbidden - Admin role required' })
-  async createRoom(@Body() dto: CreateRoomDto): Promise<Room> {
-    return this.hostelService.createRoom(dto);
+  async createRoom(@Body() dto: CreateRoomDto, @Req() req): Promise<Room> {
+    return this.hostelService.createRoom(req.user.schoolId, dto);
   }
 
   @Get('rooms')

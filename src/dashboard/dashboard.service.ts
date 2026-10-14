@@ -101,8 +101,8 @@ export class DashboardService {
         [schoolId],
       ),
 
-      this.db.query<{ total: string }>(
-        `SELECT SUM(sf.total_amount) as total FROM student_fees sf JOIN students s ON s.student_id = sf.student_id WHERE sf.student_id = $1 AND s.school_id = $2`,
+      this.db.query<{ total: string; paid: string }>(
+        `SELECT COALESCE(SUM(sf.total_amount), 0) as total, COALESCE(SUM(sf.paid_amount), 0) as paid FROM fees sf JOIN students s ON s.student_id = sf.student_id WHERE sf.student_id = $1 AND s.school_id = $2 AND sf.is_active = true`,
         [studentId, schoolId],
       ),
     ]);
@@ -113,14 +113,15 @@ export class DashboardService {
       totalAttendance > 0 ? (presentDays / totalAttendance) * 100 : 0;
 
     const totalFees = parseFloat(feeStats[0]?.total || '0');
+    const paidFees = parseFloat(feeStats[0]?.paid || '0');
 
     return {
       attendancePercentage: Math.round(attendancePercentage * 10) / 10,
       totalAssignments: parseInt(assignmentCount[0]?.count || '0'),
       pendingAssignments: 0,
       totalFees,
-      paidFees: 0,
-      pendingFees: totalFees,
+      paidFees,
+      pendingFees: Math.max(0, totalFees - paidFees),
       recentGpa: 'N/A',
       upcomingExams: 0,
     };
@@ -150,8 +151,8 @@ export class DashboardService {
   async getAccountantStats(schoolId: number): Promise<AccountantStatsDto> {
     const [feeStats, payrollStats] = await Promise.all([
       this.db.query<{ pending: string }>(
-        `SELECT 
-          SUM(CASE WHEN UPPER(sf.status) != 'PAID' THEN sf.total_amount ELSE 0 END) as pending FROM student_fees sf JOIN students s ON s.student_id = sf.student_id WHERE s.school_id = $1`,
+        `SELECT
+          COALESCE(SUM(COALESCE(sf.remaining_amount, sf.total_amount - COALESCE(sf.paid_amount, 0))), 0) as pending FROM fees sf JOIN students s ON s.student_id = sf.student_id WHERE s.school_id = $1 AND sf.is_active = true AND sf.is_fully_paid = false`,
         [schoolId],
       ),
 
@@ -192,43 +193,82 @@ export class DashboardService {
       [guardian.guardian_id, schoolId],
     );
 
-    const childrenStats: ChildStatsDto[] = await Promise.all(
-      studentGuardians.map(async (sg) => {
-        const students = await this.db.query<{
+    if (studentGuardians.length === 0) {
+      return { childrenStats: [] };
+    }
+
+    const studentIds = studentGuardians.map((sg) => sg.student_id);
+    const [studentRows, attendanceRows, feeRows, assignmentCount] =
+      await Promise.all([
+        this.db.query<{
           student_id: number;
           first_name_en: string;
-          middle_name_en: string;
-          last_name_en: string;
+          middle_name_en: string | null;
+          last_name_en: string | null;
         }>(
-          `SELECT student_id, first_name_en, middle_name_en, last_name_en FROM students WHERE student_id = $1 AND school_id = $2`,
-          [sg.student_id, schoolId],
-        );
+          `SELECT student_id, first_name_en, middle_name_en, last_name_en FROM students WHERE student_id = ANY($1) AND school_id = $2`,
+          [studentIds, schoolId],
+        ),
+        this.db.query<{ student_id: number; total: string; present: string }>(
+          `SELECT
+            student_id,
+            COUNT(*) as total,
+            SUM(CASE WHEN status = 'PRESENT' THEN 1 ELSE 0 END) as present
+          FROM attendance
+          WHERE student_id = ANY($1) AND school_id = $2 AND deleted_at IS NULL
+          GROUP BY student_id`,
+          [studentIds, schoolId],
+        ),
+        this.db.query<{ student_id: number; total: string; paid: string }>(
+          `SELECT sf.student_id, COALESCE(SUM(sf.total_amount), 0) as total, COALESCE(SUM(sf.paid_amount), 0) as paid
+           FROM fees sf JOIN students s ON s.student_id = sf.student_id
+           WHERE sf.student_id = ANY($1) AND s.school_id = $2 AND sf.is_active = true
+           GROUP BY sf.student_id`,
+          [studentIds, schoolId],
+        ),
+        this.db.query<{ count: string }>(
+          'SELECT COUNT(*) as count FROM assignments WHERE school_id = $1 AND is_active = true',
+          [schoolId],
+        ),
+      ]);
 
-        const student = students[0];
-        if (!student) {
-          return {
-            studentId: sg.student_id,
-            studentName: 'Unknown',
-            stats: await this.getStudentStats(schoolId, sg.student_id),
-          };
-        }
-
-        const stats = await this.getStudentStats(schoolId, sg.student_id);
-        const studentName = [
-          student.first_name_en,
-          student.middle_name_en,
-          student.last_name_en,
-        ]
-          .filter(Boolean)
-          .join(' ');
-
-        return {
-          studentId: sg.student_id,
-          studentName,
-          stats,
-        };
-      }),
+    const studentById = new Map(studentRows.map((s) => [s.student_id, s]));
+    const attendanceByStudent = new Map(
+      attendanceRows.map((a) => [a.student_id, a]),
     );
+    const feeByStudent = new Map(feeRows.map((f) => [f.student_id, f]));
+    const totalAssignments = parseInt(assignmentCount[0]?.count || '0');
+
+    const childrenStats: ChildStatsDto[] = studentIds.map((studentId) => {
+      const student = studentById.get(studentId);
+      const att = attendanceByStudent.get(studentId);
+      const fee = feeByStudent.get(studentId);
+      const totalAttendance = parseInt(att?.total || '0');
+      const presentDays = parseInt(att?.present || '0');
+      const attendancePercentage =
+        totalAttendance > 0 ? (presentDays / totalAttendance) * 100 : 0;
+      const totalFees = parseFloat(fee?.total || '0');
+      const paidFees = parseFloat(fee?.paid || '0');
+      const studentName = student
+        ? [student.first_name_en, student.middle_name_en, student.last_name_en]
+            .filter(Boolean)
+            .join(' ')
+        : 'Unknown';
+      return {
+        studentId,
+        studentName,
+        stats: {
+          attendancePercentage: Math.round(attendancePercentage * 10) / 10,
+          totalAssignments,
+          pendingAssignments: 0,
+          totalFees,
+          paidFees,
+          pendingFees: Math.max(0, totalFees - paidFees),
+          recentGpa: 'N/A',
+          upcomingExams: 0,
+        },
+      };
+    });
 
     return { childrenStats };
   }

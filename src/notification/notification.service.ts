@@ -222,18 +222,18 @@ export class NotificationService {
     if (targets !== null) {
       if (targets.length === 0) return;
       params.push(targets);
-      query += ` AND user_id = ANY($${params.length})`;
+      query += ` AND (user_id = ANY($${params.length}) OR user_id IS NULL)`;
     }
 
     await this.db.update(query, params);
   }
 
   async sendSmsNotification(
-    _notificationId: number,
-    _schoolId: number,
-    _phoneNumber?: string,
+    notificationId: number,
+    schoolId: number,
+    phoneNumber?: string,
   ): Promise<boolean> {
-    return true;
+    return this.sendSmsNotificationImpl(notificationId, schoolId, phoneNumber);
   }
 
   async sendSmsNotificationImpl(

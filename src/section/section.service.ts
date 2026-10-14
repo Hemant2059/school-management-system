@@ -107,9 +107,9 @@ export class SectionService {
     }
 
     if (updates.length > 0) {
-      params.push(id);
+      params.push(id, schoolId);
       await this.db.query(
-        `UPDATE sections SET ${updates.join(', ')}, updated_at = NOW() WHERE section_id = $${paramIndex}`,
+        `UPDATE sections SET ${updates.join(', ')}, updated_at = NOW() WHERE section_id = $${paramIndex} AND school_id = $${paramIndex + 1}`,
         params,
       );
     }
@@ -120,8 +120,8 @@ export class SectionService {
   async remove(id: number, schoolId: number): Promise<void> {
     await this.findOne(id, schoolId);
     await this.db.query(
-      `UPDATE sections SET is_active = false, deleted_at = NOW() WHERE section_id = $1`,
-      [id],
+      `UPDATE sections SET is_active = false, deleted_at = NOW() WHERE section_id = $1 AND school_id = $2`,
+      [id, schoolId],
     );
   }
 }

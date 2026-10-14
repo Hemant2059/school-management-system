@@ -77,8 +77,6 @@ export class AiService {
     }
 
     const suggestions: SuggestionItem[] = [];
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
 
     const [totalStudentsRes, freeSeatCountRes, schoolStudents] =
       await Promise.all([
@@ -107,7 +105,7 @@ export class AiService {
         paid_amount: string;
       }>(
         `SELECT total_amount, paid_amount FROM student_fees WHERE student_id = ANY($1) AND UPPER(status) IN ('PENDING', 'PARTIAL')`,
-        [studentIds, today],
+        [studentIds],
       );
       overdueFees = overdueFeesRes;
     }

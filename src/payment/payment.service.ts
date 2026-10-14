@@ -1,5 +1,6 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { DatabaseService } from '../database/database.service';
 
 export interface PaymentRequest {
   amount: number;
@@ -33,7 +34,10 @@ export class PaymentService {
   private connectIpsMerchantId: string;
   private isProduction: boolean;
 
-  constructor(private configService: ConfigService) {
+  constructor(
+    private configService: ConfigService,
+    private db: DatabaseService,
+  ) {
     this.ekhaltiSecretKey = this.configService.get('EKHALTI_SECRET_KEY') || '';
     this.ekhaltiPublicKey = this.configService.get('EKHALTI_PUBLIC_KEY') || '';
     this.connectIpsSecretKey =
@@ -47,6 +51,12 @@ export class PaymentService {
     request: PaymentRequest,
     gateway: 'ekhalti' | 'connectips' = 'ekhalti',
   ): Promise<PaymentResponse> {
+    if (!request.amount || request.amount <= 0) {
+      throw new BadRequestException('Payment amount must be greater than zero');
+    }
+    if (!request.studentId || !request.schoolId) {
+      throw new BadRequestException('studentId and schoolId are required');
+    }
     const transactionId = `TXN_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
     if (gateway === 'ekhalti') {
@@ -127,10 +137,27 @@ export class PaymentService {
   private async verifyEkhaltiPayment(
     transactionId: string,
   ): Promise<PaymentVerification> {
+    // No fake gateway answers: truth comes from our own ledger. Gateway
+    // live-lookup stays unimplemented until credentials are configured.
+    const row = await this.db.queryOne<{
+      amount: string;
+      is_verified: boolean;
+    }>(
+      `SELECT amount, is_verified FROM payments WHERE transaction_id = $1 OR transaction_uuid = $1 LIMIT 1`,
+      [transactionId],
+    );
+    if (!row) {
+      return {
+        transactionId,
+        status: 'pending',
+        amount: 0,
+        timestamp: new Date(),
+      };
+    }
     return {
       transactionId,
-      status: 'completed',
-      amount: 0,
+      status: row.is_verified ? 'completed' : 'pending',
+      amount: Number(row.amount) || 0,
       timestamp: new Date(),
     };
   }
@@ -138,10 +165,26 @@ export class PaymentService {
   private async verifyConnectIpsPayment(
     transactionId: string,
   ): Promise<PaymentVerification> {
+    // Same own-ledger rule as eKhalti above.
+    const row = await this.db.queryOne<{
+      amount: string;
+      is_verified: boolean;
+    }>(
+      `SELECT amount, is_verified FROM payments WHERE transaction_id = $1 OR transaction_uuid = $1 LIMIT 1`,
+      [transactionId],
+    );
+    if (!row) {
+      return {
+        transactionId,
+        status: 'pending',
+        amount: 0,
+        timestamp: new Date(),
+      };
+    }
     return {
       transactionId,
-      status: 'completed',
-      amount: 0,
+      status: row.is_verified ? 'completed' : 'pending',
+      amount: Number(row.amount) || 0,
       timestamp: new Date(),
     };
   }
@@ -160,7 +203,11 @@ export class PaymentService {
   private async handleEkhaltiCallback(
     data: any,
   ): Promise<{ success: boolean; transactionId: string }> {
-    const { transactionId, status } = data;
+    const { transactionId, status } = data || {};
+
+    if (!transactionId) {
+      throw new BadRequestException('transactionId is required');
+    }
 
     if (status === 'completed') {
       return { success: true, transactionId };
@@ -172,7 +219,11 @@ export class PaymentService {
   private async handleConnectIpsCallback(
     data: any,
   ): Promise<{ success: boolean; transactionId: string }> {
-    const { transactionId, status } = data;
+    const { transactionId, status } = data || {};
+
+    if (!transactionId) {
+      throw new BadRequestException('transactionId is required');
+    }
 
     if (status === 'success') {
       return { success: true, transactionId };
@@ -182,6 +233,12 @@ export class PaymentService {
   }
 
   generateQRCode(amount: number, schoolId: number): string {
+    if (!amount || amount <= 0) {
+      throw new BadRequestException('Amount must be greater than zero');
+    }
+    if (!schoolId) {
+      throw new BadRequestException('schoolId is required');
+    }
     const qrData = {
       amount,
       schoolId,

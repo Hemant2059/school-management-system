@@ -111,7 +111,8 @@ export class EnrollmentController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   findAll(
     @GetUser('schoolId') schoolId: number,
-    @Query('studentId', ParseIntPipe) studentId?: number,
+    @Query('studentId', new ParseIntPipe({ optional: true }))
+    studentId?: number,
     @Query('academicYear') academicYear?: string,
   ) {
     return this.enrollmentService.findAll(schoolId, studentId, academicYear);
@@ -255,12 +256,19 @@ export class EnrollmentController {
       throw new BadRequestException('academicYear is required');
     }
 
-    return this.enrollmentService.promoteStudent(
+    // Resolve the student from the enrollment: the service promotes by
+    // studentId, while this route is addressed by enrollmentId.
+    const enrollment = await this.enrollmentService.findOne(
       enrollmentId,
       schoolId,
+    );
+
+    return this.enrollmentService.promoteStudent(
+      enrollment.student_id,
+      schoolId,
       promoteDto.newClassId,
-      promoteDto.newSectionId,
       promoteDto.academicYear,
+      promoteDto.newSectionId,
       userId,
     );
   }

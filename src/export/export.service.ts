@@ -83,7 +83,7 @@ export class ExportService {
               s.department, s.designation, s.employment_type, s.joining_date, s.current_status
        FROM staff s
        WHERE s.school_id = $1 AND s.is_active = true
-       ORDER BY s.first_name_en`,
+       ORDER BY s.first_name`,
       [schoolId],
     );
   }

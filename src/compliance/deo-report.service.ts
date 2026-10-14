@@ -63,6 +63,7 @@ export class DeoReportService {
     const studentIds = students.map((s) => s.student_id);
 
     let student_enrollments: any[] = [];
+    let boardRegByStudent = new Map<number, string | null>();
     if (studentIds.length > 0) {
       // Canonical placement: enrollments keyed to the current session.
       student_enrollments = await this.db.query<{
@@ -79,6 +80,18 @@ export class DeoReportService {
            JOIN academic_years ay ON ay.academic_year_id = en.academic_year_id
           WHERE en.student_id = ANY($1) AND ay.is_current = true AND en.status <> 'LEFT'`,
         [studentIds],
+      );
+      // Board registration lives on student_enrollments (not enrollments).
+      const boardRows = await this.db.query<{
+        student_id: number;
+        board_exam_registration: string | null;
+      }>(
+        `SELECT student_id, board_exam_registration FROM student_enrollments
+          WHERE student_id = ANY($1) AND is_current = true`,
+        [studentIds],
+      );
+      boardRegByStudent = new Map(
+        boardRows.map((b) => [b.student_id, b.board_exam_registration]),
       );
     }
 
@@ -151,7 +164,7 @@ export class DeoReportService {
           className: ac?.class_name ?? null,
           sectionName: sec?.section_name ?? null,
           academicYear: enrollment?.academic_year ?? null,
-          boardExamRegistration: enrollment?.board_exam_registration ?? null,
+          boardExamRegistration: boardRegByStudent.get(s.student_id) ?? null,
         };
       }),
     };
@@ -164,7 +177,7 @@ export class DeoReportService {
       school_code: string;
       school_name: string;
     }>(
-      `SELECT school_id, school_id AS school_code, name AS school_name FROM schools WHERE school_id = $1`,
+      `SELECT school_id, school_code, COALESCE(school_name, name) AS school_name FROM schools WHERE school_id = $1`,
       [schoolId],
     );
     if (!school) {
@@ -214,7 +227,7 @@ export class DeoReportService {
       school_code: string;
       school_name: string;
     }>(
-      `SELECT school_id, school_id AS school_code, name AS school_name FROM schools WHERE school_id = $1`,
+      `SELECT school_id, school_code, COALESCE(school_name, name) AS school_name FROM schools WHERE school_id = $1`,
       [schoolId],
     );
     if (!school) {

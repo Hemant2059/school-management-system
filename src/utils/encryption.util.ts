@@ -20,10 +20,8 @@ import * as crypto from 'crypto';
  */
 const DEFAULT_KEY = 'default_secret_key_32_chars_long!!';
 const DEFAULT_IV = 'default_iv_16_!!';
-const usingDefaults =
-  !process.env.ENCRYPTION_KEY || !process.env.ENCRYPTION_IV;
+const usingDefaults = !process.env.ENCRYPTION_KEY || !process.env.ENCRYPTION_IV;
 if (usingDefaults && process.env.NODE_ENV === 'production') {
-  // eslint-disable-next-line no-console
   console.warn(
     '[SECURITY] EncryptionUtil running with DEFAULT key/IV in production. ' +
       'Set ENCRYPTION_KEY and ENCRYPTION_IV immediately.',

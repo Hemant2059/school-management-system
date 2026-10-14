@@ -90,11 +90,11 @@ export class HostelService {
       dto.nameNp ?? null,
       dto.type,
       dto.totalBeds,
-      dto.address,
+      dto.address ?? null,
       dto.addressNp ?? null,
       (dto as any).wardenName ?? null,
       dto.wardenNameNp ?? null,
-      dto.wardNumber,
+      dto.wardNumber ?? null,
     ]);
 
     return result[0];
@@ -108,7 +108,7 @@ export class HostelService {
 
   async getHostelById(id: number, schoolId: number): Promise<Hostel> {
     const query =
-      'SELECT * FROM hostels WHERE hostel_id = $1 AND school_id = $2';
+      'SELECT * FROM hostels WHERE hostel_id = $1 AND school_id = $2 AND is_active = true';
     const result = await this.databaseService.query(query, [id, schoolId]);
 
     if (!result[0]) {
@@ -164,6 +164,10 @@ export class HostelService {
       values.push(dto.wardNumber);
     }
 
+    if (fields.length === 0) {
+      return this.getHostelById(id, schoolId);
+    }
+
     values.push(id, schoolId);
     const query = `
       UPDATE hostels SET ${fields.join(', ')}
@@ -190,7 +194,15 @@ export class HostelService {
     }
   }
 
-  async createRoom(dto: CreateRoomDto): Promise<Room> {
+  async createRoom(schoolId: number, dto: CreateRoomDto): Promise<Room> {
+    const hostel = await this.databaseService.query(
+      'SELECT hostel_id FROM hostels WHERE hostel_id = $1 AND school_id = $2 AND is_active = true',
+      [dto.hostelId, schoolId],
+    );
+    if (!hostel[0]) {
+      throw new NotFoundException('Hostel not found');
+    }
+
     const query = `
       INSERT INTO hostel_rooms (hostel_id, room_number, floor, capacity, available_beds, room_type, room_type_np, price)
       VALUES ($1, $2, $3, $4, $4, $5, $6, $7)
@@ -233,12 +245,38 @@ export class HostelService {
     schoolId: number,
     dto: AssignStudentDto,
   ): Promise<HostelStudent> {
-    const roomQuery =
-      'SELECT * FROM hostel_rooms WHERE room_id = $1 AND is_active = true';
-    const room = await this.databaseService.query(roomQuery, [dto.roomId]);
+    const roomQuery = `SELECT hr.* FROM hostel_rooms hr
+         JOIN hostels h ON h.hostel_id = hr.hostel_id
+        WHERE hr.room_id = $1 AND hr.is_active = true AND h.school_id = $2`;
+    const room = await this.databaseService.query(roomQuery, [
+      dto.roomId,
+      schoolId,
+    ]);
 
     if (!room[0]) {
       throw new NotFoundException('Room not found');
+    }
+
+    if (room[0].hostel_id !== dto.hostelId) {
+      throw new BadRequestException('Room does not belong to this hostel');
+    }
+
+    const student = await this.databaseService.query(
+      'SELECT student_id FROM students WHERE student_id = $1 AND school_id = $2',
+      [dto.studentId, schoolId],
+    );
+    if (!student[0]) {
+      throw new NotFoundException('Student not found');
+    }
+
+    const activeStay = await this.databaseService.query(
+      `SELECT id FROM hostel_students WHERE student_id = $1 AND school_id = $2 AND status = 'active'`,
+      [dto.studentId, schoolId],
+    );
+    if (activeStay[0]) {
+      throw new BadRequestException(
+        'Student already has an active hostel assignment',
+      );
     }
 
     if (room[0].available_beds <= 0) {
@@ -278,7 +316,7 @@ export class HostelService {
     const query = `
       UPDATE hostel_students
       SET check_out_date = $3::date, check_out_date_bs = $4, status = 'checked_out'
-      WHERE id = $1 AND hostel_id IN (SELECT hostel_id FROM hostels WHERE school_id = $2)
+      WHERE id = $1 AND status = 'active' AND hostel_id IN (SELECT hostel_id FROM hostels WHERE school_id = $2)
       RETURNING *
     `;
 

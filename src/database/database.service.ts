@@ -999,7 +999,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     const total = parseInt(countResult.rows[0]?.total || '0', 10);
 
     // Get paginated data
-    const paginatedQuery = `${query} LIMIT $${(params?.length || 0) + 1} OFFSET $${(params?.length || 0) + 2}`;
+    const paginatedQuery = `${query} LIMIT $${(params?.length || 0) + 1}::int OFFSET $${(params?.length || 0) + 2}::int`;
     const dataParams = [...(params || []), limit, offset];
     const dataResult = await this.scopedQuery(paginatedQuery, dataParams);
 

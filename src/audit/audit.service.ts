@@ -2,7 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 
 export interface AuditLog {
-  audit_log_id: number;
+  id: number;
   school_id: number | null;
   user_id: number | null;
   user_name: string | null;
@@ -55,6 +55,7 @@ export class AuditService {
   constructor(private db: DatabaseService) {}
 
   async log(dto: CreateAuditLogDto): Promise<AuditLog> {
+    // db.insert resolves to the single inserted row (not an array).
     const result = await this.db.insert<AuditLog>(
       `INSERT INTO audit_logs (school_id, user_id, user_name, action, entity_type, entity_id, old_value, new_value, ip_address, user_agent, description)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
@@ -73,7 +74,7 @@ export class AuditService {
         dto.description || null,
       ],
     );
-    return result[0];
+    return result;
   }
 
   async findAll(
@@ -125,7 +126,7 @@ export class AuditService {
     const total = parseInt(countResult?.count || '0', 10);
 
     const data = await this.db.query<AuditLog>(
-      `SELECT * FROM audit_logs ${whereClause} ORDER BY created_at DESC LIMIT $${paramIndex++} OFFSET $${paramIndex}`,
+      `SELECT * FROM audit_logs ${whereClause} ORDER BY created_at DESC LIMIT $${paramIndex++}::int OFFSET $${paramIndex}::int`,
       [...params, limit, offset],
     );
 
@@ -161,8 +162,8 @@ export class AuditService {
   ): Promise<AuditLog[]> {
     return this.db.query<AuditLog>(
       schoolId
-        ? `SELECT * FROM audit_logs WHERE user_id = $1 AND school_id = $2 ORDER BY created_at DESC LIMIT $3`
-        : `SELECT * FROM audit_logs WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2`,
+        ? `SELECT * FROM audit_logs WHERE user_id = $1 AND school_id = $2 ORDER BY created_at DESC LIMIT $3::int`
+        : `SELECT * FROM audit_logs WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2::int`,
       schoolId ? [userId, schoolId, limit] : [userId, limit],
     );
   }

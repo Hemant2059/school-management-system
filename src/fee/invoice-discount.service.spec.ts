@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { FeeService } from './fee.service';
 import { DatabaseService } from '../database/database.service';
-import { NotFoundException, BadRequestException } from '@nestjs/common';
+import { BadRequestException } from '@nestjs/common';
 
 describe('FeeService invoice discounts', () => {
   let service: FeeService;
@@ -39,8 +39,8 @@ describe('FeeService invoice discounts', () => {
 
   beforeEach(async () => {
     jest.clearAllMocks();
-    mockDatabaseService.transaction.mockImplementation(
-      async (cb: any) => cb(mockClient),
+    mockDatabaseService.transaction.mockImplementation(async (cb: any) =>
+      cb(mockClient),
     );
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -126,14 +126,31 @@ describe('FeeService invoice discounts', () => {
   describe('approveInvoiceDiscount', () => {
     it('should post discount_total inside a transaction', async () => {
       mockClient.query
-        .mockResolvedValueOnce({ rows: [{ ...invoice, status: 'PENDING', student_discount_id: 1, school_id: 1, student_id: 3, discount_rule_id: 1, academic_year_id: 1, invoice_id: 7 }] })
+        .mockResolvedValueOnce({
+          rows: [
+            {
+              ...invoice,
+              status: 'PENDING',
+              student_discount_id: 1,
+              school_id: 1,
+              student_id: 3,
+              discount_rule_id: 1,
+              academic_year_id: 1,
+              invoice_id: 7,
+            },
+          ],
+        })
         .mockResolvedValueOnce({ rows: [] }) // invoice update
-        .mockResolvedValueOnce({ rows: [{ student_discount_id: 1, status: 'APPROVED' }] });
+        .mockResolvedValueOnce({
+          rows: [{ student_discount_id: 1, status: 'APPROVED' }],
+        });
       mockEvaluateAvailable();
       const result = await service.approveInvoiceDiscount(1, 2);
       expect(result.applied_amount).toBe(1200);
       const invoiceUpdate = mockClient.query.mock.calls[1];
-      expect(invoiceUpdate[0]).toContain('discount_total = discount_total + $1');
+      expect(invoiceUpdate[0]).toContain(
+        'discount_total = discount_total + $1',
+      );
       expect(invoiceUpdate[1]).toEqual([1200, 7]);
     });
 

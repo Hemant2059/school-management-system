@@ -1,7 +1,6 @@
 import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import * as jwt from 'jsonwebtoken';
 import { DatabaseService } from '../database/database.service';
 import * as bcrypt from 'bcryptjs';
 import * as crypto from 'crypto';
@@ -34,13 +33,18 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    if (user.locked_until && new Date() < user.locked_until) {
-      const lockMinutes = Math.ceil(
-        (user.locked_until.getTime() - new Date().getTime()) / 60000,
-      );
-      throw new UnauthorizedException(
-        `Account locked for ${lockMinutes} more minutes`,
-      );
+    if (user.locked_until) {
+      // pg returns timestamps as strings — coerce before comparing, else
+      // the lock check silently never fires.
+      const lockedUntil = new Date(user.locked_until);
+      if (!isNaN(lockedUntil.getTime()) && new Date() < lockedUntil) {
+        const lockMinutes = Math.ceil(
+          (lockedUntil.getTime() - new Date().getTime()) / 60000,
+        );
+        throw new UnauthorizedException(
+          `Account locked for ${lockMinutes} more minutes`,
+        );
+      }
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.password_hash);
@@ -93,6 +97,8 @@ export class AuthService {
       );
 
       this.logger.log('Tokens generated for: ' + user.username);
+
+      await this.userService.updateLastLoginInfo(user.user_id, ip, userAgent);
 
       return {
         ...tokens,
@@ -151,29 +157,37 @@ export class AuthService {
     }
   }
 
-  async refreshTokens(refreshToken: string, _ip: string, _userAgent: string) {
+  async refreshTokens(refreshToken: string, ip: string, userAgent: string) {
     let payload: any;
     try {
-      const secret = this.configService.get<string>('JWT_REFRESH_SECRET');
-      if (!secret) {
-        throw new Error('JWT_REFRESH_SECRET is not configured');
-      }
-      this.logger.log(
-        `Using refresh secret: found, token length: ${refreshToken?.length || 0}`,
-      );
-      this.logger.log(
-        `Token preview: ${refreshToken?.substring(0, 50) || 'EMPTY'}`,
-      );
-      payload = jwt.verify(refreshToken, secret) as any;
-      this.logger.log('JWT verified successfully, user: ' + payload.sub);
+      payload = await this.jwtService.verifyAsync(refreshToken, {
+        secret:
+          this.configService.get<string>('JWT_REFRESH_SECRET') ||
+          this.configService.get<string>('JWT_SECRET'),
+      });
     } catch (err) {
       this.logger.error(
-        'JWT verification failed: ' +
-          err.message +
-          ' | token received: ' +
-          (refreshToken ? 'yes' : 'no'),
+        'Refresh token verification failed: ' + (err as Error).message,
       );
       throw new UnauthorizedException('Invalid session');
+    }
+
+    // The refresh token is only valid while its server-side session exists.
+    const session = await this.db.queryOne<any>(
+      `SELECT * FROM user_sessions WHERE session_id = $1 AND user_id = $2`,
+      [payload.sid, payload.sub],
+    );
+    if (!session) {
+      throw new UnauthorizedException('Invalid session');
+    }
+    if (
+      session.expires_at &&
+      new Date(session.expires_at).getTime() < Date.now()
+    ) {
+      await this.db.query(`DELETE FROM user_sessions WHERE session_id = $1`, [
+        payload.sid,
+      ]);
+      throw new UnauthorizedException('Session expired');
     }
 
     const user = await this.userService.findOne(payload.sub);
@@ -181,6 +195,8 @@ export class AuthService {
       throw new UnauthorizedException('User account inactive');
     }
 
+    // Rotate: retire the old session row and persist the new one so logout
+    // and logoutAll keep working after a refresh.
     const sessionId = crypto.randomUUID();
 
     const tokens = await this.getTokens(
@@ -189,6 +205,23 @@ export class AuthService {
       user.user_type ?? '',
       user.school_id ?? 0,
       sessionId,
+    );
+
+    await this.db.query(`DELETE FROM user_sessions WHERE session_id = $1`, [
+      payload.sid,
+    ]);
+    await this.db.query(
+      `INSERT INTO user_sessions (session_id, user_id, school_id, refresh_token_hash, ip_address, user_agent, device_name, last_active_at, expires_at, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW() + interval '7 days', NOW())`,
+      [
+        sessionId,
+        user.user_id,
+        user.school_id,
+        sessionId,
+        ip,
+        userAgent,
+        this.extractDevice(userAgent),
+      ],
     );
 
     return {
@@ -342,6 +375,13 @@ export class AuthService {
   async getUserProfile(userId: number) {
     const user = await this.userService.findOneWithSchool(userId);
 
+    const school = user.school_id
+      ? await this.db.queryOne<{ school_id: number; name: string }>(
+          `SELECT school_id, name FROM schools WHERE school_id = $1`,
+          [user.school_id],
+        )
+      : null;
+
     return {
       userId: user.user_id,
       schoolId: user.school_id,
@@ -356,7 +396,7 @@ export class AuthService {
       lastLoginIp: user.last_login_ip,
       createdAt: user.created_at,
       updatedAt: user.updated_at,
-      school: null,
+      school,
     };
   }
 
@@ -405,10 +445,9 @@ export class AuthService {
       [user.user_id, resetToken, resetTokenExpiry],
     );
 
+    // The token travels via email/SMS — never echo it in the API response.
     return {
       message: 'If the email exists, a reset link will be sent.',
-      resetToken: resetToken,
-      expiry: resetTokenExpiry,
     };
   }
 
@@ -424,7 +463,7 @@ export class AuthService {
 
     const newPasswordHash = await bcrypt.hash(newPassword, 10);
     await this.db.query(
-      `UPDATE users SET password_hash = $2, reset_token = NULL, reset_token_expiry = NULL, is_verified = true, updated_at = NOW() WHERE user_id = $1`,
+      `UPDATE users SET password = $2, password_hash = $2, reset_token = NULL, reset_token_expiry = NULL, is_verified = true, updated_at = NOW() WHERE user_id = $1`,
       [user.user_id, newPasswordHash],
     );
 

@@ -127,7 +127,8 @@ export class CreateStaffDto {
   readonly position: string;
 
   @ApiPropertyOptional({
-    description: 'Designation in Nepali (provided by frontend alongside position)',
+    description:
+      'Designation in Nepali (provided by frontend alongside position)',
     example: 'प्रशासनिक अधिकृत',
     type: String,
   })

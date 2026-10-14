@@ -60,14 +60,28 @@ export class VideoClassService {
     userId: number,
     dto: CreateLiveClassDto,
   ): Promise<LiveClass> {
-    // Find teacher by user_id, or use provided teacherId
+    // Find teacher by user_id, or use provided teacherId (scoped to school
+    // so one school cannot bind another school's teacher row).
     let teacherId = dto.teacherId;
     if (!teacherId && userId) {
       const teacher = await this.databaseService.queryOne<{
         teacher_id: number;
-      }>('SELECT teacher_id FROM teachers WHERE user_id = $1', [userId]);
+      }>(
+        'SELECT teacher_id FROM teachers WHERE user_id = $1 AND school_id = $2',
+        [userId, schoolId],
+      );
       if (teacher) {
         teacherId = teacher.teacher_id;
+      }
+    } else if (teacherId) {
+      const teacher = await this.databaseService.queryOne<{
+        teacher_id: number;
+      }>(
+        'SELECT teacher_id FROM teachers WHERE teacher_id = $1 AND school_id = $2 AND is_active = true',
+        [teacherId, schoolId],
+      );
+      if (!teacher) {
+        throw new NotFoundException('Teacher not found in this school');
       }
     }
 
@@ -112,7 +126,8 @@ export class VideoClassService {
     schoolId: number,
     classId?: number,
   ): Promise<LiveClass[]> {
-    let query = 'SELECT * FROM live_classes WHERE school_id = $1';
+    let query =
+      'SELECT * FROM live_classes WHERE school_id = $1 AND deleted_at IS NULL';
     const params: any[] = [schoolId];
 
     if (classId) {
@@ -126,8 +141,12 @@ export class VideoClassService {
   }
 
   async getLiveClassById(id: number, schoolId: number): Promise<LiveClass> {
-    const query = 'SELECT * FROM live_classes WHERE id = $1 AND school_id = $2';
+    const query =
+      'SELECT * FROM live_classes WHERE id = $1 AND school_id = $2 AND deleted_at IS NULL';
     const result = await this.databaseService.query(query, [id, schoolId]);
+    if (!result[0]) {
+      throw new NotFoundException('Live class not found');
+    }
     return result[0];
   }
 
@@ -135,10 +154,13 @@ export class VideoClassService {
     const query = `
       UPDATE live_classes 
       SET status = 'live', started_at = NOW()
-      WHERE id = $1 AND school_id = $2
+      WHERE id = $1 AND school_id = $2 AND deleted_at IS NULL
       RETURNING *
     `;
     const result = await this.databaseService.query(query, [id, schoolId]);
+    if (!result[0]) {
+      throw new NotFoundException('Live class not found');
+    }
     return result[0];
   }
 
@@ -151,7 +173,7 @@ export class VideoClassService {
       const query = `
         UPDATE live_classes 
         SET status = 'ended', actual_end = NOW(), recording_url = $3
-        WHERE id = $1 AND school_id = $2
+        WHERE id = $1 AND school_id = $2 AND deleted_at IS NULL
         RETURNING *
       `;
       const result = await this.databaseService.query(query, [
@@ -172,8 +194,13 @@ export class VideoClassService {
   }
 
   async deleteLiveClass(id: number, schoolId: number): Promise<void> {
-    const query = 'DELETE FROM live_classes WHERE id = $1 AND school_id = $2';
-    await this.databaseService.query(query, [id, schoolId]);
+    const affected = await this.databaseService.update(
+      'UPDATE live_classes SET deleted_at = NOW() WHERE id = $1 AND school_id = $2 AND deleted_at IS NULL',
+      [id, schoolId],
+    );
+    if (affected === 0) {
+      throw new NotFoundException('Live class not found');
+    }
   }
 
   async getUpcomingClasses(schoolId: number): Promise<LiveClass[]> {
@@ -182,6 +209,7 @@ export class VideoClassService {
       WHERE school_id = $1 
         AND status = 'scheduled' 
         AND scheduled_at > NOW()
+        AND deleted_at IS NULL
       ORDER BY scheduled_at ASC
       LIMIT 10
     `;
@@ -191,7 +219,7 @@ export class VideoClassService {
   async getLiveNowClasses(schoolId: number): Promise<LiveClass[]> {
     const query = `
       SELECT * FROM live_classes 
-      WHERE school_id = $1 AND status = 'live'
+      WHERE school_id = $1 AND status = 'live' AND deleted_at IS NULL
     `;
     return this.databaseService.query(query, [schoolId]);
   }

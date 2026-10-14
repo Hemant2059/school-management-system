@@ -59,13 +59,6 @@ import { RolesGuard } from './auth/roles.guard';
 import { ResponseEnvelopeInterceptor } from './common/interceptors/response-envelope.interceptor';
 import { AppController } from './app.controller';
 
-let redisStore: any;
-try {
-  redisStore = require('cache-manager-redis-store').redisStore;
-} catch {
-  redisStore = undefined;
-}
-
 @Module({
   imports: [
     ConfigModule.forRoot({
@@ -77,17 +70,22 @@ try {
       isGlobal: true,
       useFactory: async () => {
         const redisHost = process.env.REDIS_HOST;
-        if (redisHost && redisStore) {
-          return {
-            store: await redisStore({
-              socket: {
-                host: redisHost,
-                port: parseInt(process.env.REDIS_PORT || '6379'),
-                password: process.env.REDIS_PASSWORD || undefined,
-              },
-            }),
-            ttl: parseInt(process.env.REDIS_TTL || '3600'),
-          };
+        if (redisHost) {
+          try {
+            const { redisStore } = await import('cache-manager-redis-store');
+            return {
+              store: await redisStore({
+                socket: {
+                  host: redisHost,
+                  port: parseInt(process.env.REDIS_PORT || '6379'),
+                  password: process.env.REDIS_PASSWORD || undefined,
+                },
+              }),
+              ttl: parseInt(process.env.REDIS_TTL || '3600'),
+            };
+          } catch {
+            // redis store unavailable — fall through to in-memory cache
+          }
         }
         return {
           ttl: parseInt(process.env.REDIS_TTL || '3600'),

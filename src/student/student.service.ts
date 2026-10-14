@@ -321,7 +321,7 @@ export class StudentService {
     const take = getStudentsDto.take || 10;
     const offset = (page - 1) * take;
     params.push(offset, take);
-    query += ` OFFSET $${params.length - 1} LIMIT $${params.length}`;
+    query += ` OFFSET $${params.length - 1}::int LIMIT $${params.length}::int`;
 
     let countQuery = `
       SELECT COUNT(*) as total

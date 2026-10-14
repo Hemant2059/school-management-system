@@ -174,10 +174,14 @@ export class TimetableService {
     const weeklySchedule: any[][] = Array.from({ length: 7 }, () => []);
 
     timetables.forEach((tt) => {
-      weeklySchedule[tt.day_of_week].push({
+      // day_of_week is varchar in the DB — coerce and guard so a bad value
+      // can neither crash getDayName nor pollute the 7-day schedule.
+      const day = Number(tt.day_of_week);
+      if (!Number.isInteger(day) || day < 0 || day > 6) return;
+      weeklySchedule[day].push({
         ...tt,
-        dayName: this.getDayName(tt.day_of_week, 'en'),
-        dayNameNp: this.getDayName(tt.day_of_week, 'np'),
+        dayName: this.getDayName(day, 'en'),
+        dayNameNp: this.getDayName(day, 'np'),
       });
     });
 

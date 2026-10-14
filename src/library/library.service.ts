@@ -70,8 +70,8 @@ export class LibraryService {
     }
 
     const result = await this.db.insert<Book>(
-      `INSERT INTO books (school_id, isbn, book_code, title, title_en, author, publisher, publisher_np, category, category_np, subject, subject_np, edition, edition_np, total_copies, available_copies, is_active)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, true)
+      `INSERT INTO books (school_id, isbn, book_code, title, title_en, title_np, author, author_np, publisher, publisher_np, category, book_type, category_np, subject, subject_np, edition, edition_np, price, curriculum_level, acquisition_date, is_see_reference, is_neb_reference, total_copies, available_copies, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $22, true)
        RETURNING *`,
       [
         createDto.schoolId,
@@ -79,8 +79,10 @@ export class LibraryService {
         createDto.bookCode,
         createDto.titleEn,
         createDto.titleEn,
-        createDto.authorEn,
-        createDto.publisherEn,
+        createDto.titleNp ?? null,
+        createDto.authorEn ?? null,
+        createDto.authorNp ?? null,
+        createDto.publisherEn ?? null,
         createDto.publisherNp ?? null,
         createDto.bookType,
         createDto.categoryNp ?? null,
@@ -88,8 +90,12 @@ export class LibraryService {
         createDto.subjectNp ?? null,
         createDto.edition || null,
         createDto.editionNp ?? null,
-        createDto.totalCopies,
-        createDto.totalCopies,
+        createDto.price ?? null,
+        createDto.curriculumLevel || null,
+        createDto.acquisitionDate || null,
+        createDto.isSeeReference ?? false,
+        createDto.isNebReference ?? false,
+        createDto.totalCopies ?? 0,
       ],
     );
 
@@ -109,6 +115,10 @@ export class LibraryService {
     if (bookType) {
       params.push(bookType);
       query += ` AND book_type = $${params.length}`;
+    }
+    if (subject) {
+      params.push(subject);
+      query += ` AND subject = $${params.length}`;
     }
     if (isSeeReference !== undefined) {
       params.push(isSeeReference);
@@ -166,12 +176,25 @@ export class LibraryService {
       edition: 'edition',
       editionNp: 'edition_np',
       price: 'price',
-
+      curriculumLevel: 'curriculum_level',
+      acquisitionDate: 'acquisition_date',
+      isSeeReference: 'is_see_reference',
+      isNebReference: 'is_neb_reference',
       totalCopies: 'total_copies',
     };
 
     for (const [dtoField, dbField] of Object.entries(fieldMap)) {
       if ((updateDto as any)[dtoField] !== undefined) {
+        // bookType is mirrored to both category and book_type (see createBook).
+        if (dtoField === 'bookType') {
+          updates.push(`category = $${paramIndex}`);
+          params.push((updateDto as any)[dtoField]);
+          paramIndex++;
+          updates.push(`book_type = $${paramIndex}`);
+          params.push((updateDto as any)[dtoField]);
+          paramIndex++;
+          continue;
+        }
         updates.push(`${dbField} = $${paramIndex}`);
         params.push((updateDto as any)[dtoField]);
         paramIndex++;
@@ -180,9 +203,9 @@ export class LibraryService {
 
     if (updates.length === 0) return this.findOneBook(id, schoolId);
 
-    params.push(id);
+    params.push(id, schoolId);
     await this.db.update(
-      `UPDATE books SET ${updates.join(', ')} WHERE book_id = $${paramIndex}`,
+      `UPDATE books SET ${updates.join(', ')} WHERE book_id = $${paramIndex} AND school_id = $${paramIndex + 1}`,
       params,
     );
 
@@ -192,15 +215,15 @@ export class LibraryService {
   async removeBook(id: number, schoolId: number): Promise<void> {
     await this.findOneBook(id, schoolId);
     const activeIssues = await this.db.queryOne<{ count: string }>(
-      `SELECT COUNT(*) as count FROM book_issues WHERE book_id = $1 AND school_id = $2 AND status = 'ISSUED'`,
+      `SELECT COUNT(*) as count FROM book_issues WHERE book_id = $1 AND school_id = $2 AND UPPER(status) = 'ISSUED'`,
       [id, schoolId],
     );
     if (activeIssues && parseInt(activeIssues.count) > 0) {
       throw new BadRequestException('Cannot delete book with active issues');
     }
     await this.db.update(
-      `UPDATE books SET is_active = false, deleted_at = NOW() WHERE book_id = $1`,
-      [id],
+      `UPDATE books SET is_active = false, deleted_at = NOW() WHERE book_id = $1 AND school_id = $2`,
+      [id, schoolId],
     );
   }
 
@@ -213,7 +236,7 @@ export class LibraryService {
 
     const existingIssue = await this.db.queryOne<BookIssue>(
       `SELECT issue_id FROM book_issues 
-       WHERE book_id = $1 AND student_id = $2 AND school_id = $3 AND status = 'ISSUED'`,
+       WHERE book_id = $1 AND student_id = $2 AND school_id = $3 AND UPPER(status) = 'ISSUED'`,
       [createDto.bookId, createDto.studentId, createDto.schoolId],
     );
     if (existingIssue) {
@@ -263,11 +286,9 @@ export class LibraryService {
       [issueId, schoolId],
     );
     if (!bookIssue) {
-      throw new NotFoundException(
-        `Book issue with ID ${returnDto.issueId} not found`,
-      );
+      throw new NotFoundException(`Book issue with ID ${issueId} not found`);
     }
-    if (bookIssue.status === 'RETURNED') {
+    if (String(bookIssue.status).toUpperCase() === 'RETURNED') {
       throw new BadRequestException('Book already returned');
     }
 
@@ -322,7 +343,7 @@ export class LibraryService {
     schoolId: number,
   ): Promise<BookIssue[]> {
     return this.db.query<BookIssue>(
-      `SELECT * FROM book_issues WHERE student_id = $1 AND school_id = $2 AND status = 'ISSUED' ORDER BY issue_date DESC`,
+      `SELECT * FROM book_issues WHERE student_id = $1 AND school_id = $2 AND UPPER(status) = 'ISSUED' ORDER BY issue_date DESC`,
       [studentId, schoolId],
     );
   }
@@ -330,7 +351,7 @@ export class LibraryService {
   async getOverdueBooks(schoolId: number): Promise<BookIssue[]> {
     const today = new Date();
     return this.db.query<BookIssue>(
-      `SELECT * FROM book_issues WHERE school_id = $1 AND due_date < $2 AND status = 'ISSUED' ORDER BY due_date ASC`,
+      `SELECT * FROM book_issues WHERE school_id = $1 AND due_date < $2 AND UPPER(status) = 'ISSUED' ORDER BY due_date ASC`,
       [schoolId, today],
     );
   }
@@ -354,7 +375,7 @@ export class LibraryService {
       `SELECT * FROM book_issues WHERE issue_id = $1 AND school_id = $2`,
       [issueId, schoolId],
     );
-    if (!bookIssue || bookIssue.status !== 'RETURNED') {
+    if (!bookIssue || String(bookIssue.status).toUpperCase() !== 'RETURNED') {
       throw new NotFoundException('Book issue not found or not returned');
     }
 

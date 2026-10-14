@@ -52,11 +52,25 @@ export class SubjectService {
     );
   }
 
-  async findAll(schoolId: number, _query?: any): Promise<Subject[]> {
-    return this.db.query<Subject>(
-      `SELECT * FROM subjects WHERE school_id = $1 AND is_active = true ORDER BY subject_name_en ASC`,
-      [schoolId],
-    );
+  async findAll(schoolId: number, query?: any): Promise<Subject[]> {
+    let sql = `SELECT * FROM subjects WHERE school_id = $1 AND is_active = true`;
+    const params: any[] = [schoolId];
+
+    if (query?.subjectGroup) {
+      params.push(query.subjectGroup);
+      sql += ` AND subject_group = $${params.length}`;
+    }
+    if (query?.isActive !== undefined) {
+      params.push(query.isActive);
+      sql += ` AND is_active = $${params.length}`;
+    }
+    if (query?.search) {
+      params.push(`%${query.search}%`);
+      sql += ` AND (subject_name_en ILIKE $${params.length} OR subject_code ILIKE $${params.length})`;
+    }
+
+    sql += ` ORDER BY subject_name_en ASC`;
+    return this.db.query<Subject>(sql, params);
   }
 
   async findOne(id: number, schoolId?: number): Promise<Subject> {
@@ -100,9 +114,9 @@ export class SubjectService {
     }
 
     if (updates.length > 0) {
-      params.push(id);
+      params.push(id, schoolId);
       await this.db.query(
-        `UPDATE subjects SET ${updates.join(', ')}, updated_at = NOW() WHERE subject_id = $${paramIndex}`,
+        `UPDATE subjects SET ${updates.join(', ')}, updated_at = NOW() WHERE subject_id = $${paramIndex} AND school_id = $${paramIndex + 1}`,
         params,
       );
     }
@@ -113,8 +127,8 @@ export class SubjectService {
   async remove(id: number, schoolId: number): Promise<void> {
     await this.findOne(id, schoolId);
     await this.db.query(
-      `UPDATE subjects SET is_active = false, deleted_at = NOW() WHERE subject_id = $1`,
-      [id],
+      `UPDATE subjects SET is_active = false, deleted_at = NOW() WHERE subject_id = $1 AND school_id = $2`,
+      [id, schoolId],
     );
   }
 

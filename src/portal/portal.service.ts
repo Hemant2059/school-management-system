@@ -147,14 +147,15 @@ export class PortalService {
 
   async getUpcomingExams(schoolId: number, studentId: number): Promise<any[]> {
     const query = `
-      SELECT e.exam_id, e.exam_name, e.exam_date, e.exam_date_bs, sub.subject_name
+      SELECT e.exam_id, e.exam_name, e.exam_date, e.exam_date_bs,
+             sub.subject_name_en AS subject_name
       FROM exams e
-      JOIN exam_classes ec ON e.exam_id = ec.exam_id
-      JOIN student_enrollments se ON ec.class_id = se.class_id
-      JOIN subjects sub ON e.subject_id = sub.subject_id
-      WHERE se.student_id = $1 
-        AND e.school_id = $2 
-        AND e.exam_date > NOW()
+      JOIN student_enrollments se ON se.class_id = e.class_id AND se.is_current = true
+      LEFT JOIN subjects sub ON sub.subject_id = e.subject_id
+      WHERE se.student_id = $1
+        AND e.school_id = $2
+        AND se.school_id = $2
+        AND e.exam_date > CURRENT_DATE
       ORDER BY e.exam_date ASC
       LIMIT 5
     `;
@@ -167,18 +168,16 @@ export class PortalService {
     studentId: number,
   ): Promise<any[]> {
     const query = `
-      SELECT a.assignment_id, a.title, a.due_date, a.due_date_bs, sub.subject_name
+      SELECT a.id AS assignment_id, a.title, a.due_date, a.due_date_bs,
+             sub.subject_name_en AS subject_name
       FROM assignments a
-      JOIN assignment_classes ac ON a.assignment_id = ac.assignment_id
-      JOIN student_enrollments se ON ac.class_id = se.class_id
-      JOIN subjects sub ON a.subject_id = sub.subject_id
-      WHERE se.student_id = $1 
-        AND a.school_id = $2 
-        AND a.due_date > NOW()
-        AND NOT EXISTS (
-          SELECT 1 FROM assignment_submissions 
-          WHERE assignment_id = a.assignment_id AND student_id = $1
-        )
+      JOIN student_enrollments se ON se.class_id = a.class_id AND se.is_current = true
+      LEFT JOIN subjects sub ON sub.subject_id = a.subject_id
+      WHERE se.student_id = $1
+        AND a.school_id = $2
+        AND se.school_id = $2
+        AND a.due_date > CURRENT_DATE
+        AND a.is_active = true
       ORDER BY a.due_date ASC
       LIMIT 5
     `;
@@ -188,10 +187,12 @@ export class PortalService {
 
   async getRecentMarks(schoolId: number, studentId: number): Promise<any[]> {
     const query = `
-      SELECT m.marks_id, m.obtained_marks, m.total_marks, e.exam_name, sub.subject_name
+      SELECT m.mark_id AS marks_id, m.marks_obtained AS obtained_marks,
+             m.theory_marks, m.practical_marks, m.total_marks,
+             e.exam_name, sub.subject_name_en AS subject_name
       FROM marks m
       JOIN exams e ON m.exam_id = e.exam_id
-      JOIN subjects sub ON m.subject_id = sub.subject_id
+      LEFT JOIN subjects sub ON m.subject_id = sub.subject_id
       WHERE m.student_id = $1 AND m.school_id = $2
       ORDER BY m.created_at DESC
       LIMIT 10
@@ -202,11 +203,12 @@ export class PortalService {
 
   async getFeeStatus(schoolId: number, studentId: number): Promise<any> {
     const query = `
-      SELECT 
+      SELECT
         COALESCE(SUM(sf.total_amount), 0) as "totalFee",
         COALESCE(SUM(sf.paid_amount), 0) as paid
       FROM student_fees sf
-      WHERE sf.student_id = $1 AND sf.school_id = $2
+      JOIN students s ON s.student_id = sf.student_id
+      WHERE sf.student_id = $1 AND s.school_id = $2
     `;
 
     const result = await this.databaseService.query(query, [

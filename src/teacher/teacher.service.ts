@@ -6,7 +6,7 @@ import {
 import { DatabaseService } from '../database/database.service';
 import { CreateTeacherDto } from './dto/create-teacher.dto';
 import { UpdateTeacherDto } from './dto/update-teacher.dto';
-import { PageOptionsDto } from '../common/dto/page-options.dto';
+import { PageOptionsDto, Order } from '../common/dto/page-options.dto';
 import { PageDto } from '../common/dto/page.dto';
 import { PageMetaDto } from '../common/dto/page-meta.dto';
 
@@ -189,10 +189,11 @@ export class TeacherService {
     const page = pageOptionsDto.page || 1;
     const take = pageOptionsDto.take || 10;
     const offset = (page - 1) * take;
-    const order = pageOptionsDto.order || 'DESC';
+    // Never interpolate raw input into ORDER BY.
+    const order = pageOptionsDto.order === Order.ASC ? 'ASC' : 'DESC';
 
     const teachers = await this.db.query<Teacher>(
-      `SELECT * FROM teachers WHERE school_id = $1 AND is_active = true ORDER BY created_at ${order} LIMIT $2 OFFSET $3`,
+      `SELECT * FROM teachers WHERE school_id = $1 AND is_active = true ORDER BY created_at ${order} LIMIT $2::int OFFSET $3::int`,
       [schoolId, take, offset],
     );
 

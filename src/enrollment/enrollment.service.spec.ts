@@ -179,7 +179,7 @@ describe('EnrollmentService', () => {
         expect.stringContaining(
           'UPDATE student_enrollments SET is_current = false',
         ),
-        [1],
+        [1, 1],
       );
     });
 

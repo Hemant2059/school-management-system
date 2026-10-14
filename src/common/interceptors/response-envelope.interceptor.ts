@@ -27,8 +27,8 @@ function isEnvelope(value: any): boolean {
     value !== null &&
     typeof value === 'object' &&
     !Buffer.isBuffer(value) &&
-    Array.isArray((value as any).data) &&
-    typeof (value as any).total === 'number'
+    Array.isArray(value.data) &&
+    typeof value.total === 'number'
   );
 }
 
@@ -36,7 +36,7 @@ function isStream(value: any): boolean {
   return (
     value !== null &&
     typeof value === 'object' &&
-    typeof (value as any).pipe === 'function'
+    typeof value.pipe === 'function'
   );
 }
 

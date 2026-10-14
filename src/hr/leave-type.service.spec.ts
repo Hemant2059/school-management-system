@@ -28,7 +28,10 @@ describe('HrService leave types', () => {
   describe('createLeaveType', () => {
     it('should store EN+NP verbatim', async () => {
       mockDatabaseService.queryOne.mockResolvedValue(null);
-      mockDatabaseService.insert.mockResolvedValue({ id: 1, name: 'Sick Leave' });
+      mockDatabaseService.insert.mockResolvedValue({
+        id: 1,
+        name: 'Sick Leave',
+      });
       const result = await service.createLeaveType({
         schoolId: 1,
         name: 'Sick Leave',
@@ -37,7 +40,9 @@ describe('HrService leave types', () => {
         isPaid: true,
       });
       expect(result.id).toBe(1);
-      expect(mockDatabaseService.insert.mock.calls[0][1]).toContain('बिरामी बिदा');
+      expect(mockDatabaseService.insert.mock.calls[0][1]).toContain(
+        'बिरामी बिदा',
+      );
     });
 
     it('should reject duplicate name per school', async () => {

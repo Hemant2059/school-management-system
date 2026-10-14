@@ -105,49 +105,6 @@ export class PromotionController {
     return this.promotionService.demoteClass(dto.schoolId, dto);
   }
 
-  @Get('student/:studentId')
-  @ApiOperation({
-    summary: 'Get Student Promotion History',
-    description: `Get all promotion/demotion records for a student.`,
-  })
-  @ApiParam({
-    name: 'studentId',
-    description: 'Student ID',
-    example: 123,
-    type: Number,
-  })
-  @ApiQuery({
-    name: 'schoolId',
-    description: 'School ID',
-    example: 1,
-    type: Number,
-    required: true,
-  })
-  @ApiResponse({
-    status: 200,
-    description: 'Promotion history',
-    schema: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          id: { type: 'number', example: 1 },
-          type: { type: 'string', example: 'PROMOTION' },
-          fromClass: { type: 'string', example: 'Grade 10' },
-          toClass: { type: 'string', example: 'Grade 11' },
-          academicYear: { type: 'string', example: '2081-2082' },
-          promotedAt: { type: 'string', example: '2082-04-15' },
-        },
-      },
-    },
-  })
-  getPromotionHistory(
-    @Param('studentId') studentId: number,
-    @Query('schoolId') schoolId: number,
-  ) {
-    return this.promotionService.getPromotionHistory(studentId, schoolId);
-  }
-
   @Get('report')
   @ApiOperation({
     summary: 'Get Promotion Report',
@@ -194,5 +151,48 @@ export class PromotionController {
     @Query('academicYear') academicYear: string,
   ) {
     return this.promotionService.getPromotionReport(schoolId, academicYear);
+  }
+
+  @Get('student/:studentId')
+  @ApiOperation({
+    summary: 'Get Student Promotion History',
+    description: `Get all promotion/demotion records for a student.`,
+  })
+  @ApiParam({
+    name: 'studentId',
+    description: 'Student ID',
+    example: 123,
+    type: Number,
+  })
+  @ApiQuery({
+    name: 'schoolId',
+    description: 'School ID',
+    example: 1,
+    type: Number,
+    required: true,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Promotion history',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'number', example: 1 },
+          type: { type: 'string', example: 'PROMOTION' },
+          fromClass: { type: 'string', example: 'Grade 10' },
+          toClass: { type: 'string', example: 'Grade 11' },
+          academicYear: { type: 'string', example: '2081-2082' },
+          promotedAt: { type: 'string', example: '2082-04-15' },
+        },
+      },
+    },
+  })
+  getPromotionHistory(
+    @Param('studentId') studentId: number,
+    @Query('schoolId') schoolId: number,
+  ) {
+    return this.promotionService.getPromotionHistory(studentId, schoolId);
   }
 }

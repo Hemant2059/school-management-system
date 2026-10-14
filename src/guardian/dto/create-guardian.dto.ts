@@ -139,7 +139,8 @@ export class CreateGuardianDto {
   readonly occupation?: string;
 
   @ApiPropertyOptional({
-    description: 'Guardian occupation/profession (Nepali, provided by frontend)',
+    description:
+      'Guardian occupation/profession (Nepali, provided by frontend)',
     example: 'व्यापार',
     type: String,
   })

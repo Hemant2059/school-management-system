@@ -14,7 +14,10 @@ export class CreateLeaveTypeDto {
   @IsInt()
   readonly schoolId: number;
 
-  @ApiProperty({ description: 'Leave type name in English', example: 'Sick Leave' })
+  @ApiProperty({
+    description: 'Leave type name in English',
+    example: 'Sick Leave',
+  })
   @IsNotEmpty()
   @IsString()
   @MaxLength(100)

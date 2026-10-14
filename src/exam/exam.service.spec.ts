@@ -208,7 +208,7 @@ describe('ExamService', () => {
 
       expect(mockDatabaseService.query).toHaveBeenCalledWith(
         expect.stringContaining('UPDATE exams SET is_active = false'),
-        [1],
+        [1, 1],
       );
     });
 

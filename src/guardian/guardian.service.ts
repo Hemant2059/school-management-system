@@ -70,6 +70,23 @@ export class GuardianService {
       );
     }
 
+    if (
+      createGuardianDto.userId !== undefined &&
+      createGuardianDto.userId !== null
+    ) {
+      const owner = await this.db.queryOne<{ school_id: number | null }>(
+        `SELECT school_id FROM users WHERE user_id = $1`,
+        [createGuardianDto.userId],
+      );
+      if (!owner) throw new NotFoundException('Linked user not found');
+      if (
+        owner.school_id !== null &&
+        owner.school_id !== createGuardianDto.schoolId
+      ) {
+        throw new BadRequestException('Linked user belongs to another school');
+      }
+    }
+
     const [countResult] = await this.db.query<{ count: string }>(
       `SELECT COUNT(*) as count FROM guardians WHERE school_id = $1`,
       [createGuardianDto.schoolId],
@@ -83,11 +100,12 @@ export class GuardianService {
       : `${createGuardianDto.firstNameEn} ${createGuardianDto.lastNameEn ?? ''}`.trim();
 
     const created = await this.db.insert<Guardian>(
-      `INSERT INTO guardians (school_id, guardian_code, first_name_en, middle_name_en, last_name_en, first_name_np, middle_name_np, last_name_np, display_name, relation_to_student, relation_to_student_np, occupation, occupation_np, education_level, education_level_np, mobile, alternate_mobile, email, annual_income, citizenship_no, citizenship_issue_district, citizenship_issue_date, citizenship_issue_date_bs, nin, address_en, address_np)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)
+      `INSERT INTO guardians (school_id, user_id, guardian_code, first_name_en, middle_name_en, last_name_en, first_name_np, middle_name_np, last_name_np, display_name, relation_to_student, relation_to_student_np, occupation, occupation_np, education_level, education_level_np, mobile, alternate_mobile, email, annual_income, citizenship_no, citizenship_issue_district, citizenship_issue_date, citizenship_issue_date_bs, nin, address_en, address_np)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27)
        RETURNING *`,
       [
         createGuardianDto.schoolId,
+        createGuardianDto.userId ?? null,
         guardianCode,
         createGuardianDto.firstNameEn,
         createGuardianDto.middleNameEn || null,
@@ -147,6 +165,21 @@ export class GuardianService {
     updateGuardianDto: UpdateGuardianDto,
   ): Promise<Guardian> {
     const existing = await this.findOne(id, schoolId);
+
+    if (
+      updateGuardianDto.mobile !== undefined &&
+      updateGuardianDto.mobile !== existing.mobile
+    ) {
+      const clash = await this.db.queryOne<Guardian>(
+        `SELECT guardian_id FROM guardians WHERE mobile = $1 AND school_id = $2 AND is_active = true AND guardian_id <> $3`,
+        [updateGuardianDto.mobile, schoolId, id],
+      );
+      if (clash) {
+        throw new BadRequestException(
+          'Another guardian with this mobile number already exists',
+        );
+      }
+    }
 
     if (
       updateGuardianDto.userId !== undefined &&
@@ -225,9 +258,9 @@ export class GuardianService {
     }
 
     if (updates.length > 0) {
-      params.push(id);
+      params.push(id, schoolId);
       await this.db.query(
-        `UPDATE guardians SET ${updates.join(', ')}, updated_at = NOW() WHERE guardian_id = $${paramIndex}`,
+        `UPDATE guardians SET ${updates.join(', ')}, updated_at = NOW() WHERE guardian_id = $${paramIndex} AND school_id = $${paramIndex + 1}`,
         params,
       );
     }
@@ -238,8 +271,8 @@ export class GuardianService {
   async remove(id: number, schoolId: number): Promise<void> {
     await this.findOne(id, schoolId);
     await this.db.query(
-      `UPDATE guardians SET is_active = false, deleted_at = NOW() WHERE guardian_id = $1`,
-      [id],
+      `UPDATE guardians SET is_active = false, deleted_at = NOW() WHERE guardian_id = $1 AND school_id = $2`,
+      [id, schoolId],
     );
   }
 

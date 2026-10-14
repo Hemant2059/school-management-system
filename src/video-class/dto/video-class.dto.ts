@@ -32,7 +32,8 @@ export class CreateLiveClassDto {
   classNameNp?: string;
 
   @ApiPropertyOptional({
-    description: 'Live class title in Nepali (provided by frontend, alias of classNameNp)',
+    description:
+      'Live class title in Nepali (provided by frontend, alias of classNameNp)',
   })
   @IsOptional()
   @IsString()

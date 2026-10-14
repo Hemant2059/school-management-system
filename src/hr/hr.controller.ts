@@ -198,7 +198,10 @@ export class HrController {
     description: 'Retrieve all active leave types for the school.',
   })
   @ApiQuery({ name: 'schoolId', type: Number, required: true })
-  @ApiResponse({ status: 200, description: 'Leave types retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Leave types retrieved successfully',
+  })
   getLeaveTypes(@Query('schoolId') schoolId: number) {
     return this.hrService.getLeaveTypes(schoolId);
   }
@@ -267,8 +270,13 @@ export class HrController {
   approveLeaveRequest(
     @Param('leaveRequestId', ParseIntPipe) leaveRequestId: number,
     @Body('approvedBy') approvedBy: number,
+    @GetUser('schoolId') schoolId: number,
   ) {
-    return this.hrService.approveLeaveRequest(leaveRequestId, approvedBy);
+    return this.hrService.approveLeaveRequest(
+      leaveRequestId,
+      approvedBy,
+      schoolId,
+    );
   }
 
   @Patch('leaves/:leaveRequestId/reject')
@@ -309,11 +317,13 @@ export class HrController {
     @Param('leaveRequestId', ParseIntPipe) leaveRequestId: number,
     @Body('rejectionReason') rejectionReason: string,
     @Body('rejectionReasonNp') rejectionReasonNp?: string,
+    @GetUser('schoolId') schoolId?: number,
   ) {
     return this.hrService.rejectLeaveRequest(
       leaveRequestId,
       rejectionReason,
       rejectionReasonNp,
+      schoolId,
     );
   }
 

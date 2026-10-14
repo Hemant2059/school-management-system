@@ -273,7 +273,8 @@ export class FeeController {
   getStructureForClass(
     @Param('classId', ParseIntPipe) classId: number,
     @Query('schoolId', ParseIntPipe) schoolId: number,
-    @Query('sectionId', ParseIntPipe) sectionId?: number,
+    @Query('sectionId', new ParseIntPipe({ optional: true }))
+    sectionId?: number,
     @Query('academicYear') academicYear?: string,
   ) {
     return this.feeService.getFeeStructureForClass(
@@ -575,7 +576,8 @@ export class FeeController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   getOverdueFees(
     @GetUser('schoolId') schoolId: number,
-    @Query('daysOverdue', ParseIntPipe) daysOverdue?: number,
+    @Query('daysOverdue', new ParseIntPipe({ optional: true }))
+    daysOverdue?: number,
   ) {
     return this.feeService.getOverdueFees(schoolId, daysOverdue);
   }
@@ -973,7 +975,10 @@ export class FeeController {
       'Create a school-level discount rule (e.g. sibling discount). Name stored in English + Nepali as sent by frontend.',
   })
   @ApiBody({ type: CreateDiscountRuleDto })
-  @ApiResponse({ status: 201, description: 'Discount rule created successfully' })
+  @ApiResponse({
+    status: 201,
+    description: 'Discount rule created successfully',
+  })
   @ApiResponse({ status: 400, description: 'Invalid input data' })
   createDiscountRule(@Body() createDto: CreateDiscountRuleDto) {
     return this.feeService.createDiscountRule(createDto);
@@ -986,7 +991,10 @@ export class FeeController {
     summary: 'Get Discount Rules',
     description: 'Retrieve all active discount rules for the school.',
   })
-  @ApiResponse({ status: 200, description: 'Discount rules retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Discount rules retrieved successfully',
+  })
   getDiscountRules(@GetUser('schoolId') schoolId: number) {
     return this.feeService.getDiscountRules(schoolId);
   }
@@ -1008,9 +1016,15 @@ export class FeeController {
   @Delete('discount-rules/:id')
   @Roles(UserRole.ADMIN, UserRole.ACCOUNTANT)
   @Permissions(Permission.FEE_UPDATE)
-  @ApiOperation({ summary: 'Delete Discount Rule', description: 'Soft-deletes (deactivates) the rule.' })
+  @ApiOperation({
+    summary: 'Delete Discount Rule',
+    description: 'Soft-deletes (deactivates) the rule.',
+  })
   @ApiParam({ name: 'id', type: Number })
-  @ApiResponse({ status: 200, description: 'Discount rule deleted successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Discount rule deleted successfully',
+  })
   async deleteDiscountRule(
     @Param('id', ParseIntPipe) id: number,
     @GetUser('schoolId') schoolId: number,
@@ -1029,7 +1043,10 @@ export class FeeController {
       'Create a school-level penalty rule. Name stored in English + Nepali as sent by frontend.',
   })
   @ApiBody({ type: CreatePenaltyRuleDto })
-  @ApiResponse({ status: 201, description: 'Penalty rule created successfully' })
+  @ApiResponse({
+    status: 201,
+    description: 'Penalty rule created successfully',
+  })
   @ApiResponse({ status: 400, description: 'Invalid input data' })
   createPenaltyRule(@Body() createDto: CreatePenaltyRuleDto) {
     return this.feeService.createPenaltyRule(createDto);
@@ -1042,7 +1059,10 @@ export class FeeController {
     summary: 'Get Penalty Rules',
     description: 'Retrieve all active penalty rules for the school.',
   })
-  @ApiResponse({ status: 200, description: 'Penalty rules retrieved successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Penalty rules retrieved successfully',
+  })
   getPenaltyRules(@GetUser('schoolId') schoolId: number) {
     return this.feeService.getPenaltyRules(schoolId);
   }
@@ -1064,9 +1084,15 @@ export class FeeController {
   @Delete('penalty-rules/:id')
   @Roles(UserRole.ADMIN, UserRole.ACCOUNTANT)
   @Permissions(Permission.FEE_UPDATE)
-  @ApiOperation({ summary: 'Delete Penalty Rule', description: 'Soft-deletes (deactivates) the rule.' })
+  @ApiOperation({
+    summary: 'Delete Penalty Rule',
+    description: 'Soft-deletes (deactivates) the rule.',
+  })
   @ApiParam({ name: 'id', type: Number })
-  @ApiResponse({ status: 200, description: 'Penalty rule deleted successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Penalty rule deleted successfully',
+  })
   async deletePenaltyRule(
     @Param('id', ParseIntPipe) id: number,
     @GetUser('schoolId') schoolId: number,
@@ -1086,7 +1112,10 @@ export class FeeController {
   })
   @ApiBody({ type: ApplyInvoiceDiscountDto })
   @ApiResponse({ status: 201, description: 'Discount application recorded' })
-  @ApiResponse({ status: 400, description: 'Rule invalid/expired or nothing to discount' })
+  @ApiResponse({
+    status: 400,
+    description: 'Rule invalid/expired or nothing to discount',
+  })
   applyInvoiceDiscount(@Body() createDto: ApplyInvoiceDiscountDto) {
     return this.feeService.applyInvoiceDiscount(createDto);
   }
@@ -1629,7 +1658,12 @@ export class FeeController {
   approveFeeWaiver(
     @Param('id', ParseIntPipe) id: number,
     @Body()
-    body: { approvedBy: number; approvedAmount: number; remarks?: string; remarksNp?: string },
+    body: {
+      approvedBy: number;
+      approvedAmount: number;
+      remarks?: string;
+      remarksNp?: string;
+    },
   ) {
     return this.feeService.approveFeeWaiver(
       id,

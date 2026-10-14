@@ -4,6 +4,7 @@ import {
   BadRequestException,
   Logger,
 } from '@nestjs/common';
+import * as bcrypt from 'bcryptjs';
 import { DatabaseService } from '../database/database.service';
 
 export interface OnlineAdmission {
@@ -127,8 +128,6 @@ export class AdmissionService {
     schoolId: number,
     dto: CreateAdmissionDto,
   ): Promise<OnlineAdmission> {
-    const applicationNo = await this.generateApplicationNo(schoolId);
-
     const query = `
       INSERT INTO online_admissions (
         school_id, application_no, first_name, middle_name, last_name,
@@ -147,14 +146,14 @@ export class AdmissionService {
       RETURNING *
     `;
 
-    const result = await this.databaseService.query(query, [
+    const buildParams = (applicationNo: string) => [
       schoolId,
       applicationNo,
       dto.firstName,
-      dto.middleName,
+      dto.middleName ?? null,
       dto.lastName,
       dto.firstNameNp,
-      dto.middleNameNp,
+      dto.middleNameNp ?? null,
       dto.lastNameNp,
       dto.gender,
       dto.dateOfBirth,
@@ -163,49 +162,64 @@ export class AdmissionService {
       dto.birthPlaceNp ?? null,
       dto.nationality,
       dto.nationalityNp ?? null,
-      dto.religion,
+      dto.religion ?? null,
       dto.religionNp ?? null,
-      dto.caste,
+      dto.caste ?? null,
       dto.casteNp ?? null,
       dto.gradeApplied ?? null,
       dto.gradeAppliedNp ?? null,
       dto.parentName ?? null,
       dto.parentNameNp ?? null,
-      dto.email,
+      dto.email ?? null,
       dto.phone,
       dto.mobile,
       dto.fatherName,
       dto.fatherNameNp ?? null,
       dto.fatherPhone,
-      dto.fatherOccupation,
+      dto.fatherOccupation ?? null,
       dto.fatherOccupationNp ?? null,
       dto.motherName,
       dto.motherNameNp ?? null,
       dto.motherPhone,
-      dto.motherOccupation,
+      dto.motherOccupation ?? null,
       dto.motherOccupationNp ?? null,
-      dto.guardianName,
+      dto.guardianName ?? null,
       dto.guardianNameNp ?? null,
-      dto.guardianPhone,
-      dto.guardianRelation,
+      dto.guardianPhone ?? null,
+      dto.guardianRelation ?? null,
       dto.guardianRelationNp ?? null,
-      dto.provinceId,
-      dto.districtId,
-      dto.municipalityId,
-      dto.wardNumber,
+      dto.provinceId ?? null,
+      dto.districtId ?? null,
+      dto.municipalityId ?? null,
+      dto.wardNumber ?? null,
       dto.address,
-      dto.previousSchool,
+      dto.previousSchool ?? null,
       dto.previousSchoolNp ?? null,
-      dto.previousClass,
+      dto.previousClass ?? null,
       dto.previousClassNp ?? null,
-      dto.previousGrade,
+      dto.previousGrade ?? null,
       dto.previousGradeNp ?? null,
-      dto.transferCertificate,
+      dto.transferCertificate ?? null,
       dto.classId,
-      dto.photoUrl,
-    ]);
+      dto.photoUrl ?? null,
+    ];
 
-    return result[0];
+    // application_no is COUNT(*)+1 based — retry on a concurrent collision
+    // (unique violation) instead of surfacing a 500.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const applicationNo = await this.generateApplicationNo(schoolId);
+      try {
+        const result = await this.databaseService.query(
+          query,
+          buildParams(applicationNo),
+        );
+        return result[0];
+      } catch (error: any) {
+        if (error?.code === '23505' && attempt < 2) continue;
+        throw error;
+      }
+    }
+    throw new BadRequestException('Could not generate an application number');
   }
 
   async getApplications(
@@ -306,8 +320,8 @@ export class AdmissionService {
     const app = application as any;
     const enrolled = await this.databaseService.transaction(async (client) => {
       const tempPassword = Math.random().toString(36).slice(-8);
-      const hashedPassword = this.hashPassword(tempPassword);
-      const username = `student${Date.now()}`;
+      const hashedPassword = await this.hashPassword(tempPassword);
+      const username = `student${Date.now()}${Math.floor(Math.random() * 10000)}`;
 
       const userRows = await client.query(
         `INSERT INTO users (school_id, username, email, password, user_type, is_active, must_change_password, is_verified, created_at)
@@ -334,10 +348,21 @@ export class AdmissionService {
         );
       }
       let resolvedSectionId = sectionId;
+      if (resolvedSectionId) {
+        const owned = await client.query(
+          `SELECT section_id FROM sections WHERE section_id = $1 AND class_id = $2 AND school_id = $3 AND is_active = true`,
+          [resolvedSectionId, app.class_id, schoolId],
+        );
+        if (!owned.rows[0]) {
+          throw new BadRequestException(
+            'Section does not belong to this school/class',
+          );
+        }
+      }
       if (!resolvedSectionId) {
         const firstSection = await client.query(
-          `SELECT section_id FROM sections WHERE class_id = $1 ORDER BY section_id LIMIT 1`,
-          [app.class_id],
+          `SELECT section_id FROM sections WHERE class_id = $1 AND school_id = $2 AND is_active = true ORDER BY section_id LIMIT 1`,
+          [app.class_id, schoolId],
         );
         if (!firstSection.rows[0]) {
           throw new BadRequestException(
@@ -471,6 +496,26 @@ export class AdmissionService {
       [phone, schoolId],
     );
     let guardianId = existing?.guardian_id;
+    // student_guardians.relationship_type is check-constrained — map any
+    // free-form application value onto the allowed set.
+    const rawRelation = String(
+      app.guardian_relation || 'GUARDIAN',
+    ).toUpperCase();
+    const allowedRelations = [
+      'FATHER',
+      'MOTHER',
+      'GRANDFATHER',
+      'GRANDMOTHER',
+      'UNCLE',
+      'AUNT',
+      'BROTHER',
+      'SISTER',
+      'GUARDIAN',
+      'OTHER',
+    ];
+    const relation = allowedRelations.includes(rawRelation)
+      ? rawRelation
+      : 'GUARDIAN';
     if (!guardianId) {
       const created = await this.databaseService.insert<{
         guardian_id: number;
@@ -484,7 +529,7 @@ export class AdmissionService {
           parts[0],
           parts.slice(1).join(' ') || parts[0],
           phone,
-          (app.guardian_relation || 'GUARDIAN').toUpperCase(),
+          relation,
           app.father_occupation || app.mother_occupation || null,
         ],
       );
@@ -494,18 +539,17 @@ export class AdmissionService {
       `INSERT INTO student_guardians (student_id, guardian_id, relationship_type, is_primary, is_emergency_contact, is_fee_payer, is_active)
        VALUES ($1, $2, $3, true, true, true, true)
        ON CONFLICT (student_id, guardian_id) DO NOTHING`,
-      [
-        studentId,
-        guardianId,
-        (app.guardian_relation || 'GUARDIAN').toUpperCase(),
-      ],
+      [studentId, guardianId, relation],
     );
   }
 
   async deleteApplication(id: number, schoolId: number): Promise<void> {
-    const query =
-      'DELETE FROM online_admissions WHERE id = $1 AND school_id = $2';
-    const result = await this.databaseService.query(query, [id, schoolId]);
+    // DELETE without RETURNING yields zero rows — RETURNING is required to
+    // distinguish "deleted" from "not found".
+    const result = await this.databaseService.query<{ id: number }>(
+      'DELETE FROM online_admissions WHERE id = $1 AND school_id = $2 RETURNING id',
+      [id, schoolId],
+    );
 
     if (result.length === 0) {
       throw new NotFoundException('Application not found');
@@ -560,7 +604,7 @@ export class AdmissionService {
     return `STU${new Date().getFullYear()}000001`;
   }
 
-  private hashPassword(password: string): string {
-    return password;
+  private async hashPassword(password: string): Promise<string> {
+    return bcrypt.hash(password, 10);
   }
 }

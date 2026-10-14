@@ -51,8 +51,8 @@ export class EnrollmentService {
     let nextRoll = requestedRoll;
     if (nextRoll === null) {
       const [rollResult] = await this.db.query<{ max_roll: string }>(
-        `SELECT MAX(roll_number) as max_roll FROM student_enrollments WHERE class_id = $1 AND academic_year = $2`,
-        [createDto.classId, createDto.academicYear],
+        `SELECT MAX(roll_number) as max_roll FROM student_enrollments WHERE school_id = $1 AND class_id = $2 AND academic_year = $3`,
+        [createDto.schoolId, createDto.classId, createDto.academicYear],
       );
       nextRoll = parseInt(rollResult?.max_roll || '0', 10) + 1;
     }
@@ -150,9 +150,9 @@ export class EnrollmentService {
     }
 
     if (updates.length > 0) {
-      params.push(id);
+      params.push(id, schoolId);
       await this.db.query(
-        `UPDATE student_enrollments SET ${updates.join(', ')}, updated_at = NOW() WHERE enrollment_id = $${paramIndex}`,
+        `UPDATE student_enrollments SET ${updates.join(', ')}, updated_at = NOW() WHERE enrollment_id = $${paramIndex} AND school_id = $${paramIndex + 1}`,
         params,
       );
     }
@@ -163,8 +163,8 @@ export class EnrollmentService {
   async remove(id: number, schoolId: number): Promise<void> {
     await this.findOne(id, schoolId);
     await this.db.query(
-      `UPDATE student_enrollments SET is_current = false, status = 'WITHDRAWN', deleted_at = NOW() WHERE enrollment_id = $1`,
-      [id],
+      `UPDATE student_enrollments SET is_current = false, status = 'WITHDRAWN', deleted_at = NOW() WHERE enrollment_id = $1 AND school_id = $2`,
+      [id, schoolId],
     );
   }
 

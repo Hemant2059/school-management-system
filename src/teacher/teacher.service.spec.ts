@@ -251,7 +251,7 @@ describe('TeacherService', () => {
       await service.findAll(1, defaultPageOptions);
 
       expect(mockDatabaseService.query).toHaveBeenCalledWith(
-        expect.stringContaining('LIMIT $2 OFFSET $3'),
+        expect.stringContaining('LIMIT $2::int OFFSET $3::int'),
         [1, 10, 0],
       );
     });

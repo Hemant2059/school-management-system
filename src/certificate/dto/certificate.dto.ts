@@ -74,8 +74,7 @@ export class CreateTCDto {
   issuedTo?: string;
 
   @ApiPropertyOptional({
-    description:
-      'Issued-to in Nepali (provided by frontend, stored verbatim)',
+    description: 'Issued-to in Nepali (provided by frontend, stored verbatim)',
   })
   @IsOptional()
   @IsString()
@@ -94,8 +93,7 @@ export class CreateTCDto {
   remarksNp?: string;
 
   @ApiPropertyOptional({
-    description:
-      'Last class in Nepali (provided by frontend, stored verbatim)',
+    description: 'Last class in Nepali (provided by frontend, stored verbatim)',
   })
   @IsOptional()
   @IsString()

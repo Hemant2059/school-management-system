@@ -218,7 +218,7 @@ describe('SubjectService', () => {
 
       expect(mockDatabaseService.query).toHaveBeenCalledWith(
         expect.stringContaining('UPDATE subjects SET is_active = false'),
-        [1],
+        [1, 1],
       );
     });
 

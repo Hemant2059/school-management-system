@@ -29,17 +29,25 @@ export class AdminService {
         JOIN books b ON b.book_id = bi.book_id WHERE b.school_id = $1`,
     };
 
-    // Allowlist shape guard: table names are identifiers, never values —
-    // reject anything that is not a bare lowercase identifier.
-    const tablesToExport = (tables || defaultTables).filter((t) =>
-      /^[a-z_]+$/.test(t),
+    // Strict allowlist: only these tables may be exported. This both
+    // prevents SQL injection via table names and blocks access to
+    // sensitive tables (users.password_hash, user_sessions tokens, ...).
+    const allowed = new Set(defaultTables);
+    const tablesToExport = (tables || defaultTables).filter(
+      (t) => allowed.has(t) && /^[a-z_]+$/.test(t),
     );
+    // Column denylist for exported tables: never leak secrets.
+    const safeUserCols = `user_id, username, email, full_name, full_name_np, phone, user_type,
+      school_id, is_active, is_verified, is_system, last_login_at, created_at, updated_at`;
     const data: Record<string, any[]> = {};
 
     for (const table of tablesToExport) {
       try {
         const result = await this.db.query(
-          scopedQueries[table] ?? `SELECT * FROM ${table} WHERE school_id = $1`,
+          table === 'users'
+            ? `SELECT ${safeUserCols} FROM users WHERE school_id = $1`
+            : (scopedQueries[table] ??
+                `SELECT * FROM ${table} WHERE school_id = $1`),
           [schoolId],
         );
         data[table] = result;

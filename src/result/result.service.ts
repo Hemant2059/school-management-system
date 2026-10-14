@@ -59,6 +59,25 @@ export class ResultService {
     private auditService?: AuditService,
   ) {}
 
+  /**
+   * Single total-marks rule used by create/bulk/update: an explicit
+   * theory/practical breakdown wins (summed); otherwise the headline
+   * marksObtained wins. Absent students score 0. marks_obtained always
+   * mirrors the resulting total.
+   */
+  private computeTotal(input: {
+    isAbsent?: boolean;
+    marksObtained?: number | null;
+    theoryMarks?: number | null;
+    practicalMarks?: number | null;
+  }): number {
+    if (input.isAbsent) return 0;
+    if (input.theoryMarks != null || input.practicalMarks != null) {
+      return (input.theoryMarks || 0) + (input.practicalMarks || 0);
+    }
+    return input.marksObtained || 0;
+  }
+
   async create(createDto: {
     schoolId: number;
     studentId: number;
@@ -76,7 +95,12 @@ export class ResultService {
     remarksNp?: string;
   }): Promise<Mark> {
     const fullMarks = createDto.fullMarks || 100;
-    const totalMarks = createDto.isAbsent ? 0 : createDto.marksObtained || 0;
+    const totalMarks = this.computeTotal({
+      isAbsent: createDto.isAbsent,
+      marksObtained: createDto.marksObtained,
+      theoryMarks: createDto.theoryMarks,
+      practicalMarks: createDto.practicalMarks,
+    });
 
     const gradeScales = await this.gradeService.findAll(createDto.schoolId);
     const { grade, gradePoint } = this.gradeService.calculateGrade(
@@ -134,9 +158,12 @@ export class ResultService {
     const gradeScales = await this.gradeService.findAll(createDto.schoolId);
 
     for (const mark of createDto.marks) {
-      const totalMarks = mark.isAbsent
-        ? 0
-        : (mark.marksObtained || 0) + (mark.practicalMarks || 0);
+      const totalMarks = this.computeTotal({
+        isAbsent: mark.isAbsent,
+        marksObtained: mark.marksObtained,
+        theoryMarks: mark.theoryMarks,
+        practicalMarks: mark.practicalMarks,
+      });
       const percentage = fullMarks > 0 ? (totalMarks / fullMarks) * 100 : 0;
       const { grade, gradePoint } = this.gradeService.calculateGrade(
         percentage,
@@ -144,10 +171,11 @@ export class ResultService {
       );
 
       const result = await this.db.insert<Mark>(
-        `INSERT INTO marks (school_id, student_id, exam_id, subject_id, class_id, theory_marks, practical_marks, total_marks, grade, grade_point, is_absent, is_submitted, is_verified, is_active, remarks, remarks_np)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, false, false, true, $12, $13)
+        `INSERT INTO marks (school_id, student_id, exam_id, subject_id, class_id, marks_obtained, full_marks, theory_marks, practical_marks, total_marks, grade, grade_point, is_absent, is_submitted, is_verified, is_active, remarks, remarks_np)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, false, false, true, $14, $15)
          ON CONFLICT (school_id, student_id, exam_id, subject_id) DO UPDATE SET
            marks_obtained = EXCLUDED.marks_obtained,
+           full_marks = EXCLUDED.full_marks,
            theory_marks = EXCLUDED.theory_marks,
            practical_marks = EXCLUDED.practical_marks,
            total_marks = EXCLUDED.total_marks,
@@ -164,6 +192,8 @@ export class ResultService {
           createDto.examId,
           createDto.subjectId,
           createDto.classId || null,
+          totalMarks,
+          fullMarks,
           mark.theoryMarks || null,
           mark.practicalMarks || null,
           totalMarks,
@@ -174,7 +204,7 @@ export class ResultService {
           mark.remarksNp || null,
         ],
       );
-      results.push(result[0]);
+      results.push(result);
     }
 
     return results;
@@ -254,10 +284,32 @@ export class ResultService {
     };
 
     const fullMarks = updateDto.fullMarks || mark.full_marks;
-    const totalMarks = updateDto.isAbsent
-      ? 0
-      : (updateDto.marksObtained ?? mark.marks_obtained) +
-        (updateDto.practicalMarks ?? (mark.practical_marks || 0));
+    // Unified total rule (same as create/bulk): an explicit theory/practical
+    // breakdown wins; otherwise the headline marksObtained wins; untouched
+    // updates keep the stored total. marks_obtained always mirrors total.
+    const touchesMarks =
+      updateDto.isAbsent !== undefined ||
+      updateDto.marksObtained !== undefined ||
+      updateDto.theoryMarks !== undefined ||
+      updateDto.practicalMarks !== undefined;
+    let totalMarks = mark.total_marks ?? 0;
+    let obtainedParam: number | null = null;
+    if (touchesMarks) {
+      const isAbsent = updateDto.isAbsent ?? mark.is_absent;
+      if (isAbsent) {
+        totalMarks = 0;
+      } else if (
+        updateDto.theoryMarks !== undefined ||
+        updateDto.practicalMarks !== undefined
+      ) {
+        totalMarks =
+          (updateDto.theoryMarks ?? mark.theory_marks ?? 0) +
+          (updateDto.practicalMarks ?? mark.practical_marks ?? 0);
+      } else if (updateDto.marksObtained !== undefined) {
+        totalMarks = updateDto.marksObtained;
+      }
+      obtainedParam = totalMarks;
+    }
 
     const gradeScales = await this.gradeService.findAll(mark.school_id);
     const percentage = fullMarks > 0 ? (totalMarks / fullMarks) * 100 : 0;
@@ -281,7 +333,7 @@ export class ResultService {
        WHERE mark_id = $1`,
       [
         id,
-        updateDto.marksObtained ?? null,
+        obtainedParam,
         updateDto.theoryMarks ?? null,
         updateDto.practicalMarks ?? null,
         totalMarks,
