@@ -19,6 +19,7 @@ import { CreateDiscountRuleDto } from './dto/create-discount-rule.dto';
 import { UpdateDiscountRuleDto } from './dto/update-discount-rule.dto';
 import { CreatePenaltyRuleDto } from './dto/create-penalty-rule.dto';
 import { UpdatePenaltyRuleDto } from './dto/update-penalty-rule.dto';
+import { ApplyInvoiceDiscountDto } from './dto/apply-invoice-discount.dto';
 
 export interface FeeCategory extends DbFeeCategory {
   category_code?: string;
@@ -56,6 +57,18 @@ export interface PenaltyRule {
   percent: number;
   max_cap: number | null;
   is_active: boolean;
+}
+
+export interface InvoiceDiscount {
+  student_discount_id: number;
+  school_id: number;
+  student_id: number;
+  discount_rule_id: number;
+  academic_year_id: number;
+  invoice_id: number | null;
+  approved_by: number | null;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
+  created_at: Date;
 }
 
 @Injectable()
@@ -721,6 +734,211 @@ export class FeeService {
     if (n === 0) {
       throw new NotFoundException(`Penalty rule with ID ${id} not found`);
     }
+  }
+
+  // ---- Invoice discounts: applies discount_rules to invoices ----
+  // Rule evaluation (window, stacking, amount) lives here so apply-time
+  // validation and approve-time posting always agree.
+  private async evaluateInvoiceDiscount(
+    schoolId: number,
+    studentId: number,
+    discountRuleId: number,
+    academicYearId: number | undefined,
+    invoiceId: number | undefined,
+  ): Promise<{
+    rule: DiscountRule;
+    invoice: any;
+    yearId: number;
+    amount: number;
+  }> {
+    const rule = await this.db.queryOne<DiscountRule>(
+      `SELECT * FROM discount_rules WHERE discount_rule_id = $1 AND school_id = $2 AND is_active = true`,
+      [discountRuleId, schoolId],
+    );
+    if (!rule) {
+      throw new NotFoundException(
+        `Active discount rule with ID ${discountRuleId} not found`,
+      );
+    }
+    const today = new Date().toISOString().slice(0, 10);
+    if (rule.valid_from_ad && String(rule.valid_from_ad).slice(0, 10) > today) {
+      throw new BadRequestException('Discount rule is not yet valid');
+    }
+    if (rule.valid_to_ad && String(rule.valid_to_ad).slice(0, 10) < today) {
+      throw new BadRequestException('Discount rule has expired');
+    }
+
+    const student = await this.db.queryOne(
+      `SELECT student_id FROM students WHERE student_id = $1 AND school_id = $2`,
+      [studentId, schoolId],
+    );
+    if (!student) {
+      throw new NotFoundException(
+        `Student with ID ${studentId} not found in this school`,
+      );
+    }
+
+    let invoice: any = null;
+    if (invoiceId !== undefined && invoiceId !== null) {
+      invoice = await this.db.queryOne(
+        `SELECT * FROM fee_invoices WHERE invoice_id = $1 AND school_id = $2 AND student_id = $3`,
+        [invoiceId, schoolId, studentId],
+      );
+      if (!invoice) {
+        throw new NotFoundException(
+          `Invoice with ID ${invoiceId} not found for this student`,
+        );
+      }
+    } else {
+      invoice = await this.db.queryOne(
+        `SELECT * FROM fee_invoices
+         WHERE school_id = $1 AND student_id = $2 AND status IN ('ISSUED','PARTIAL','OVERDUE')
+         ORDER BY invoice_date_ad DESC LIMIT 1`,
+        [schoolId, studentId],
+      );
+      if (!invoice) {
+        throw new NotFoundException(
+          'No open invoice found for this student',
+        );
+      }
+    }
+    if (!['ISSUED', 'PARTIAL', 'OVERDUE'].includes(invoice.status)) {
+      throw new BadRequestException(
+        `Invoice is ${invoice.status}; discounts apply only to open invoices`,
+      );
+    }
+
+    const yearId = academicYearId ?? invoice.academic_year_id;
+    const subtotal = parseFloat(invoice.subtotal) || 0;
+    const alreadyDiscounted = parseFloat(invoice.discount_total) || 0;
+    const paid = parseFloat(invoice.paid_amount) || 0;
+    const raw =
+      rule.discount_type === 'PERCENT'
+        ? (subtotal * parseFloat(String(rule.value))) / 100
+        : parseFloat(String(rule.value));
+    const amount =
+      Math.round(Math.min(raw, Math.max(subtotal - alreadyDiscounted - paid, 0)) * 100) / 100;
+    if (amount <= 0) {
+      throw new BadRequestException('Nothing left to discount on this invoice');
+    }
+
+    if (!rule.is_stackable) {
+      const prior = await this.db.queryOne(
+        `SELECT student_discount_id FROM student_fee_discounts
+         WHERE invoice_id = $1 AND status = 'APPROVED' LIMIT 1`,
+        [invoice.invoice_id],
+      );
+      if (prior) {
+        throw new BadRequestException(
+          `Rule '${rule.code}' does not stack; invoice already has an approved discount`,
+        );
+      }
+    }
+
+    return { rule, invoice, yearId, amount };
+  }
+
+  async applyInvoiceDiscount(
+    createDto: ApplyInvoiceDiscountDto,
+  ): Promise<InvoiceDiscount & { computed_amount: number }> {
+    const { invoice, yearId, amount } = await this.evaluateInvoiceDiscount(
+      createDto.schoolId,
+      createDto.studentId,
+      createDto.discountRuleId,
+      createDto.academicYearId,
+      createDto.invoiceId,
+    );
+    const rec = await this.db.insert<InvoiceDiscount>(
+      `INSERT INTO student_fee_discounts (school_id, student_id, discount_rule_id, academic_year_id, invoice_id, status)
+       VALUES ($1, $2, $3, $4, $5, 'PENDING')
+       RETURNING *`,
+      [
+        createDto.schoolId,
+        createDto.studentId,
+        createDto.discountRuleId,
+        yearId,
+        invoice.invoice_id,
+      ],
+    );
+    return { ...rec, computed_amount: amount };
+  }
+
+  async getInvoiceDiscounts(
+    schoolId: number,
+    studentId?: number,
+    status?: string,
+  ): Promise<any[]> {
+    let query = `
+      SELECT d.*, r.code AS rule_code, r.name_en AS rule_name, r.name_np AS rule_name_np,
+             r.discount_type, r.value AS rule_value, i.invoice_no
+      FROM student_fee_discounts d
+      JOIN discount_rules r ON r.discount_rule_id = d.discount_rule_id
+      LEFT JOIN fee_invoices i ON i.invoice_id = d.invoice_id
+      WHERE d.school_id = $1`;
+    const params: any[] = [schoolId];
+    if (studentId !== undefined) {
+      params.push(studentId);
+      query += ` AND d.student_id = $${params.length}`;
+    }
+    if (status) {
+      params.push(status);
+      query += ` AND d.status = $${params.length}`;
+    }
+    query += ` ORDER BY d.created_at DESC`;
+    return this.db.query(query, params);
+  }
+
+  async approveInvoiceDiscount(
+    id: number,
+    approvedBy: number,
+  ): Promise<InvoiceDiscount & { applied_amount: number }> {
+    return this.db.transaction(async (client) => {
+      const recRows = await client.query(
+        `SELECT * FROM student_fee_discounts WHERE student_discount_id = $1`,
+        [id],
+      );
+      const rec = recRows.rows[0];
+      if (!rec) {
+        throw new NotFoundException(`Invoice discount with ID ${id} not found`);
+      }
+      if (rec.status !== 'PENDING') {
+        throw new BadRequestException('Discount is not in pending status');
+      }
+      // Re-evaluate at approve time (rule may have changed since application).
+      const { invoice, amount } = await this.evaluateInvoiceDiscount(
+        rec.school_id,
+        rec.student_id,
+        rec.discount_rule_id,
+        rec.academic_year_id,
+        rec.invoice_id,
+      );
+      await client.query(
+        `UPDATE fee_invoices SET discount_total = discount_total + $1 WHERE invoice_id = $2`,
+        [amount, invoice.invoice_id],
+      );
+      const updated = await client.query(
+        `UPDATE student_fee_discounts SET status = 'APPROVED', approved_by = $1 WHERE student_discount_id = $2 RETURNING *`,
+        [approvedBy, id],
+      );
+      return { ...updated.rows[0], applied_amount: amount };
+    });
+  }
+
+  async rejectInvoiceDiscount(id: number, approvedBy: number): Promise<InvoiceDiscount> {
+    const rec = await this.db.queryOne<InvoiceDiscount>(
+      `SELECT * FROM student_fee_discounts WHERE student_discount_id = $1`,
+      [id],
+    );
+    if (!rec) {
+      throw new NotFoundException(`Invoice discount with ID ${id} not found`);
+    }
+    if (rec.status !== 'PENDING') {
+      throw new BadRequestException('Discount is not in pending status');
+    }
+    return this.db.insert<InvoiceDiscount>(
+      `UPDATE student_fee_discounts SET status = 'REJECTED', approved_by = $1 WHERE student_discount_id = $2 RETURNING *`,
+      [approvedBy, id],
+    );
   }
 
   async createScholarship(createDto: {

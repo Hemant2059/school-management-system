@@ -30,6 +30,7 @@ import { CreateDiscountRuleDto } from './dto/create-discount-rule.dto';
 import { UpdateDiscountRuleDto } from './dto/update-discount-rule.dto';
 import { CreatePenaltyRuleDto } from './dto/create-penalty-rule.dto';
 import { UpdatePenaltyRuleDto } from './dto/update-penalty-rule.dto';
+import { ApplyInvoiceDiscountDto } from './dto/apply-invoice-discount.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard, PermissionsGuard } from '../common/guards/roles.guard';
 import { Roles, Permissions } from '../common/decorators/roles.decorator';
@@ -1072,6 +1073,87 @@ export class FeeController {
   ) {
     await this.feeService.deletePenaltyRule(id, schoolId);
     return { message: 'Penalty rule deleted successfully' };
+  }
+
+  // Invoice discounts (applies discount_rules to invoices)
+  @Post('invoice-discounts')
+  @Roles(UserRole.ADMIN, UserRole.ACCOUNTANT)
+  @Permissions(Permission.FEE_CREATE)
+  @ApiOperation({
+    summary: 'Apply Discount Rule to Invoice',
+    description:
+      'Evaluates a discount rule against an invoice (validity window, stacking, remaining balance) and records a PENDING application. The computed amount is returned but not posted until approval.',
+  })
+  @ApiBody({ type: ApplyInvoiceDiscountDto })
+  @ApiResponse({ status: 201, description: 'Discount application recorded' })
+  @ApiResponse({ status: 400, description: 'Rule invalid/expired or nothing to discount' })
+  applyInvoiceDiscount(@Body() createDto: ApplyInvoiceDiscountDto) {
+    return this.feeService.applyInvoiceDiscount(createDto);
+  }
+
+  @Get('invoice-discounts')
+  @Roles(UserRole.ADMIN, UserRole.ACCOUNTANT)
+  @Permissions(Permission.FEE_READ)
+  @ApiOperation({
+    summary: 'Get Invoice Discounts',
+    description: 'List discount applications with rule and invoice details.',
+  })
+  @ApiQuery({ name: 'schoolId', type: Number, required: true })
+  @ApiQuery({ name: 'studentId', type: Number, required: false })
+  @ApiQuery({ name: 'status', type: String, required: false })
+  @ApiResponse({ status: 200, description: 'Discounts retrieved successfully' })
+  getInvoiceDiscounts(
+    @Query('schoolId') schoolId: number,
+    @Query('studentId') studentId?: number,
+    @Query('status') status?: string,
+  ) {
+    return this.feeService.getInvoiceDiscounts(schoolId, studentId, status);
+  }
+
+  @Post('invoice-discounts/:id/approve')
+  @Roles(UserRole.ADMIN)
+  @Permissions(Permission.FEE_APPROVE)
+  @ApiOperation({
+    summary: 'Approve Invoice Discount',
+    description:
+      'Posts the discount to the invoice (discount_total increases; grand_total/balance follow automatically). Rejects non-stackable duplicates at apply time.',
+  })
+  @ApiParam({ name: 'id', type: Number })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        approvedBy: { type: 'number', example: 1 },
+      },
+    },
+  })
+  @ApiResponse({ status: 201, description: 'Discount approved and posted' })
+  approveInvoiceDiscount(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { approvedBy: number },
+  ) {
+    return this.feeService.approveInvoiceDiscount(id, body.approvedBy);
+  }
+
+  @Post('invoice-discounts/:id/reject')
+  @Roles(UserRole.ADMIN)
+  @Permissions(Permission.FEE_APPROVE)
+  @ApiOperation({ summary: 'Reject Invoice Discount' })
+  @ApiParam({ name: 'id', type: Number })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        approvedBy: { type: 'number', example: 1 },
+      },
+    },
+  })
+  @ApiResponse({ status: 201, description: 'Discount rejected' })
+  rejectInvoiceDiscount(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() body: { approvedBy: number },
+  ) {
+    return this.feeService.rejectInvoiceDiscount(id, body.approvedBy);
   }
 
   @Get('calculate-fine')
