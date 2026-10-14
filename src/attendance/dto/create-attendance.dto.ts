@@ -93,6 +93,15 @@ export class CreateAttendanceDto {
   readonly remarks?: string;
 
   @ApiPropertyOptional({
+    description: 'Remarks in Nepali (provided by frontend)',
+    example: 'टिप्पणी',
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  readonly remarksNp?: string;
+
+  @ApiPropertyOptional({
     description: 'Attendance date in Bikram Sambat',
     example: '2081-11-02',
     type: String,

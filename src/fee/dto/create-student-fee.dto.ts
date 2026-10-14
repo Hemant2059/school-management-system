@@ -172,4 +172,12 @@ export class CreateStudentFeeDto {
   @IsOptional()
   @IsString()
   readonly notes?: string;
+
+  @ApiPropertyOptional({
+    description: 'Notes in Nepali (provided by frontend, stored verbatim)',
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  readonly notesNp?: string;
 }

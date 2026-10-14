@@ -116,15 +116,71 @@ export class CreateStudentDto {
   @IsString()
   religion?: string;
 
+  @ApiPropertyOptional({
+    description: 'Religion (Nepali, provided by frontend)',
+    example: 'हिन्दु धर्म',
+  })
+  @IsOptional()
+  @IsString()
+  religionNp?: string;
+
+  @ApiPropertyOptional({
+    description: 'Nationality (Nepali, provided by frontend)',
+    example: 'नेपाली',
+  })
+  @IsOptional()
+  @IsString()
+  nationalityNp?: string;
+
   @ApiPropertyOptional({ description: 'Mother tongue', example: 'Nepali' })
   @IsOptional()
   @IsString()
   motherTongue?: string;
 
+  @ApiPropertyOptional({
+    description: 'Mother tongue (Nepali, provided by frontend)',
+    example: 'नेपाली',
+  })
+  @IsOptional()
+  @IsString()
+  motherTongueNp?: string;
+
   @ApiPropertyOptional({ description: 'Caste/Ethnicity', example: 'Brahmin' })
   @IsOptional()
   @IsString()
   casteEthnicity?: string;
+
+  @ApiPropertyOptional({
+    description: 'Caste/Ethnicity (Nepali, provided by frontend)',
+    example: 'ब्राह्मण',
+  })
+  @IsOptional()
+  @IsString()
+  casteEthnicityNp?: string;
+
+  @ApiPropertyOptional({
+    description: 'Birthplace (Nepali, provided by frontend)',
+    example: 'काठमाडौं',
+  })
+  @IsOptional()
+  @IsString()
+  birthplaceNp?: string;
+
+  @ApiPropertyOptional({
+    description: 'Father name (Nepali, provided by frontend)',
+    example: 'राम शर्मा',
+  })
+  @IsOptional()
+  @IsString()
+  fatherNameNp?: string;
+
+  @ApiPropertyOptional({
+    description: 'Mother name (Nepali, provided by frontend)',
+    example: 'सीता शर्मा',
+  })
+  @IsOptional()
+  @IsString()
+  motherNameNp?: string;
 
   // === Permanent Address (English) - Nepal provinces 1-7 ===
   @ApiPropertyOptional({
@@ -392,6 +448,14 @@ export class CreateStudentDto {
   @IsOptional()
   @IsString()
   disabilityType?: string;
+
+  @ApiPropertyOptional({
+    description: 'Disability type (Nepali, provided by frontend)',
+    example: 'दृष्टिविहीन',
+  })
+  @IsOptional()
+  @IsString()
+  disabilityTypeNp?: string;
 
   @ApiPropertyOptional({
     description: 'Admission date (BS) – valid YYYY-MM-DD',

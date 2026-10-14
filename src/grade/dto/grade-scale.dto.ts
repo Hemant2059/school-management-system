@@ -32,6 +32,13 @@ export class CreateGradeScaleDto {
   @IsString()
   readonly gradeLabel?: string;
 
+  @ApiPropertyOptional({
+    description: 'Remark in Nepali (provided by frontend, stored verbatim)',
+  })
+  @IsOptional()
+  @IsString()
+  readonly remarkNp?: string;
+
   @ApiPropertyOptional({ description: 'Description' })
   @IsOptional()
   @IsString()
@@ -63,6 +70,13 @@ export class UpdateGradeScaleDto {
   @IsOptional()
   @IsString()
   readonly gradeLabel?: string;
+
+  @ApiPropertyOptional({
+    description: 'Remark in Nepali (provided by frontend, stored verbatim)',
+  })
+  @IsOptional()
+  @IsString()
+  readonly remarkNp?: string;
 
   @ApiPropertyOptional({ description: 'Description' })
   @IsOptional()

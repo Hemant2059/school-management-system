@@ -5,6 +5,7 @@ import {
   Body,
   Param,
   Patch,
+  Delete,
   Query,
   ParseIntPipe,
 } from '@nestjs/common';
@@ -22,6 +23,8 @@ import { HrService } from './hr.service';
 import { CreateStaffDto } from './dto/create-staff.dto';
 import { ProcessPayrollDto } from './dto/process-payroll.dto';
 import { CreateLeaveRequestDto } from './dto/create-leave-request.dto';
+import { CreateLeaveTypeDto } from './dto/create-leave-type.dto';
+import { UpdateLeaveTypeDto } from './dto/update-leave-type.dto';
 
 @ApiTags('HR & Payroll Management')
 @ApiBearerAuth()
@@ -174,6 +177,64 @@ export class HrController {
     return this.hrService.createLeaveRequest(createDto);
   }
 
+  // Leave Types (admin-managed)
+  @Post('leave-types')
+  @ApiOperation({
+    summary: 'Create leave type',
+    description:
+      'Create a school-level leave type. Name stored in English + Nepali as sent by frontend.',
+  })
+  @ApiBody({ type: CreateLeaveTypeDto })
+  @ApiResponse({ status: 201, description: 'Leave type created successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid input data' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  createLeaveType(@Body() createDto: CreateLeaveTypeDto) {
+    return this.hrService.createLeaveType(createDto);
+  }
+
+  @Get('leave-types')
+  @ApiOperation({
+    summary: 'Get leave types',
+    description: 'Retrieve all active leave types for the school.',
+  })
+  @ApiQuery({ name: 'schoolId', type: Number, required: true })
+  @ApiResponse({ status: 200, description: 'Leave types retrieved successfully' })
+  getLeaveTypes(@Query('schoolId') schoolId: number) {
+    return this.hrService.getLeaveTypes(schoolId);
+  }
+
+  @Patch('leave-types/:id')
+  @ApiOperation({ summary: 'Update leave type' })
+  @ApiParam({ name: 'id', type: Number })
+  @ApiBody({ type: UpdateLeaveTypeDto })
+  @ApiResponse({ status: 200, description: 'Leave type updated successfully' })
+  @ApiResponse({ status: 404, description: 'Leave type not found' })
+  updateLeaveType(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('schoolId') schoolId: number,
+    @Body() updateDto: UpdateLeaveTypeDto,
+  ) {
+    return this.hrService.updateLeaveType(id, schoolId, updateDto);
+  }
+
+  @Delete('leave-types/:id')
+  @ApiOperation({
+    summary: 'Delete leave type',
+    description:
+      'Soft-deletes (deactivates) the leave type. Blocked while pending requests reference it.',
+  })
+  @ApiParam({ name: 'id', type: Number })
+  @ApiQuery({ name: 'schoolId', type: Number, required: true })
+  @ApiResponse({ status: 200, description: 'Leave type deleted successfully' })
+  @ApiResponse({ status: 404, description: 'Leave type not found' })
+  async deleteLeaveType(
+    @Param('id', ParseIntPipe) id: number,
+    @Query('schoolId') schoolId: number,
+  ) {
+    await this.hrService.deleteLeaveType(id, schoolId);
+    return { message: 'Leave type deleted successfully' };
+  }
+
   @Patch('leaves/:leaveRequestId/approve')
   @ApiOperation({
     summary: 'Approve leave request',
@@ -230,6 +291,11 @@ export class HrController {
           description: 'Reason for rejection',
           example: 'Insufficient coverage available',
         },
+        rejectionReasonNp: {
+          type: 'string',
+          description: 'Reason for rejection in Nepali (provided by frontend)',
+          example: 'पर्याप्त कभरेज उपलब्ध छैन',
+        },
       },
     },
   })
@@ -242,8 +308,13 @@ export class HrController {
   rejectLeaveRequest(
     @Param('leaveRequestId', ParseIntPipe) leaveRequestId: number,
     @Body('rejectionReason') rejectionReason: string,
+    @Body('rejectionReasonNp') rejectionReasonNp?: string,
   ) {
-    return this.hrService.rejectLeaveRequest(leaveRequestId, rejectionReason);
+    return this.hrService.rejectLeaveRequest(
+      leaveRequestId,
+      rejectionReason,
+      rejectionReasonNp,
+    );
   }
 
   // Nepal Holidays

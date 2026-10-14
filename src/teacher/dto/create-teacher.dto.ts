@@ -132,6 +132,15 @@ export class CreateTeacherDto {
   readonly nationality?: string;
 
   @ApiPropertyOptional({
+    description: 'Nationality (Nepali, provided by frontend)',
+    example: 'नेपाली',
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  readonly nationalityNp?: string;
+
+  @ApiPropertyOptional({
     description: 'Religion',
     example: 'Hindu',
     type: String,
@@ -139,6 +148,42 @@ export class CreateTeacherDto {
   @IsOptional()
   @IsString()
   readonly religion?: string;
+
+  @ApiPropertyOptional({
+    description: 'Religion (Nepali, provided by frontend)',
+    example: 'हिन्दु',
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  readonly religionNp?: string;
+
+  @ApiPropertyOptional({
+    description: 'Caste/ethnicity name (Nepali, provided by frontend)',
+    example: 'ब्राह्मण',
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  readonly casteEthnicityNameNp?: string;
+
+  @ApiPropertyOptional({
+    description: 'Marital status (Nepali, provided by frontend)',
+    example: 'विवाहित',
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  readonly maritalStatusNp?: string;
+
+  @ApiPropertyOptional({
+    description: 'Emergency contact relation (Nepali, provided by frontend)',
+    example: 'श्रीमान',
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  readonly emergencyContactRelationNp?: string;
 
   // === Qualifications ===
   @ApiPropertyOptional({
@@ -151,6 +196,15 @@ export class CreateTeacherDto {
   readonly highestQualification?: string;
 
   @ApiPropertyOptional({
+    description: 'Highest educational qualification (Nepali, provided by frontend)',
+    example: 'शिक्षामा स्नातकोत्तर',
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  readonly highestQualificationNp?: string;
+
+  @ApiPropertyOptional({
     description: 'Subject specialization',
     example: 'Mathematics',
     type: String,
@@ -160,6 +214,15 @@ export class CreateTeacherDto {
   readonly specialization?: string;
 
   @ApiPropertyOptional({
+    description: 'Subject specialization (Nepali, provided by frontend)',
+    example: 'गणित',
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  readonly specializationNp?: string;
+
+  @ApiPropertyOptional({
     description: 'University or board name',
     example: 'Tribhuvan University',
     type: String,
@@ -167,6 +230,15 @@ export class CreateTeacherDto {
   @IsOptional()
   @IsString()
   readonly universityBoard?: string;
+
+  @ApiPropertyOptional({
+    description: 'University or board name (Nepali, provided by frontend)',
+    example: 'त्रिभुवन विश्वविद्यालय',
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  readonly universityBoardNp?: string;
 
   @ApiPropertyOptional({
     description: 'Year of passing/completing degree',
@@ -258,6 +330,24 @@ export class CreateTeacherDto {
   readonly employmentType?: string;
 
   @ApiPropertyOptional({
+    description: 'Type of employment contract (Nepali, provided by frontend)',
+    example: 'स्थायी',
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  readonly employmentTypeNp?: string;
+
+  @ApiPropertyOptional({
+    description: 'Designation (Nepali, provided by frontend)',
+    example: 'प्रधानाध्यापक',
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  readonly designationNp?: string;
+
+  @ApiPropertyOptional({
     description: 'Department or subject group',
     example: 'Mathematics Department',
     type: String,
@@ -265,6 +355,15 @@ export class CreateTeacherDto {
   @IsOptional()
   @IsString()
   readonly department?: string;
+
+  @ApiPropertyOptional({
+    description: 'Department or subject group (Nepali, provided by frontend)',
+    example: 'गणित विभाग',
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  readonly departmentNp?: string;
 
   // === Status ===
   @ApiPropertyOptional({

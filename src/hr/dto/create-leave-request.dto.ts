@@ -1,6 +1,6 @@
 import { IsNotEmpty, IsInt, IsDate, IsString, IsOptional, Min } from 'class-validator';
 import { Type } from 'class-transformer';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateLeaveRequestDto {
   @IsNotEmpty()
@@ -61,4 +61,12 @@ export class CreateLeaveRequestDto {
   @IsNotEmpty()
   @IsString()
   readonly reason: string;
+
+  @ApiPropertyOptional({
+    description: 'Reason for leave in Nepali (provided by frontend)',
+    example: 'चिकित्सा आकस्मिक',
+  })
+  @IsOptional()
+  @IsString()
+  readonly reasonNp?: string;
 }

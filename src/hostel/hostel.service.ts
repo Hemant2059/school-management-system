@@ -45,9 +45,12 @@ export interface HostelStudent {
 
 export interface CreateHostelDto {
   name: string;
+  nameNp?: string;
   type: 'boys' | 'girls' | 'mixed';
   totalBeds: number;
   address?: string;
+  addressNp?: string;
+  wardenNameNp?: string;
   wardNumber?: number;
 }
 
@@ -57,6 +60,7 @@ export interface CreateRoomDto {
   floor: number;
   totalBeds: number;
   roomType: 'single' | 'double' | 'triple' | 'dormitory';
+  roomTypeNp?: string;
   monthlyRent: number;
 }
 
@@ -75,17 +79,21 @@ export class HostelService {
 
   async createHostel(schoolId: number, dto: CreateHostelDto): Promise<Hostel> {
     const query = `
-      INSERT INTO hostels (school_id, name, type, total_beds, available_beds, address, ward_number)
-      VALUES ($1, $2, $3, $4, $4, $5, $6)
+      INSERT INTO hostels (school_id, name, name_np, type, total_beds, available_beds, address, address_np, warden_name, warden_name_np, ward_number)
+      VALUES ($1, $2, $3, $4, $5, $5, $6, $7, $8, $9, $10)
       RETURNING *
     `;
 
     const result = await this.databaseService.query(query, [
       schoolId,
       dto.name,
+      dto.nameNp ?? null,
       dto.type,
       dto.totalBeds,
       dto.address,
+      dto.addressNp ?? null,
+      (dto as any).wardenName ?? null,
+      dto.wardenNameNp ?? null,
       dto.wardNumber,
     ]);
 
@@ -123,6 +131,10 @@ export class HostelService {
       fields.push(`name = $${paramCount++}`);
       values.push(dto.name);
     }
+    if (dto.nameNp !== undefined) {
+      fields.push(`name_np = $${paramCount++}`);
+      values.push(dto.nameNp ?? null);
+    }
     if (dto.type) {
       fields.push(`type = $${paramCount++}`);
       values.push(dto.type);
@@ -134,6 +146,18 @@ export class HostelService {
     if (dto.address) {
       fields.push(`address = $${paramCount++}`);
       values.push(dto.address);
+    }
+    if (dto.addressNp !== undefined) {
+      fields.push(`address_np = $${paramCount++}`);
+      values.push(dto.addressNp ?? null);
+    }
+    if (dto.wardenNameNp !== undefined) {
+      fields.push(`warden_name_np = $${paramCount++}`);
+      values.push(dto.wardenNameNp ?? null);
+    }
+    if ((dto as any).wardenName !== undefined) {
+      fields.push(`warden_name = $${paramCount++}`);
+      values.push((dto as any).wardenName ?? null);
     }
     if (dto.wardNumber) {
       fields.push(`ward_number = $${paramCount++}`);
@@ -168,8 +192,8 @@ export class HostelService {
 
   async createRoom(dto: CreateRoomDto): Promise<Room> {
     const query = `
-      INSERT INTO hostel_rooms (hostel_id, room_number, floor, capacity, available_beds, room_type, price)
-      VALUES ($1, $2, $3, $4, $4, $5, $6)
+      INSERT INTO hostel_rooms (hostel_id, room_number, floor, capacity, available_beds, room_type, room_type_np, price)
+      VALUES ($1, $2, $3, $4, $4, $5, $6, $7)
       RETURNING *
     `;
 
@@ -179,6 +203,7 @@ export class HostelService {
       dto.floor,
       dto.totalBeds,
       dto.roomType,
+      dto.roomTypeNp ?? null,
       dto.monthlyRent,
     ]);
 

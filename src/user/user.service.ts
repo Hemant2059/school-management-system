@@ -41,8 +41,8 @@ export class UserService {
     const userType = createUserDto.userType || 'TEACHER';
 
     const user = await this.db.insert<User>(
-      `INSERT INTO users (school_id, username, email, phone, password, password_hash, full_name, user_type, is_verified, is_active, failed_login_attempts)
-       VALUES ($1, $2, $3, $4, $5, $5, $6, $7, false, true, 0)
+      `INSERT INTO users (school_id, username, email, phone, password, password_hash, full_name, full_name_np, user_type, is_verified, is_active, failed_login_attempts)
+       VALUES ($1, $2, $3, $4, $5, $5, $6, $7, $8, false, true, 0)
        RETURNING *`,
       [
         schoolId,
@@ -51,6 +51,7 @@ export class UserService {
         phone,
         passwordHash,
         createUserDto.fullName,
+        createUserDto.fullNameNp || null,
         userType,
       ],
     );
@@ -164,6 +165,10 @@ export class UserService {
     if (updateUserDto.fullName) {
       updates.push(`full_name = $${paramIndex++}`);
       params.push(updateUserDto.fullName);
+    }
+    if (updateUserDto.fullNameNp !== undefined) {
+      updates.push(`full_name_np = $${paramIndex++}`);
+      params.push(updateUserDto.fullNameNp || null);
     }
     if (updateUserDto.password) {
       const passwordHash = await bcrypt.hash(updateUserDto.password, 10);

@@ -13,6 +13,7 @@ export interface AcademicCalendar {
   start_date_bs: string | null;
   end_date_bs: string | null;
   description: string | null;
+  description_np: string | null;
   is_holiday: boolean;
   is_exam: boolean;
   is_event: boolean;
@@ -33,6 +34,7 @@ export interface CreateCalendarEventDto {
   endDate?: string;
   endDateBs?: string;
   description?: string;
+  descriptionNp?: string;
   isHoliday?: boolean;
   isExam?: boolean;
   isEvent?: boolean;
@@ -45,8 +47,8 @@ export class AcademicCalendarService {
 
   async create(dto: CreateCalendarEventDto): Promise<AcademicCalendar> {
     return this.db.insert<AcademicCalendar>(
-      `INSERT INTO academic_calendars (school_id, academic_year, title, title_np, event_type, start_date, start_date_bs, end_date, end_date_bs, description, is_holiday, is_exam, is_event, is_active, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, true, $14)
+      `INSERT INTO academic_calendars (school_id, academic_year, title, title_np, event_type, start_date, start_date_bs, end_date, end_date_bs, description, description_np, is_holiday, is_exam, is_event, is_active, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, true, $15)
        RETURNING *`,
       [
         dto.schoolId,
@@ -59,6 +61,7 @@ export class AcademicCalendarService {
         dto.endDate || null,
         dto.endDateBs || null,
         dto.description || null,
+        dto.descriptionNp || null,
         dto.isHoliday || false,
         dto.isExam || false,
         dto.isEvent || false,
@@ -114,11 +117,12 @@ export class AcademicCalendarService {
         end_date = COALESCE($7, end_date),
         end_date_bs = COALESCE($8, end_date_bs),
         description = COALESCE($9, description),
-        is_holiday = COALESCE($10, is_holiday),
-        is_exam = COALESCE($11, is_exam),
-        is_event = COALESCE($12, is_event),
+        description_np = COALESCE($10, description_np),
+        is_holiday = COALESCE($11, is_holiday),
+        is_exam = COALESCE($12, is_exam),
+        is_event = COALESCE($13, is_event),
         updated_at = NOW()
-       WHERE id = $1 AND school_id = $13`,
+       WHERE id = $1 AND school_id = $14`,
       [
         id,
         dto.title || null,
@@ -129,6 +133,7 @@ export class AcademicCalendarService {
         dto.endDate || null,
         dto.endDateBs || null,
         dto.description || null,
+        dto.descriptionNp || null,
         dto.isHoliday ?? null,
         dto.isExam ?? null,
         dto.isEvent ?? null,

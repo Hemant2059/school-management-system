@@ -119,6 +119,15 @@ export class CreateGuardianDto {
   ])
   readonly relationToStudent: string;
 
+  @ApiPropertyOptional({
+    description: 'Relationship to student (Nepali, provided by frontend)',
+    example: 'बुबा',
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  readonly relationToStudentNp?: string;
+
   // === Occupation ===
   @ApiPropertyOptional({
     description: 'Guardian occupation/profession',
@@ -128,6 +137,15 @@ export class CreateGuardianDto {
   @IsOptional()
   @IsString()
   readonly occupation?: string;
+
+  @ApiPropertyOptional({
+    description: 'Guardian occupation/profession (Nepali, provided by frontend)',
+    example: 'व्यापार',
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  readonly occupationNp?: string;
 
   @ApiPropertyOptional({
     description: 'Organization/company where guardian works',
@@ -155,6 +173,15 @@ export class CreateGuardianDto {
   @IsOptional()
   @IsString()
   readonly educationLevel?: string;
+
+  @ApiPropertyOptional({
+    description: 'Highest education level (Nepali, provided by frontend)',
+    example: 'स्नातकोत्तर',
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  readonly educationLevelNp?: string;
 
   @ApiPropertyOptional({
     description: 'Annual income in NPR',

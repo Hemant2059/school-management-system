@@ -23,6 +23,10 @@ export class AttendanceRecordDto {
   @IsOptional()
   @IsString()
   readonly remarks?: string;
+
+  @IsOptional()
+  @IsString()
+  readonly remarksNp?: string;
 }
 
 export class BulkAttendanceDto {

@@ -2,6 +2,7 @@ import {
   Controller,
   Post,
   Get,
+  Patch,
   Delete,
   Body,
   Param,
@@ -10,7 +11,11 @@ import {
   Req,
 } from '@nestjs/common';
 import { DocumentService } from './document.service';
-import type { CreateDocumentDto, Document } from './document.service';
+import type {
+  CreateDocumentDto,
+  CreateDocumentTemplateDto,
+  Document,
+} from './document.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -134,6 +139,27 @@ export class DocumentController {
       entityId,
       entityType,
     );
+  }
+
+  @Get('templates')
+  @Roles('admin', 'teacher')
+  @ApiOperation({
+    summary: 'Get Document Templates',
+    description: 'Retrieve all active document templates for the school.',
+  })
+  @ApiResponse({ status: 200, description: 'Templates retrieved successfully' })
+  async getTemplates(@Req() req) {
+    return this.documentService.getTemplates(req.user.schoolId);
+  }
+
+  @Get('templates/:id')
+  @Roles('admin', 'teacher')
+  @ApiOperation({ summary: 'Get Document Template by ID' })
+  @ApiParam({ name: 'id', type: Number })
+  @ApiResponse({ status: 200, description: 'Template retrieved successfully' })
+  @ApiResponse({ status: 404, description: 'Template not found' })
+  async getTemplateById(@Param('id') id: number, @Req() req) {
+    return this.documentService.getTemplateById(id, req.user.schoolId);
   }
 
   @Get('student/:studentId')
@@ -270,6 +296,71 @@ export class DocumentController {
   ): Promise<{ message: string }> {
     await this.documentService.deleteDocument(id, req.user.schoolId);
     return { message: 'Document deleted successfully' };
+  }
+
+  // Document Templates (admin-managed)
+  @Post('templates')
+  @Roles('admin')
+  @ApiOperation({
+    summary: 'Create Document Template',
+    description:
+      'Create a reusable document template. Name and content stored in English + Nepali as sent by frontend.',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['name'],
+      properties: {
+        name: { type: 'string', example: 'Bonafide Template' },
+        nameNp: { type: 'string', example: 'बोनाफाइड नमुना' },
+        templateType: { type: 'string', example: 'BONAFIDE' },
+        templateContent: {
+          type: 'string',
+          example: 'This certifies {{name}} studies in {{class}}.',
+        },
+        templateContentNp: {
+          type: 'string',
+          example: 'यो प्रमाणित गर्दछ कि {{name}} {{class}} मा अध्ययनरत छन्।',
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 201, description: 'Template created successfully' })
+  async createTemplate(
+    @Body() dto: CreateDocumentTemplateDto,
+    @Req() req,
+  ) {
+    return this.documentService.createTemplate(req.user.schoolId, dto);
+  }
+
+  @Patch('templates/:id')
+  @Roles('admin')
+  @ApiOperation({ summary: 'Update Document Template' })
+  @ApiParam({ name: 'id', type: Number })
+  @ApiResponse({ status: 200, description: 'Template updated successfully' })
+  @ApiResponse({ status: 404, description: 'Template not found' })
+  async updateTemplate(
+    @Param('id') id: number,
+    @Body() dto: Partial<CreateDocumentTemplateDto> & { isActive?: boolean },
+    @Req() req,
+  ) {
+    return this.documentService.updateTemplate(id, req.user.schoolId, dto);
+  }
+
+  @Delete('templates/:id')
+  @Roles('admin')
+  @ApiOperation({
+    summary: 'Delete Document Template',
+    description: 'Soft-deletes (deactivates) the template.',
+  })
+  @ApiParam({ name: 'id', type: Number })
+  @ApiResponse({ status: 200, description: 'Template deleted' })
+  async deleteTemplate(
+    @Param('id') id: number,
+    @Req() req,
+  ): Promise<{ message: string }> {
+    await this.documentService.deleteTemplate(id, req.user.schoolId);
+    return { message: 'Document template deleted successfully' };
   }
 
   @Get('certificate/:studentId/:type')

@@ -34,11 +34,17 @@ export interface Route {
   route_id: number;
   school_id: number;
   route_name: string;
+  route_name_np: string | null;
   route_code: string;
   province_id: number | null;
   district_id: number | null;
   municipality_id: number | null;
   route_description: string;
+  route_description_np: string | null;
+  start_point: string | null;
+  start_point_np: string | null;
+  end_point: string | null;
+  end_point_np: string | null;
   distance_km: number;
   estimated_time: string | null;
   is_active: boolean;
@@ -104,17 +110,19 @@ export class TransportService {
 
     const result = await this.db.insert<Vehicle>(
       `INSERT INTO vehicles (
-        school_id, transport_id, vehicle_number, vehicle_name, vehicle_type, capacity,
+        school_id, transport_id, vehicle_number, vehicle_name, vehicle_name_np, vehicle_type, vehicle_type_np, capacity,
         manufacturer, year, color, chassis_number, engine_number,
         insurance_expiry, permit_expiry, is_active
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
       RETURNING *`,
       [
         createDto.schoolId,
         createDto.transportId || null,
         createDto.vehicleNumber,
         createDto.vehicleName,
+        createDto.vehicleNameNp ?? null,
         createDto.vehicleType,
+        createDto.vehicleTypeNp ?? null,
         createDto.capacity,
         createDto.manufacturer || null,
         createDto.year || null,
@@ -139,18 +147,24 @@ export class TransportService {
   async createRoute(createDto: CreateRouteDto): Promise<Route> {
     const result = await this.db.insert<Route>(
       `INSERT INTO routes (
-        school_id, route_name, route_code, province_id, district_id, municipality_id,
-        route_description, distance_km, estimated_time, is_active
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        school_id, route_name, route_name_np, route_code, province_id, district_id, municipality_id,
+        route_description, route_description_np, start_point, start_point_np, end_point, end_point_np, distance_km, estimated_time, is_active
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
       RETURNING *`,
       [
         createDto.schoolId,
         createDto.routeName,
+        createDto.routeNameNp ?? null,
         createDto.routeCode,
         createDto.provinceId,
         createDto.districtId,
         createDto.municipalityId,
         createDto.routeDescription,
+        createDto.routeDescriptionNp ?? null,
+        createDto.startPoint ?? null,
+        createDto.startPointNp ?? null,
+        createDto.endPoint ?? null,
+        createDto.endPointNp ?? null,
         createDto.distanceKm,
         createDto.estimatedTime,
         true,
@@ -162,14 +176,15 @@ export class TransportService {
   async createRouteStop(createDto: CreateRouteStopDto): Promise<RouteStop> {
     const result = await this.db.insert<RouteStop>(
       `INSERT INTO route_stops (
-        school_id, route_id, stop_name, stop_order, latitude, longitude,
+        school_id, route_id, stop_name, stop_name_np, stop_order, latitude, longitude,
         pickup_time, drop_time, is_active
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING *`,
       [
         createDto.schoolId,
         createDto.routeId,
         createDto.stopName,
+        createDto.stopNameNp ?? null,
         createDto.stopOrder,
         createDto.latitude,
         createDto.longitude,

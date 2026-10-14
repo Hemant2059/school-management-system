@@ -29,6 +29,15 @@ export class CreateSectionDto {
   @IsString()
   readonly sectionName: string;
 
+  @ApiPropertyOptional({
+    description: 'Section name in Nepali (provided by frontend)',
+    example: 'क',
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  readonly sectionNameNp?: string;
+
   @ApiProperty({
     description: 'Short section code',
     example: 'SEC-A',

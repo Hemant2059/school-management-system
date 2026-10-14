@@ -14,6 +14,14 @@ export class CreateHostelDto {
   @IsString()
   name: string;
 
+  @ApiPropertyOptional({
+    description: 'Hostel name in Nepali (provided by frontend)',
+    example: 'छात्रावास',
+  })
+  @IsOptional()
+  @IsString()
+  nameNp?: string;
+
   @ApiProperty({ enum: ['boys', 'girls', 'mixed'], example: 'boys' })
   @IsEnum(['boys', 'girls', 'mixed'])
   type: 'boys' | 'girls' | 'mixed';
@@ -30,6 +38,30 @@ export class CreateHostelDto {
   @IsOptional()
   @IsString()
   address?: string;
+
+  @ApiPropertyOptional({
+    description: 'Hostel address in Nepali (provided by frontend)',
+    example: 'विद्यालय परिसर',
+  })
+  @IsOptional()
+  @IsString()
+  addressNp?: string;
+
+  @ApiPropertyOptional({
+    description: 'Warden name',
+    example: 'Kedar Nath',
+  })
+  @IsOptional()
+  @IsString()
+  wardenName?: string;
+
+  @ApiPropertyOptional({
+    description: 'Warden name in Nepali (provided by frontend)',
+    example: 'वार्डेन नाम',
+  })
+  @IsOptional()
+  @IsString()
+  wardenNameNp?: string;
 
   @ApiPropertyOptional({ description: 'Ward number', example: 1 })
   @IsOptional()
@@ -69,6 +101,14 @@ export class CreateRoomDto {
   })
   @IsEnum(['single', 'double', 'triple', 'dormitory'])
   roomType: 'single' | 'double' | 'triple' | 'dormitory';
+
+  @ApiPropertyOptional({
+    description: 'Room type in Nepali (provided by frontend)',
+    example: 'छात्रावास कोठा',
+  })
+  @IsOptional()
+  @IsString()
+  roomTypeNp?: string;
 
   @ApiProperty({ description: 'Monthly rent', example: 2000 })
   @IsNotEmpty()
@@ -127,6 +167,13 @@ export class UpdateHostelDto {
   @IsString()
   name?: string;
 
+  @ApiPropertyOptional({
+    description: 'Hostel name in Nepali (provided by frontend)',
+  })
+  @IsOptional()
+  @IsString()
+  nameNp?: string;
+
   @ApiPropertyOptional({ enum: ['boys', 'girls', 'mixed'], example: 'boys' })
   @IsOptional()
   @IsEnum(['boys', 'girls', 'mixed'])
@@ -146,6 +193,20 @@ export class UpdateHostelDto {
   @IsOptional()
   @IsString()
   address?: string;
+
+  @ApiPropertyOptional({
+    description: 'Hostel address in Nepali (provided by frontend)',
+  })
+  @IsOptional()
+  @IsString()
+  addressNp?: string;
+
+  @ApiPropertyOptional({
+    description: 'Warden name in Nepali (provided by frontend)',
+  })
+  @IsOptional()
+  @IsString()
+  wardenNameNp?: string;
 
   @ApiPropertyOptional({ description: 'Ward number' })
   @IsOptional()

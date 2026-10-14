@@ -131,8 +131,8 @@ export class TeacherService {
     }
 
     const teacher = await this.db.insert<Teacher>(
-      `INSERT INTO teachers (school_id, user_id, teacher_code, employee_id, first_name_en, middle_name_en, last_name_en, first_name_np, middle_name_np, last_name_np, display_name, date_of_birth, gender, blood_group, nationality, religion, highest_qualification, specialization, university_board, passing_year, teaching_license_number, license_expiry_date, personal_mobile, official_mobile, personal_email, official_email, joining_date, employment_type, department, current_status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30)
+      `INSERT INTO teachers (school_id, user_id, teacher_code, employee_id, first_name_en, middle_name_en, last_name_en, first_name_np, middle_name_np, last_name_np, display_name, date_of_birth, gender, blood_group, nationality, nationality_np, religion, religion_np, highest_qualification, highest_qualification_np, specialization, specialization_np, university_board, university_board_np, passing_year, teaching_license_number, license_expiry_date, personal_mobile, official_mobile, personal_email, official_email, joining_date, employment_type, employment_type_np, department, department_np, designation_np, marital_status_np, caste_ethnicity_name_np, emergency_contact_relation_np, current_status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41)
        RETURNING *`,
       [
         createTeacherDto.schoolId,
@@ -150,10 +150,15 @@ export class TeacherService {
         createTeacherDto.gender,
         createTeacherDto.bloodGroup || null,
         createTeacherDto.nationality || null,
+        createTeacherDto.nationalityNp || null,
         createTeacherDto.religion || null,
+        createTeacherDto.religionNp || null,
         createTeacherDto.highestQualification || null,
+        createTeacherDto.highestQualificationNp || null,
         createTeacherDto.specialization || null,
+        createTeacherDto.specializationNp || null,
         createTeacherDto.universityBoard || null,
+        createTeacherDto.universityBoardNp || null,
         createTeacherDto.passingYear || null,
         createTeacherDto.teachingLicenseNumber || null,
         createTeacherDto.licenseExpiryDate || null,
@@ -163,7 +168,13 @@ export class TeacherService {
         createTeacherDto.officialEmail || null,
         createTeacherDto.joiningDate || null,
         createTeacherDto.employmentType || 'PERMANENT',
+        createTeacherDto.employmentTypeNp || null,
         createTeacherDto.department || null,
+        createTeacherDto.departmentNp || null,
+        createTeacherDto.designationNp || null,
+        createTeacherDto.maritalStatusNp || null,
+        createTeacherDto.casteEthnicityNameNp || null,
+        createTeacherDto.emergencyContactRelationNp || null,
         createTeacherDto.currentStatus || 'ACTIVE',
       ],
     );
@@ -260,6 +271,17 @@ export class TeacherService {
       personalEmail: 'personal_email',
       officialEmail: 'official_email',
       department: 'department',
+      departmentNp: 'department_np',
+      designationNp: 'designation_np',
+      religionNp: 'religion_np',
+      nationalityNp: 'nationality_np',
+      highestQualificationNp: 'highest_qualification_np',
+      specializationNp: 'specialization_np',
+      universityBoardNp: 'university_board_np',
+      maritalStatusNp: 'marital_status_np',
+      casteEthnicityNameNp: 'caste_ethnicity_name_np',
+      emergencyContactRelationNp: 'emergency_contact_relation_np',
+      employmentTypeNp: 'employment_type_np',
       currentStatus: 'current_status',
     };
 

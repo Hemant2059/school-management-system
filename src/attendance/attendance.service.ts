@@ -19,6 +19,7 @@ export interface Attendance {
   status: string;
   session: string | null;
   remarks: string | null;
+  remarks_np: string | null;
   check_in_time: string | null;
   check_out_time: string | null;
   biometric_device_id: string | null;
@@ -38,6 +39,7 @@ export class AttendanceService {
       classId?: number;
       sectionId?: number;
       session?: string;
+      remarksNp?: string;
       attendanceDateBs?: string;
       checkInTime?: string;
       checkOutTime?: string;
@@ -57,8 +59,8 @@ export class AttendanceService {
     }
 
     return this.db.insert<Attendance>(
-      `INSERT INTO attendance (school_id, student_id, class_id, section_id, academic_year, attendance_date, attendance_date_bs, status, remarks, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      `INSERT INTO attendance (school_id, student_id, class_id, section_id, academic_year, attendance_date, attendance_date_bs, status, remarks, remarks_np, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
        RETURNING *`,
       [
         createDto.schoolId,
@@ -70,6 +72,7 @@ export class AttendanceService {
         createDto.attendanceDateBs || null,
         createDto.status,
         createDto.remarks || null,
+        createDto.remarksNp || null,
         userId || null,
       ],
     );
@@ -129,6 +132,7 @@ export class AttendanceService {
     const fieldMap: Record<string, string> = {
       status: 'status',
       remarks: 'remarks',
+      remarksNp: 'remarks_np',
       checkInTime: 'check_in_time',
       checkOutTime: 'check_out_time',
       biometricDeviceId: 'biometric_device_id',

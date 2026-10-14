@@ -53,6 +53,13 @@ export class CreateCalendarEventDto {
   @IsString()
   description?: string;
 
+  @ApiPropertyOptional({
+    description: 'Event description in Nepali (provided by frontend)',
+  })
+  @IsOptional()
+  @IsString()
+  descriptionNp?: string;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsBoolean()

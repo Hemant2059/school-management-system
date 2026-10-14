@@ -233,6 +233,7 @@ export class AuthController {
       email: string;
       password: string;
       fullName: string;
+      fullNameNp?: string;
       phone?: string;
     },
   ) {

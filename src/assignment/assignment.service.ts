@@ -7,7 +7,10 @@ import { NepaliDateUtil } from '../utils/nepali-date.util';
 export interface Assignment {
   id: number;
   school_id: number;
+  title: string | null;
+  title_np: string | null;
   description: string;
+  description_np: string | null;
   class_id: number;
   section_id: number | null;
   subject_id: number;
@@ -32,14 +35,16 @@ export class AssignmentService {
 
     const result = await this.db.insert<Assignment>(
       `INSERT INTO assignments (
-        school_id, title, description, class_id, section_id, subject_id,
+        school_id, title, title_np, description, description_np, class_id, section_id, subject_id,
         teacher_id, due_date, due_date_bs, total_marks, is_published, is_active
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       RETURNING *`,
       [
         createDto.schoolId,
         createDto.title || createDto.description,
+        createDto.titleNp || null,
         createDto.description,
+        createDto.descriptionNp || null,
         createDto.classId,
         createDto.sectionId,
         createDto.subjectId,
@@ -134,6 +139,20 @@ export class AssignmentService {
       updates.push(`due_date_bs = $${paramIndex}`);
       params.push(dueDateBs);
       paramIndex++;
+    }
+
+    // Nepali twins come from the frontend — stored verbatim, never derived.
+    const npFieldMap: Record<string, string> = {
+      titleNp: 'title_np',
+      descriptionNp: 'description_np',
+    };
+    for (const [key, dbField] of Object.entries(npFieldMap)) {
+      const value = (updateDto as any)[key];
+      if (value !== undefined) {
+        updates.push(`${dbField} = $${paramIndex}`);
+        params.push(value || null);
+        paramIndex++;
+      }
     }
 
     if (updates.length === 0) return assignment;

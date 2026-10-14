@@ -19,6 +19,15 @@ export class CreateAssignmentDto {
   @IsString()
   readonly title?: string;
 
+  @ApiPropertyOptional({
+    description: 'Assignment title in Nepali (provided by frontend)',
+    example: 'गृहकार्य',
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  readonly titleNp?: string;
+
   @ApiProperty({
     description: 'Detailed assignment description or instructions',
     example: 'Complete all exercises from chapter 5 on quadratic equations',
@@ -27,6 +36,15 @@ export class CreateAssignmentDto {
   @IsNotEmpty()
   @IsString()
   readonly description: string;
+
+  @ApiPropertyOptional({
+    description: 'Assignment description in Nepali (provided by frontend)',
+    example: 'विवरण',
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  readonly descriptionNp?: string;
 
   @ApiProperty({
     description: 'Academic class ID',

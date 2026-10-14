@@ -34,6 +34,8 @@ export class PromotionService {
       promoteAll?: boolean;
       studentIds?: number[];
       promotionStatus?: string;
+      remarks?: string;
+      remarksNp?: string;
     },
   ): Promise<{ promoted: number; failed: number; results: any[] }> {
     let students: any[];
@@ -98,8 +100,8 @@ export class PromotionService {
         );
 
         await this.db.insert(
-          `INSERT INTO student_promotions (school_id, student_id, from_class_id, to_class_id, from_academic_year, to_academic_year, promotion_status, previous_roll_number, new_roll_number, promoted_by, promotion_date)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())`,
+          `INSERT INTO student_promotions (school_id, student_id, from_class_id, to_class_id, from_academic_year, to_academic_year, promotion_status, previous_roll_number, new_roll_number, promoted_by, promotion_date, remarks, remarks_np)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), $11, $12)`,
           [
             schoolId,
             student.student_id,
@@ -111,6 +113,8 @@ export class PromotionService {
             student.current_roll,
             nextRoll,
             dto.promotedBy,
+            dto.remarks || null,
+            dto.remarksNp || null,
           ],
         );
 
@@ -144,6 +148,8 @@ export class PromotionService {
       toClassId: number;
       demotedBy: number;
       reason?: string;
+      reasonNp?: string;
+      remarksNp?: string;
     },
   ): Promise<{ demoted: number; results: any[] }> {
     const results: any[] = [];
@@ -180,8 +186,8 @@ export class PromotionService {
       );
 
       await this.db.insert(
-        `INSERT INTO student_promotions (school_id, student_id, from_class_id, to_class_id, from_academic_year, to_academic_year, promotion_status, previous_roll_number, new_roll_number, promoted_by, promotion_date, remarks)
-         VALUES ($1, $2, $3, $4, $5, $6, 'REPEATED', $7, $8, $9, NOW(), $10)`,
+        `INSERT INTO student_promotions (school_id, student_id, from_class_id, to_class_id, from_academic_year, to_academic_year, promotion_status, previous_roll_number, new_roll_number, promoted_by, promotion_date, remarks, remarks_np)
+         VALUES ($1, $2, $3, $4, $5, $6, 'REPEATED', $7, $8, $9, NOW(), $10, $11)`,
         [
           schoolId,
           studentId,
@@ -193,6 +199,7 @@ export class PromotionService {
           enrollment.roll_number,
           dto.demotedBy,
           dto.reason,
+          dto.reasonNp || dto.remarksNp || null,
         ],
       );
 

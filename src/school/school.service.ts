@@ -59,15 +59,19 @@ export class SchoolService {
     }
 
     const school = await this.db.insert<School>(
-      `INSERT INTO schools (school_code, school_name, school_name_nepali, school_type, ownership_type, established_date, established_date_bs, affiliation_number, registration_number, province_id, district_id, municipality_id, ward_no, tole, tole_nepali, street_address, street_address_nepali, mobile, email, is_active, created_by, updated_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, true, $20, $21)
+      `INSERT INTO schools (school_code, school_name, school_name_nepali, school_type, school_type_np, ownership_type, ownership_type_np, name_np, address_np, established_date, established_date_bs, affiliation_number, registration_number, province_id, district_id, municipality_id, ward_no, tole, tole_nepali, street_address, street_address_nepali, mobile, email, is_active, created_by, updated_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, true, $24, $25)
        RETURNING *`,
       [
         createSchoolDto.schoolCode,
         createSchoolDto.schoolName,
         createSchoolDto.schoolNameNepali || null,
         createSchoolDto.schoolType,
+        createSchoolDto.schoolTypeNp || null,
         createSchoolDto.ownershipType,
+        createSchoolDto.ownershipTypeNp || null,
+        createSchoolDto.nameNp || null,
+        createSchoolDto.addressNp || null,
         createSchoolDto.establishedDate || null,
         createSchoolDto.establishedDateBs || null,
         createSchoolDto.affiliationNumber || null,
@@ -130,7 +134,11 @@ export class SchoolService {
       schoolName: 'school_name',
       schoolNameNepali: 'school_name_nepali',
       schoolType: 'school_type',
+      schoolTypeNp: 'school_type_np',
       ownershipType: 'ownership_type',
+      ownershipTypeNp: 'ownership_type_np',
+      nameNp: 'name_np',
+      addressNp: 'address_np',
       affiliationNumber: 'affiliation_number',
       registrationNumber: 'registration_number',
       provinceId: 'province_id',

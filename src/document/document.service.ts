@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DatabaseService } from '../database/database.service';
 
@@ -32,10 +32,34 @@ export interface CreateDocumentDto {
   staffId?: number;
   type: Document['type'];
   title: string;
+  titleNp?: string;
+  description?: string;
+  descriptionNp?: string;
   fileName: string;
   filePath: string;
   fileSize?: number;
   mimeType?: string;
+}
+
+export interface DocumentTemplate {
+  id?: number;
+  school_id: number | null;
+  name: string;
+  name_np: string | null;
+  template_type: string | null;
+  template_content: string | null;
+  template_content_np: string | null;
+  is_active: boolean;
+  created_at?: Date;
+}
+
+export interface CreateDocumentTemplateDto {
+  schoolId?: number;
+  name: string;
+  nameNp?: string;
+  templateType?: string;
+  templateContent?: string;
+  templateContentNp?: string;
 }
 
 @Injectable()
@@ -56,9 +80,10 @@ export class DocumentService {
   ): Promise<Document> {
     const query = `
       INSERT INTO documents (
-        school_id, student_id, teacher_id, staff_id, type, title,
+        school_id, student_id, teacher_id, staff_id, type, title, title_np,
+        description, description_np,
         file_name, file_path, file_size, mime_type, uploaded_by
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       RETURNING *
     `;
 
@@ -69,6 +94,9 @@ export class DocumentService {
       dto.staffId,
       dto.type,
       dto.title,
+      (dto as any).titleNp || null,
+      (dto as any).description || null,
+      (dto as any).descriptionNp || null,
       dto.fileName,
       dto.filePath,
       dto.fileSize,
@@ -128,6 +156,101 @@ export class DocumentService {
 
     if (result.length === 0) {
       throw new NotFoundException('Document not found');
+    }
+  }
+
+  // ---- Document templates (admin-managed; EN+NP stored verbatim) ----
+  async createTemplate(
+    schoolId: number,
+    dto: CreateDocumentTemplateDto,
+  ): Promise<DocumentTemplate> {
+    const dup = await this.databaseService.queryOne<DocumentTemplate>(
+      `SELECT id FROM document_templates WHERE school_id = $1 AND name = $2`,
+      [schoolId, dto.name],
+    );
+    if (dup) {
+      throw new BadRequestException(
+        `Document template '${dto.name}' already exists for this school`,
+      );
+    }
+    const result = await this.databaseService.query(
+      `INSERT INTO document_templates (school_id, name, name_np, template_type, template_content, template_content_np, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, true)
+       RETURNING *`,
+      [
+        schoolId,
+        dto.name,
+        dto.nameNp || null,
+        dto.templateType || null,
+        dto.templateContent || null,
+        dto.templateContentNp || null,
+      ],
+    );
+    return result[0];
+  }
+
+  async getTemplates(schoolId: number): Promise<DocumentTemplate[]> {
+    return this.databaseService.query(
+      `SELECT * FROM document_templates WHERE school_id = $1 AND is_active = true ORDER BY name ASC`,
+      [schoolId],
+    );
+  }
+
+  async updateTemplate(
+    id: number,
+    schoolId: number,
+    dto: Partial<CreateDocumentTemplateDto> & { isActive?: boolean },
+  ): Promise<DocumentTemplate> {
+    const fieldMap: Record<string, string> = {
+      name: 'name',
+      nameNp: 'name_np',
+      templateType: 'template_type',
+      templateContent: 'template_content',
+      templateContentNp: 'template_content_np',
+      isActive: 'is_active',
+    };
+    const updates: string[] = [];
+    const params: any[] = [];
+    let i = 1;
+    for (const [key, col] of Object.entries(fieldMap)) {
+      const v = (dto as any)[key];
+      if (v !== undefined) {
+        updates.push(`${col} = $${i++}`);
+        params.push(v);
+      }
+    }
+    if (updates.length === 0) {
+      return this.getTemplateById(id, schoolId);
+    }
+    params.push(id, schoolId);
+    const result = await this.databaseService.query(
+      `UPDATE document_templates SET ${updates.join(', ')} WHERE id = $${i} AND school_id = $${i + 1} RETURNING *`,
+      params,
+    );
+    if (!result[0]) {
+      throw new NotFoundException('Document template not found');
+    }
+    return result[0];
+  }
+
+  async getTemplateById(id: number, schoolId: number): Promise<DocumentTemplate> {
+    const result = await this.databaseService.query(
+      `SELECT * FROM document_templates WHERE id = $1 AND school_id = $2`,
+      [id, schoolId],
+    );
+    if (!result[0]) {
+      throw new NotFoundException('Document template not found');
+    }
+    return result[0];
+  }
+
+  async deleteTemplate(id: number, schoolId: number): Promise<void> {
+    const result = await this.databaseService.query(
+      `UPDATE document_templates SET is_active = false WHERE id = $1 AND school_id = $2 RETURNING id`,
+      [id, schoolId],
+    );
+    if (result.length === 0) {
+      throw new NotFoundException('Document template not found');
     }
   }
 

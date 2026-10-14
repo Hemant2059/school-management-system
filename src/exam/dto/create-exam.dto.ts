@@ -14,6 +14,15 @@ export class CreateExamDto {
   @IsString()
   readonly examName: string;
 
+  @ApiPropertyOptional({
+    description: 'Exam name in Nepali (provided by frontend)',
+    example: 'परीक्षा',
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  readonly examNameNp?: string;
+
   @ApiProperty({ description: 'School ID', example: 1 })
   @IsNotEmpty()
   @IsInt()

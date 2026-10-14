@@ -73,29 +73,46 @@ export interface CreateAdmissionDto {
   dateOfBirth: string;
   dateOfBirthBs: string;
   birthPlace: string;
+  birthPlaceNp?: string;
   nationality: string;
+  nationalityNp?: string;
   religion?: string;
+  religionNp?: string;
   caste?: string;
+  casteNp?: string;
+  gradeApplied?: string;
+  gradeAppliedNp?: string;
+  parentName?: string;
+  parentNameNp?: string;
   email?: string;
   phone: string;
   mobile: string;
   fatherName: string;
+  fatherNameNp?: string;
   fatherPhone: string;
   fatherOccupation?: string;
+  fatherOccupationNp?: string;
   motherName: string;
+  motherNameNp?: string;
   motherPhone: string;
   motherOccupation?: string;
+  motherOccupationNp?: string;
   guardianName?: string;
+  guardianNameNp?: string;
   guardianPhone?: string;
   guardianRelation?: string;
+  guardianRelationNp?: string;
   provinceId?: number;
   districtId?: number;
   municipalityId?: number;
   wardNumber?: number;
   address: string;
   previousSchool?: string;
+  previousSchoolNp?: string;
   previousClass?: string;
+  previousClassNp?: string;
   previousGrade?: string;
+  previousGradeNp?: string;
   transferCertificate?: boolean;
   classId: number;
   photoUrl?: string;
@@ -116,15 +133,17 @@ export class AdmissionService {
       INSERT INTO online_admissions (
         school_id, application_no, first_name, middle_name, last_name,
         first_name_np, middle_name_np, last_name_np,
-        gender, date_of_birth, date_of_birth_bs, birth_place,
-        nationality, religion, caste, email, phone, mobile,
-        father_name, father_phone, father_occupation,
-        mother_name, mother_phone, mother_occupation,
-        guardian_name, guardian_phone, guardian_relation,
+        gender, date_of_birth, date_of_birth_bs, birth_place, birth_place_np,
+        nationality, nationality_np, religion, religion_np, caste, caste_np,
+        grade_applied, grade_applied_np, parent_name, parent_name_np,
+        email, phone, mobile,
+        father_name, father_name_np, father_phone, father_occupation, father_occupation_np,
+        mother_name, mother_name_np, mother_phone, mother_occupation, mother_occupation_np,
+        guardian_name, guardian_name_np, guardian_phone, guardian_relation, guardian_relation_np,
         province_id, district_id, municipality_id, ward_number, address,
-        previous_school, previous_class, previous_grade, transfer_certificate,
+        previous_school, previous_school_np, previous_class, previous_class_np, previous_grade, previous_grade_np, transfer_certificate,
         class_id, photo_url, status, documents, applied_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, 'pending', '[]', NOW())
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55, 'pending', '[]', NOW())
       RETURNING *
     `;
 
@@ -141,29 +160,46 @@ export class AdmissionService {
       dto.dateOfBirth,
       dto.dateOfBirthBs,
       dto.birthPlace,
+      dto.birthPlaceNp ?? null,
       dto.nationality,
+      dto.nationalityNp ?? null,
       dto.religion,
+      dto.religionNp ?? null,
       dto.caste,
+      dto.casteNp ?? null,
+      dto.gradeApplied ?? null,
+      dto.gradeAppliedNp ?? null,
+      dto.parentName ?? null,
+      dto.parentNameNp ?? null,
       dto.email,
       dto.phone,
       dto.mobile,
       dto.fatherName,
+      dto.fatherNameNp ?? null,
       dto.fatherPhone,
       dto.fatherOccupation,
+      dto.fatherOccupationNp ?? null,
       dto.motherName,
+      dto.motherNameNp ?? null,
       dto.motherPhone,
       dto.motherOccupation,
+      dto.motherOccupationNp ?? null,
       dto.guardianName,
+      dto.guardianNameNp ?? null,
       dto.guardianPhone,
       dto.guardianRelation,
+      dto.guardianRelationNp ?? null,
       dto.provinceId,
       dto.districtId,
       dto.municipalityId,
       dto.wardNumber,
       dto.address,
       dto.previousSchool,
+      dto.previousSchoolNp ?? null,
       dto.previousClass,
+      dto.previousClassNp ?? null,
       dto.previousGrade,
+      dto.previousGradeNp ?? null,
       dto.transferCertificate,
       dto.classId,
       dto.photoUrl,

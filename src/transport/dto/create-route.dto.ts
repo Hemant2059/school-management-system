@@ -12,6 +12,14 @@ export class CreateRouteDto {
   @IsString()
   readonly routeName: string;
 
+  @ApiPropertyOptional({
+    description: 'Route name in Nepali (provided by frontend)',
+    example: 'रत्नपार्क-सातदोबाटो रुट',
+  })
+  @IsOptional()
+  @IsString()
+  readonly routeNameNp?: string;
+
   @ApiProperty({ description: 'School ID', example: 1 })
   @IsNotEmpty()
   @IsInt()
@@ -45,10 +53,44 @@ export class CreateRouteDto {
   @IsString()
   readonly routeDescription: string;
 
+  @ApiPropertyOptional({
+    description: 'Route description in Nepali (provided by frontend)',
+    example: 'रत्नपार्कबाट थापाथली हुँदै सातदोबाटोसम्म',
+  })
+  @IsOptional()
+  @IsString()
+  readonly routeDescriptionNp?: string;
+
   @ApiProperty({ description: 'Total distance in kilometers', example: 8.5 })
   @IsNotEmpty()
   @IsNumber()
   readonly distanceKm: number;
+
+  @ApiPropertyOptional({ description: 'Start point', example: 'Ratnapark' })
+  @IsOptional()
+  @IsString()
+  readonly startPoint?: string;
+
+  @ApiPropertyOptional({
+    description: 'Start point in Nepali (provided by frontend)',
+    example: 'रत्नपार्क',
+  })
+  @IsOptional()
+  @IsString()
+  readonly startPointNp?: string;
+
+  @ApiPropertyOptional({ description: 'End point', example: 'Satdobato' })
+  @IsOptional()
+  @IsString()
+  readonly endPoint?: string;
+
+  @ApiPropertyOptional({
+    description: 'End point in Nepali (provided by frontend)',
+    example: 'सातदोबाटो',
+  })
+  @IsOptional()
+  @IsString()
+  readonly endPointNp?: string;
 
   @ApiPropertyOptional({
     description: 'Estimated travel time',

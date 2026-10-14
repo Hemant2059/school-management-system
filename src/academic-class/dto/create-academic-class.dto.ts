@@ -26,6 +26,15 @@ export class CreateAcademicClassDto {
   @IsString()
   readonly className: string; // e.g., "Grade 1"
 
+  @ApiPropertyOptional({
+    description: 'Class name in Nepali (provided by frontend)',
+    example: 'कक्षा ५',
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  readonly classNameNp?: string;
+
   @ApiProperty({
     description: 'Short class code for identification',
     example: 'G5',

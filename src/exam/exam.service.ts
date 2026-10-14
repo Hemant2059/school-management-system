@@ -25,20 +25,23 @@ export class ExamService {
   async create(
     createDto: CreateExamDto & {
       examCode?: string;
+      examNameNp?: string;
       sectionId?: number;
       subjectId: number;
       examDateBs?: string;
       academicYear?: string;
       remarks?: string;
+      remarksNp?: string;
     },
   ): Promise<Exam> {
     return this.db.insert<Exam>(
-      `INSERT INTO exams (school_id, exam_name, exam_code, exam_type, class_id, section_id, subject_id, exam_date, exam_date_bs, start_time, end_time, full_marks, pass_marks, is_published, is_active, is_result_published, is_locked, remarks, academic_year)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, false, true, false, false, $14, $15)
+      `INSERT INTO exams (school_id, exam_name, exam_name_np, exam_code, exam_type, class_id, section_id, subject_id, exam_date, exam_date_bs, start_time, end_time, full_marks, pass_marks, is_published, is_active, is_result_published, is_locked, remarks, remarks_np, academic_year)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, false, true, false, false, $15, $16, $17)
        RETURNING *`,
       [
         createDto.schoolId,
         createDto.examName,
+        createDto.examNameNp || null,
         createDto.examCode || null,
         createDto.examType,
         createDto.classId,
@@ -51,6 +54,7 @@ export class ExamService {
         createDto.fullMarks,
         createDto.passMarks,
         createDto.remarks || null,
+        (createDto as any).remarksNp || null,
         createDto.academicYear || null,
       ],
     );
@@ -105,6 +109,7 @@ export class ExamService {
 
     const fieldMap: Record<string, string> = {
       examName: 'exam_name',
+      examNameNp: 'exam_name_np',
       examCode: 'exam_code',
       examType: 'exam_type',
       examDate: 'exam_date',
@@ -117,6 +122,7 @@ export class ExamService {
       isResultPublished: 'is_result_published',
       isLocked: 'is_locked',
       remarks: 'remarks',
+      remarksNp: 'remarks_np',
     };
 
     for (const [key, dbField] of Object.entries(fieldMap)) {
@@ -271,10 +277,12 @@ export class ExamService {
     sectionPosition?: number;
     principalRemark?: string;
     teacherRemark?: string;
+    principalRemarkNp?: string;
+    teacherRemarkNp?: string;
   }): Promise<ReportCard> {
     return this.db.insert<ReportCard>(
-      `INSERT INTO report_cards (school_id, student_id, exam_id, academic_year, total_gpa, total_percentage, class_position, section_position, principal_remark, teacher_remark, is_published, generated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false, NOW())
+      `INSERT INTO report_cards (school_id, student_id, exam_id, academic_year, total_gpa, total_percentage, class_position, section_position, principal_remark, principal_remark_np, teacher_remark, teacher_remark_np, is_published, generated_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, false, NOW())
        RETURNING *`,
       [
         createDto.schoolId,
@@ -286,7 +294,9 @@ export class ExamService {
         createDto.classPosition || null,
         createDto.sectionPosition || null,
         createDto.principalRemark || null,
+        (createDto as any).principalRemarkNp || null,
         createDto.teacherRemark || null,
+        (createDto as any).teacherRemarkNp || null,
       ],
     );
   }

@@ -28,10 +28,26 @@ export class CreateVehicleDto {
   @IsString()
   readonly vehicleName: string;
 
+  @ApiPropertyOptional({
+    description: 'Vehicle name in Nepali (provided by frontend)',
+    example: 'टाटा मार्कोपोलो',
+  })
+  @IsOptional()
+  @IsString()
+  readonly vehicleNameNp?: string;
+
   @ApiProperty({ description: 'Vehicle type', example: 'BUS' })
   @IsNotEmpty()
   @IsString()
   readonly vehicleType: string;
+
+  @ApiPropertyOptional({
+    description: 'Vehicle type in Nepali (provided by frontend)',
+    example: 'बस',
+  })
+  @IsOptional()
+  @IsString()
+  readonly vehicleTypeNp?: string;
 
   @ApiProperty({ description: 'Passenger capacity', example: 40 })
   @IsNotEmpty()

@@ -106,6 +106,7 @@ export class GradeService {
     gradePoint: number;
     gradeLabel?: string;
     description?: string;
+    remarkNp?: string;
   }): Promise<GradeBand> {
     const scaleId = await this.requireOwnScaleId(createDto.schoolId);
     const existing = await this.db.queryOne<GradeBand>(
@@ -120,8 +121,8 @@ export class GradeService {
     // Overlaps beyond touching boundaries are rejected by trg_grade_band.
     return this.db.insert<GradeBand>(
       `INSERT INTO grade_scale_lines
-         (scale_id, grade, grade_point, min_percent, max_percent, remark)
-       VALUES ($1, $2, $3, $4, $5, $6)
+         (scale_id, grade, grade_point, min_percent, max_percent, remark, remark_np)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        RETURNING line_id, scale_id, grade, grade_np, grade_point,
                  min_percent, max_percent, remark`,
       [
@@ -131,6 +132,7 @@ export class GradeService {
         createDto.minPercentage,
         createDto.maxPercentage,
         createDto.gradeLabel ?? createDto.description ?? null,
+        createDto.remarkNp || null,
       ],
     );
   }
@@ -145,6 +147,7 @@ export class GradeService {
       gradePoint?: number;
       gradeLabel?: string;
       description?: string;
+      remarkNp?: string;
     },
   ): Promise<GradeBand> {
     await this.findOne(id, schoolId);
@@ -172,6 +175,10 @@ export class GradeService {
     if (remark !== undefined) {
       updates.push(`remark = $${paramIndex++}`);
       params.push(remark);
+    }
+    if (updateDto.remarkNp !== undefined) {
+      updates.push(`remark_np = $${paramIndex++}`);
+      params.push(updateDto.remarkNp || null);
     }
     if (updates.length === 0) {
       return this.findOne(id, schoolId);

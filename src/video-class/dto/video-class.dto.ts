@@ -23,6 +23,28 @@ export class CreateLiveClassDto {
   @IsString()
   description?: string;
 
+  @ApiPropertyOptional({
+    description: 'Class name in Nepali (provided by frontend)',
+    example: 'गणित कक्षा',
+  })
+  @IsOptional()
+  @IsString()
+  classNameNp?: string;
+
+  @ApiPropertyOptional({
+    description: 'Live class title in Nepali (provided by frontend, alias of classNameNp)',
+  })
+  @IsOptional()
+  @IsString()
+  titleNp?: string;
+
+  @ApiPropertyOptional({
+    description: 'Class description in Nepali (provided by frontend)',
+  })
+  @IsOptional()
+  @IsString()
+  descriptionNp?: string;
+
   @ApiPropertyOptional({ description: 'Class ID', example: 1 })
   @IsOptional()
   @IsInt()

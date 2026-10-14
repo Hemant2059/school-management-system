@@ -15,6 +15,7 @@ export interface Timetable {
   subject_id: number;
   teacher_id: number;
   day_of_week: number;
+  day_of_week_np: string | null;
   start_time: string;
   end_time: string;
   period_number: number;
@@ -50,8 +51,8 @@ export class TimetableService {
     const result = await this.db.insert<Timetable>(
       `INSERT INTO timetables (
         school_id, class_id, section_id, subject_id, teacher_id,
-        day_of_week, start_time, end_time, period_number, room_number, is_active
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        day_of_week, day_of_week_np, start_time, end_time, period_number, room_number, is_active
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       RETURNING *`,
       [
         createDto.schoolId,
@@ -60,6 +61,7 @@ export class TimetableService {
         createDto.subjectId || null,
         createDto.teacherId || null,
         String(createDto.dayOfWeek),
+        createDto.dayOfWeekNp || null,
         createDto.startTime,
         createDto.endTime,
         createDto.periodNumber,
@@ -132,6 +134,16 @@ export class TimetableService {
         params.push((updateDto as any)[field]);
         paramIndex++;
       }
+    }
+
+    // Nepali twin comes from the frontend — stored verbatim, never derived.
+    // day_of_week itself is frontend-supplied (dayOfWeek 0-6), not derived from a date.
+    const dayOfWeekNp =
+      (updateDto as any).dayOfWeekNp ?? (updateDto as any).day_of_week_np;
+    if (dayOfWeekNp !== undefined) {
+      updates.push(`day_of_week_np = $${paramIndex}`);
+      params.push(dayOfWeekNp || null);
+      paramIndex++;
     }
 
     if (updates.length === 0) return timetable;

@@ -30,6 +30,14 @@ export class CreateTCDto {
   @IsString()
   reasonForLeaving?: string;
 
+  @ApiPropertyOptional({
+    description:
+      'Reason for leaving in Nepali (provided by frontend, stored verbatim)',
+  })
+  @IsOptional()
+  @IsString()
+  reasonForLeavingNp?: string;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
@@ -65,10 +73,41 @@ export class CreateTCDto {
   @IsString()
   issuedTo?: string;
 
+  @ApiPropertyOptional({
+    description:
+      'Issued-to in Nepali (provided by frontend, stored verbatim)',
+  })
+  @IsOptional()
+  @IsString()
+  issuedToNp?: string;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
   remarks?: string;
+
+  @ApiPropertyOptional({
+    description: 'Remarks in Nepali (provided by frontend, stored verbatim)',
+  })
+  @IsOptional()
+  @IsString()
+  remarksNp?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Last class in Nepali (provided by frontend, stored verbatim)',
+  })
+  @IsOptional()
+  @IsString()
+  lastClassNp?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Certificate type in Nepali (provided by frontend, stored verbatim)',
+  })
+  @IsOptional()
+  @IsString()
+  certificateTypeNp?: string;
 
   @ApiProperty()
   @IsNumber()
@@ -88,6 +127,21 @@ export class CreateBonafideDto {
   @IsOptional()
   @IsString()
   purpose?: string;
+
+  @ApiPropertyOptional({
+    description: 'Purpose in Nepali (provided by frontend, stored verbatim)',
+  })
+  @IsOptional()
+  @IsString()
+  purposeNp?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Certificate type in Nepali (provided by frontend, stored verbatim)',
+  })
+  @IsOptional()
+  @IsString()
+  certificateTypeNp?: string;
 
   @ApiProperty()
   @IsNumber()
@@ -112,6 +166,30 @@ export class CreateCharacterDto {
   @IsOptional()
   @IsString()
   conductDescription?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Character remarks in Nepali (provided by frontend, stored verbatim)',
+  })
+  @IsOptional()
+  @IsString()
+  characterRemarksNp?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Conduct description in Nepali (provided by frontend, stored verbatim)',
+  })
+  @IsOptional()
+  @IsString()
+  conductDescriptionNp?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Certificate type in Nepali (provided by frontend, stored verbatim)',
+  })
+  @IsOptional()
+  @IsString()
+  certificateTypeNp?: string;
 
   @ApiProperty()
   @IsNumber()

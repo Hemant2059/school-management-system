@@ -2,6 +2,8 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
+  Delete,
   Body,
   Param,
   Query,
@@ -24,6 +26,10 @@ import { CreateFeeCategoryDto } from './dto/create-fee-category.dto';
 import { CreateFeeStructureDto } from './dto/create-fee-structure.dto';
 import { CreateStudentFeeDto } from './dto/create-student-fee.dto';
 import { CreatePaymentDto } from './dto/create-payment.dto';
+import { CreateDiscountRuleDto } from './dto/create-discount-rule.dto';
+import { UpdateDiscountRuleDto } from './dto/update-discount-rule.dto';
+import { CreatePenaltyRuleDto } from './dto/create-penalty-rule.dto';
+import { UpdatePenaltyRuleDto } from './dto/update-penalty-rule.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard, PermissionsGuard } from '../common/guards/roles.guard';
 import { Roles, Permissions } from '../common/decorators/roles.decorator';
@@ -788,6 +794,11 @@ export class FeeController {
           description: 'Amount to carry forward',
         },
         notes: { type: 'string', example: 'Unpaid tuition fee from last year' },
+        notesNp: {
+          type: 'string',
+          description: 'Notes in Nepali (provided by frontend)',
+          example: 'गत वर्षको नतिरेको ट्युसन शुल्क',
+        },
       },
     },
   })
@@ -818,6 +829,7 @@ export class FeeController {
       toAcademicYear: string;
       amount: number;
       notes?: string;
+      notesNp?: string;
     },
   ) {
     return this.feeService.carryForwardBalance(
@@ -826,6 +838,7 @@ export class FeeController {
       createDto.toAcademicYear,
       createDto.amount,
       createDto.notes,
+      createDto.notesNp,
     );
   }
 
@@ -908,6 +921,7 @@ export class FeeController {
     createDto: {
       schoolId: number;
       ruleName: string;
+      ruleNameNp?: string;
       fineType: 'per_day' | 'flat' | 'percentage';
       fineAmount: number;
       gracePeriodDays?: number;
@@ -946,6 +960,118 @@ export class FeeController {
   })
   getLateFineRules(@GetUser('schoolId') schoolId: number) {
     return this.feeService.getLateFineRules(schoolId);
+  }
+
+  // Discount Rules (admin-managed)
+  @Post('discount-rules')
+  @Roles(UserRole.ADMIN, UserRole.ACCOUNTANT)
+  @Permissions(Permission.FEE_CREATE)
+  @ApiOperation({
+    summary: 'Create Discount Rule',
+    description:
+      'Create a school-level discount rule (e.g. sibling discount). Name stored in English + Nepali as sent by frontend.',
+  })
+  @ApiBody({ type: CreateDiscountRuleDto })
+  @ApiResponse({ status: 201, description: 'Discount rule created successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid input data' })
+  createDiscountRule(@Body() createDto: CreateDiscountRuleDto) {
+    return this.feeService.createDiscountRule(createDto);
+  }
+
+  @Get('discount-rules')
+  @Roles(UserRole.ADMIN, UserRole.ACCOUNTANT)
+  @Permissions(Permission.FEE_READ)
+  @ApiOperation({
+    summary: 'Get Discount Rules',
+    description: 'Retrieve all active discount rules for the school.',
+  })
+  @ApiResponse({ status: 200, description: 'Discount rules retrieved successfully' })
+  getDiscountRules(@GetUser('schoolId') schoolId: number) {
+    return this.feeService.getDiscountRules(schoolId);
+  }
+
+  @Patch('discount-rules/:id')
+  @Roles(UserRole.ADMIN, UserRole.ACCOUNTANT)
+  @Permissions(Permission.FEE_UPDATE)
+  @ApiOperation({ summary: 'Update Discount Rule' })
+  @ApiParam({ name: 'id', type: Number })
+  @ApiBody({ type: UpdateDiscountRuleDto })
+  updateDiscountRule(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser('schoolId') schoolId: number,
+    @Body() updateDto: UpdateDiscountRuleDto,
+  ) {
+    return this.feeService.updateDiscountRule(id, schoolId, updateDto);
+  }
+
+  @Delete('discount-rules/:id')
+  @Roles(UserRole.ADMIN, UserRole.ACCOUNTANT)
+  @Permissions(Permission.FEE_UPDATE)
+  @ApiOperation({ summary: 'Delete Discount Rule', description: 'Soft-deletes (deactivates) the rule.' })
+  @ApiParam({ name: 'id', type: Number })
+  @ApiResponse({ status: 200, description: 'Discount rule deleted successfully' })
+  async deleteDiscountRule(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser('schoolId') schoolId: number,
+  ) {
+    await this.feeService.deleteDiscountRule(id, schoolId);
+    return { message: 'Discount rule deleted successfully' };
+  }
+
+  // Penalty Rules (admin-managed)
+  @Post('penalty-rules')
+  @Roles(UserRole.ADMIN, UserRole.ACCOUNTANT)
+  @Permissions(Permission.FEE_CREATE)
+  @ApiOperation({
+    summary: 'Create Penalty Rule',
+    description:
+      'Create a school-level penalty rule. Name stored in English + Nepali as sent by frontend.',
+  })
+  @ApiBody({ type: CreatePenaltyRuleDto })
+  @ApiResponse({ status: 201, description: 'Penalty rule created successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid input data' })
+  createPenaltyRule(@Body() createDto: CreatePenaltyRuleDto) {
+    return this.feeService.createPenaltyRule(createDto);
+  }
+
+  @Get('penalty-rules')
+  @Roles(UserRole.ADMIN, UserRole.ACCOUNTANT)
+  @Permissions(Permission.FEE_READ)
+  @ApiOperation({
+    summary: 'Get Penalty Rules',
+    description: 'Retrieve all active penalty rules for the school.',
+  })
+  @ApiResponse({ status: 200, description: 'Penalty rules retrieved successfully' })
+  getPenaltyRules(@GetUser('schoolId') schoolId: number) {
+    return this.feeService.getPenaltyRules(schoolId);
+  }
+
+  @Patch('penalty-rules/:id')
+  @Roles(UserRole.ADMIN, UserRole.ACCOUNTANT)
+  @Permissions(Permission.FEE_UPDATE)
+  @ApiOperation({ summary: 'Update Penalty Rule' })
+  @ApiParam({ name: 'id', type: Number })
+  @ApiBody({ type: UpdatePenaltyRuleDto })
+  updatePenaltyRule(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser('schoolId') schoolId: number,
+    @Body() updateDto: UpdatePenaltyRuleDto,
+  ) {
+    return this.feeService.updatePenaltyRule(id, schoolId, updateDto);
+  }
+
+  @Delete('penalty-rules/:id')
+  @Roles(UserRole.ADMIN, UserRole.ACCOUNTANT)
+  @Permissions(Permission.FEE_UPDATE)
+  @ApiOperation({ summary: 'Delete Penalty Rule', description: 'Soft-deletes (deactivates) the rule.' })
+  @ApiParam({ name: 'id', type: Number })
+  @ApiResponse({ status: 200, description: 'Penalty rule deleted successfully' })
+  async deletePenaltyRule(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser('schoolId') schoolId: number,
+  ) {
+    await this.feeService.deletePenaltyRule(id, schoolId);
+    return { message: 'Penalty rule deleted successfully' };
   }
 
   @Get('calculate-fine')
@@ -1073,6 +1199,7 @@ export class FeeController {
       discountAmount?: number;
       academicYear: string;
       reason?: string;
+      reasonNp?: string;
     },
   ) {
     return this.feeService.createScholarship(createDto);
@@ -1164,12 +1291,13 @@ export class FeeController {
   })
   approveScholarship(
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { approvedBy: number; remarks?: string },
+    @Body() body: { approvedBy: number; remarks?: string; remarksNp?: string },
   ) {
     return this.feeService.approveScholarship(
       id,
       body.approvedBy,
       body.remarks,
+      body.remarksNp,
     );
   }
 
@@ -1202,9 +1330,14 @@ export class FeeController {
   @ApiResponse({ status: 201, description: 'Scholarship rejected' })
   rejectScholarship(
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { approvedBy: number; remarks: string },
+    @Body() body: { approvedBy: number; remarks: string; remarksNp?: string },
   ) {
-    return this.feeService.rejectScholarship(id, body.approvedBy, body.remarks);
+    return this.feeService.rejectScholarship(
+      id,
+      body.approvedBy,
+      body.remarks,
+      body.remarksNp,
+    );
   }
 
   // Sibling Discounts
@@ -1342,6 +1475,7 @@ export class FeeController {
       waiverType: string;
       requestedAmount: number;
       reason?: string;
+      reasonNp?: string;
       supportingDocuments?: string[];
     },
   ) {
@@ -1413,13 +1547,14 @@ export class FeeController {
   approveFeeWaiver(
     @Param('id', ParseIntPipe) id: number,
     @Body()
-    body: { approvedBy: number; approvedAmount: number; remarks?: string },
+    body: { approvedBy: number; approvedAmount: number; remarks?: string; remarksNp?: string },
   ) {
     return this.feeService.approveFeeWaiver(
       id,
       body.approvedBy,
       body.approvedAmount,
       body.remarks,
+      body.remarksNp,
     );
   }
 
@@ -1449,8 +1584,13 @@ export class FeeController {
   @ApiResponse({ status: 201, description: 'Fee waiver rejected' })
   rejectFeeWaiver(
     @Param('id', ParseIntPipe) id: number,
-    @Body() body: { approvedBy: number; remarks: string },
+    @Body() body: { approvedBy: number; remarks: string; remarksNp?: string },
   ) {
-    return this.feeService.rejectFeeWaiver(id, body.approvedBy, body.remarks);
+    return this.feeService.rejectFeeWaiver(
+      id,
+      body.approvedBy,
+      body.remarks,
+      body.remarksNp,
+    );
   }
 }

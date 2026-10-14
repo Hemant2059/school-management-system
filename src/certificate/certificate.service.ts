@@ -68,14 +68,19 @@ export interface CreateTCDto {
   leavingDate: string;
   leavingDateBs?: string;
   reasonForLeaving?: string;
+  reasonForLeavingNp?: string;
   characterGrade?: string;
   attendancePercentage?: number;
   lastClassId?: number;
+  lastClassNp?: string;
   lastSectionId?: number;
   lastAcademicYear?: string;
   isConductCertificate?: boolean;
   issuedTo?: string;
+  issuedToNp?: string;
   remarks?: string;
+  remarksNp?: string;
+  certificateTypeNp?: string;
   issuedBy: number;
 }
 
@@ -83,6 +88,8 @@ export interface CreateBonafideDto {
   schoolId: number;
   studentId: number;
   purpose?: string;
+  purposeNp?: string;
+  certificateTypeNp?: string;
   issuedBy: number;
 }
 
@@ -90,7 +97,10 @@ export interface CreateCharacterDto {
   schoolId: number;
   studentId: number;
   characterGrade?: string;
+  characterRemarksNp?: string;
   conductDescription?: string;
+  conductDescriptionNp?: string;
+  certificateTypeNp?: string;
   issuedBy: number;
 }
 
@@ -127,11 +137,12 @@ export class CertificateService {
     );
 
     const certificate = await this.db.insert<Certificate>(
-      `INSERT INTO certificates (school_id, certificate_type, student_id, certificate_number, issued_date, issued_date_bs, issued_by, is_active)
-       VALUES ($1, 'TC', $2, $3, $4, $5, $6, true)
+      `INSERT INTO certificates (school_id, certificate_type, certificate_type_np, student_id, certificate_number, issued_date, issued_date_bs, issued_by, is_active)
+       VALUES ($1, 'TC', $2, $3, $4, $5, $6, $7, true)
        RETURNING *`,
       [
         dto.schoolId,
+        dto.certificateTypeNp || null,
         dto.studentId,
         certificateNumber,
         dto.leavingDate,
@@ -141,8 +152,8 @@ export class CertificateService {
     );
 
     const tc = await this.db.insert<TransferCertificate>(
-      `INSERT INTO transfer_certificates (certificate_id, school_id, student_id, leaving_date, leaving_date_bs, reason_for_leaving, character_grade, attendance_percentage, last_class_id, last_section_id, last_academic_year, is_conduct_certificate, tc_number, issued_to, signature_principal, signature_teacher, remarks)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+      `INSERT INTO transfer_certificates (certificate_id, school_id, student_id, leaving_date, leaving_date_bs, reason_for_leaving, reason_for_leaving_np, character_grade, attendance_percentage, last_class_id, last_class_np, last_section_id, last_academic_year, is_conduct_certificate, tc_number, issued_to, issued_to_np, signature_principal, signature_teacher, remarks, remarks_np)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
        RETURNING *`,
       [
         certificate.certificate_id,
@@ -151,17 +162,21 @@ export class CertificateService {
         dto.leavingDate,
         dto.leavingDateBs || null,
         dto.reasonForLeaving || null,
+        dto.reasonForLeavingNp || null,
         dto.characterGrade || null,
         dto.attendancePercentage || null,
         dto.lastClassId || null,
+        dto.lastClassNp || null,
         dto.lastSectionId || null,
         dto.lastAcademicYear || null,
         dto.isConductCertificate ?? true,
         certificateNumber,
         dto.issuedTo || 'PARENT',
+        dto.issuedToNp || null,
         dto.remarks ? false : true,
         dto.remarks ? false : true,
         dto.remarks || null,
+        dto.remarksNp || null,
       ],
     );
 
@@ -183,21 +198,28 @@ export class CertificateService {
     );
 
     const certificate = await this.db.insert<Certificate>(
-      `INSERT INTO certificates (school_id, certificate_type, student_id, certificate_number, issued_date, issued_by, is_active)
-       VALUES ($1, 'BONAFIDE', $2, $3, CURRENT_DATE, $4, true)
+      `INSERT INTO certificates (school_id, certificate_type, certificate_type_np, student_id, certificate_number, issued_date, issued_by, is_active)
+       VALUES ($1, 'BONAFIDE', $2, $3, $4, CURRENT_DATE, $5, true)
        RETURNING *`,
-      [dto.schoolId, dto.studentId, certificateNumber, dto.issuedBy],
+      [
+        dto.schoolId,
+        dto.certificateTypeNp || null,
+        dto.studentId,
+        certificateNumber,
+        dto.issuedBy,
+      ],
     );
 
     const bonafide = await this.db.insert<BonafideCertificate>(
-      `INSERT INTO bonafide_certificates (certificate_id, school_id, student_id, purpose, is_verified, verified_by, verified_at)
-       VALUES ($1, $2, $3, $4, false, $5, NULL)
+      `INSERT INTO bonafide_certificates (certificate_id, school_id, student_id, purpose, purpose_np, is_verified, verified_by, verified_at)
+       VALUES ($1, $2, $3, $4, $5, false, $6, NULL)
        RETURNING *`,
       [
         certificate.certificate_id,
         dto.schoolId,
         dto.studentId,
         dto.purpose || null,
+        dto.purposeNp || null,
         dto.issuedBy,
       ],
     );
@@ -222,22 +244,30 @@ export class CertificateService {
     );
 
     const certificate = await this.db.insert<Certificate>(
-      `INSERT INTO certificates (school_id, certificate_type, student_id, certificate_number, issued_date, issued_by, is_active)
-       VALUES ($1, 'CHARACTER', $2, $3, CURRENT_DATE, $4, true)
+      `INSERT INTO certificates (school_id, certificate_type, certificate_type_np, student_id, certificate_number, issued_date, issued_by, is_active)
+       VALUES ($1, 'CHARACTER', $2, $3, $4, CURRENT_DATE, $5, true)
        RETURNING *`,
-      [dto.schoolId, dto.studentId, certificateNumber, dto.issuedBy],
+      [
+        dto.schoolId,
+        dto.certificateTypeNp || null,
+        dto.studentId,
+        certificateNumber,
+        dto.issuedBy,
+      ],
     );
 
     const character = await this.db.insert<CharacterCertificate>(
-      `INSERT INTO character_certificates (certificate_id, school_id, student_id, character_grade, conduct_description, is_verified, verified_by, verified_at)
-       VALUES ($1, $2, $3, $4, $5, false, $6, NULL)
+      `INSERT INTO character_certificates (certificate_id, school_id, student_id, character_grade, character_remarks_np, conduct_description, conduct_description_np, is_verified, verified_by, verified_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, false, $8, NULL)
        RETURNING *`,
       [
         certificate.certificate_id,
         dto.schoolId,
         dto.studentId,
         dto.characterGrade || null,
+        dto.characterRemarksNp || null,
         dto.conductDescription || null,
+        dto.conductDescriptionNp || null,
         dto.issuedBy,
       ],
     );

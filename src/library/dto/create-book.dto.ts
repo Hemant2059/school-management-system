@@ -69,6 +69,24 @@ export class CreateBookDto {
   @IsString()
   readonly publisherNp?: string;
 
+  @ApiPropertyOptional({
+    description: 'Book category in Nepali (provided by frontend)',
+    example: 'पाठ्यपुस्तक',
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  readonly categoryNp?: string;
+
+  @ApiPropertyOptional({
+    description: 'Subject area in Nepali (provided by frontend)',
+    example: 'गणित',
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  readonly subjectNp?: string;
+
   @ApiProperty({
     description: 'ISBN number',
     example: '978-99946-000-1-2',

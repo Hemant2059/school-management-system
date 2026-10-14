@@ -7,7 +7,9 @@ import { WhatsAppService } from './whatsapp.service';
 export interface Notification {
   notification_id: number;
   title: string;
+  title_np?: string | null;
   message: string;
+  message_np?: string | null;
   type: string;
   school_id: number | null;
   user_id: number | null;
@@ -75,12 +77,14 @@ export class NotificationService {
     for (const userId of userIds) {
       first = await this.db.insert<Notification>(
         `INSERT INTO notifications (
-          title, message, type, school_id, user_id, is_read
-        ) VALUES ($1, $2, $3, $4, $5, $6)
+          title, title_np, message, message_np, type, school_id, user_id, is_read
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
         RETURNING *`,
         [
           createDto.title,
+          (createDto as any).titleNp || null,
           createDto.message,
+          (createDto as any).messageNp || null,
           createDto.type || 'INFO',
           createDto.schoolId || null,
           userId,
@@ -152,11 +156,23 @@ export class NotificationService {
     let paramIndex = 1;
 
     const fields = ['title', 'message', 'type', 'is_read'];
+    const npFieldMap: Record<string, string> = {
+      titleNp: 'title_np',
+      messageNp: 'message_np',
+    };
 
     for (const field of fields) {
       if ((updateDto as any)[field] !== undefined) {
         updates.push(`${field} = $${paramIndex}`);
         params.push((updateDto as any)[field]);
+        paramIndex++;
+      }
+    }
+
+    for (const [dtoField, column] of Object.entries(npFieldMap)) {
+      if ((updateDto as any)[dtoField] !== undefined) {
+        updates.push(`${column} = $${paramIndex}`);
+        params.push((updateDto as any)[dtoField] || null);
         paramIndex++;
       }
     }

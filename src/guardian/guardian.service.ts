@@ -83,8 +83,8 @@ export class GuardianService {
       : `${createGuardianDto.firstNameEn} ${createGuardianDto.lastNameEn ?? ''}`.trim();
 
     const created = await this.db.insert<Guardian>(
-      `INSERT INTO guardians (school_id, guardian_code, first_name_en, middle_name_en, last_name_en, first_name_np, middle_name_np, last_name_np, display_name, relation_to_student, occupation, education_level, mobile, alternate_mobile, email, annual_income, citizenship_no, citizenship_issue_district, citizenship_issue_date, citizenship_issue_date_bs, nin, address_en, address_np)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
+      `INSERT INTO guardians (school_id, guardian_code, first_name_en, middle_name_en, last_name_en, first_name_np, middle_name_np, last_name_np, display_name, relation_to_student, relation_to_student_np, occupation, occupation_np, education_level, education_level_np, mobile, alternate_mobile, email, annual_income, citizenship_no, citizenship_issue_district, citizenship_issue_date, citizenship_issue_date_bs, nin, address_en, address_np)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26)
        RETURNING *`,
       [
         createGuardianDto.schoolId,
@@ -97,8 +97,11 @@ export class GuardianService {
         createGuardianDto.lastNameNp,
         displayName,
         createGuardianDto.relationToStudent,
+        createGuardianDto.relationToStudentNp || null,
         createGuardianDto.occupation || null,
+        createGuardianDto.occupationNp || null,
         createGuardianDto.educationLevel || null,
+        createGuardianDto.educationLevelNp || null,
         createGuardianDto.mobile,
         createGuardianDto.alternateMobile || null,
         createGuardianDto.email || null,
@@ -173,8 +176,11 @@ export class GuardianService {
       lastNameNp: 'last_name_np',
       relation: 'relation_to_student',
       relationToStudent: 'relation_to_student',
+      relationToStudentNp: 'relation_to_student_np',
       occupation: 'occupation',
+      occupationNp: 'occupation_np',
       educationLevel: 'education_level',
+      educationLevelNp: 'education_level_np',
       mobile: 'mobile',
       alternateMobile: 'alternate_mobile',
       email: 'email',

@@ -7,6 +7,8 @@ import { DatabaseService } from '../database/database.service';
 import { CreateStaffDto } from './dto/create-staff.dto';
 import { ProcessPayrollDto } from './dto/process-payroll.dto';
 import { CreateLeaveRequestDto } from './dto/create-leave-request.dto';
+import { CreateLeaveTypeDto } from './dto/create-leave-type.dto';
+import { UpdateLeaveTypeDto } from './dto/update-leave-type.dto';
 import { NepaliNumberUtil } from '../utils/nepali-number.util';
 
 export interface Staff {
@@ -63,6 +65,17 @@ export interface Payroll {
   updated_at: Date;
 }
 
+export interface LeaveType {
+  id: number;
+  school_id: number;
+  name: string;
+  name_np: string | null;
+  max_days_per_year: number | null;
+  is_paid: boolean;
+  is_active: boolean;
+  created_at: Date;
+}
+
 export interface LeaveRequest {
   leave_request_id: number;
   school_id: number;
@@ -108,8 +121,9 @@ export class HrService {
     const result = await this.db.insert<Staff>(
       `INSERT INTO staff (
         school_id, user_id, staff_code, employee_id, first_name, last_name, email, mobile,
-        department, designation, employment_type, joining_date, current_status, is_active
-      ) VALUES ($1, $2, $3, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        department, designation, employment_type, joining_date, current_status, is_active,
+        first_name_np, middle_name_np, last_name_np, department_np, designation_np, employment_type_np
+      ) VALUES ($1, $2, $3, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
       RETURNING *`,
       [
         createDto.schoolId,
@@ -125,6 +139,12 @@ export class HrService {
         createDto.hireDate,
         'ACTIVE',
         true,
+        createDto.firstNameNp ?? null,
+        createDto.middleNameNp ?? null,
+        createDto.lastNameNp ?? null,
+        createDto.departmentNp ?? null,
+        createDto.designationNp ?? null,
+        createDto.employmentTypeNp ?? null,
       ],
     );
     return result;
@@ -315,8 +335,8 @@ export class HrService {
     const result = await this.db.insert<LeaveRequest>(
       `INSERT INTO leave_requests (
         school_id, staff_id, leave_type_id, start_date, start_date_bs,
-        end_date, end_date_bs, days_requested, reason, status, is_active
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        end_date, end_date_bs, days_requested, reason, reason_np, status, is_active
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       RETURNING *`,
       [
         createDto.schoolId,
@@ -328,11 +348,100 @@ export class HrService {
         endBs,
         createDto.daysRequested,
         createDto.reason,
+        createDto.reasonNp ?? null,
         'PENDING',
         true,
       ],
     );
     return result;
+  }
+
+  // ---- Leave types (admin-managed; EN+NP stored verbatim) ----
+  async createLeaveType(createDto: CreateLeaveTypeDto): Promise<LeaveType> {
+    const dup = await this.db.queryOne<LeaveType>(
+      `SELECT id FROM leave_types WHERE school_id = $1 AND name = $2`,
+      [createDto.schoolId, createDto.name],
+    );
+    if (dup) {
+      throw new BadRequestException(
+        `Leave type '${createDto.name}' already exists for this school`,
+      );
+    }
+    return this.db.insert<LeaveType>(
+      `INSERT INTO leave_types (school_id, name, name_np, max_days_per_year, is_paid, is_active)
+       VALUES ($1, $2, $3, $4, $5, true)
+       RETURNING *`,
+      [
+        createDto.schoolId,
+        createDto.name,
+        createDto.nameNp || null,
+        createDto.maxDaysPerYear ?? null,
+        createDto.isPaid ?? false,
+      ],
+    );
+  }
+
+  async getLeaveTypes(schoolId: number): Promise<LeaveType[]> {
+    return this.db.query<LeaveType>(
+      `SELECT * FROM leave_types WHERE school_id = $1 AND is_active = true ORDER BY name ASC`,
+      [schoolId],
+    );
+  }
+
+  async updateLeaveType(
+    id: number,
+    schoolId: number,
+    updateDto: UpdateLeaveTypeDto,
+  ): Promise<LeaveType> {
+    const existing = await this.db.queryOne<LeaveType>(
+      `SELECT * FROM leave_types WHERE id = $1 AND school_id = $2`,
+      [id, schoolId],
+    );
+    if (!existing) {
+      throw new NotFoundException(`Leave type with ID ${id} not found`);
+    }
+    const fieldMap: Record<string, string> = {
+      name: 'name',
+      nameNp: 'name_np',
+      maxDaysPerYear: 'max_days_per_year',
+      isPaid: 'is_paid',
+      isActive: 'is_active',
+    };
+    const updates: string[] = [];
+    const params: any[] = [];
+    let i = 1;
+    for (const [key, col] of Object.entries(fieldMap)) {
+      const v = (updateDto as any)[key];
+      if (v !== undefined) {
+        updates.push(`${col} = $${i++}`);
+        params.push(v);
+      }
+    }
+    if (updates.length === 0) return existing;
+    params.push(id);
+    return this.db.insert<LeaveType>(
+      `UPDATE leave_types SET ${updates.join(', ')} WHERE id = $${i} RETURNING *`,
+      params,
+    );
+  }
+
+  async deleteLeaveType(id: number, schoolId: number): Promise<void> {
+    const inUse = await this.db.queryOne<{ count: string }>(
+      `SELECT COUNT(*) as count FROM leave_requests WHERE leave_type_id = $1 AND status = 'PENDING'`,
+      [id],
+    );
+    if (inUse && parseInt(inUse.count, 10) > 0) {
+      throw new BadRequestException(
+        'Cannot delete leave type with pending requests',
+      );
+    }
+    const n = await this.db.update(
+      `UPDATE leave_types SET is_active = false WHERE id = $1 AND school_id = $2`,
+      [id, schoolId],
+    );
+    if (n === 0) {
+      throw new NotFoundException(`Leave type with ID ${id} not found`);
+    }
   }
 
   async approveLeaveRequest(
@@ -358,6 +467,7 @@ export class HrService {
   async rejectLeaveRequest(
     leaveRequestId: number,
     rejectionReason: string,
+    rejectionReasonNp?: string,
   ): Promise<LeaveRequest> {
     const leaveRequest = await this.db.queryOne<LeaveRequest>(
       `SELECT * FROM leave_requests WHERE leave_request_id = $1`,
@@ -369,8 +479,8 @@ export class HrService {
     }
 
     const result = await this.db.insert<LeaveRequest>(
-      `UPDATE leave_requests SET status = 'REJECTED', rejection_reason = $1 WHERE leave_request_id = $2 RETURNING *`,
-      [rejectionReason, leaveRequestId],
+      `UPDATE leave_requests SET status = 'REJECTED', rejection_reason = $1, rejection_reason_np = $2 WHERE leave_request_id = $3 RETURNING *`,
+      [rejectionReason, rejectionReasonNp || null, leaveRequestId],
     );
     return result;
   }

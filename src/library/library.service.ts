@@ -70,8 +70,8 @@ export class LibraryService {
     }
 
     const result = await this.db.insert<Book>(
-      `INSERT INTO books (school_id, isbn, book_code, title, title_en, author, publisher, category, total_copies, available_copies, is_active)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true)
+      `INSERT INTO books (school_id, isbn, book_code, title, title_en, author, publisher, publisher_np, category, category_np, subject, subject_np, total_copies, available_copies, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, true)
        RETURNING *`,
       [
         createDto.schoolId,
@@ -81,7 +81,11 @@ export class LibraryService {
         createDto.titleEn,
         createDto.authorEn,
         createDto.publisherEn,
+        createDto.publisherNp ?? null,
         createDto.bookType,
+        createDto.categoryNp ?? null,
+        createDto.subject || null,
+        createDto.subjectNp ?? null,
         createDto.totalCopies,
         createDto.totalCopies,
       ],
@@ -154,7 +158,9 @@ export class LibraryService {
       isbn: 'isbn',
       bookCode: 'book_code',
       subject: 'subject',
+      subjectNp: 'subject_np',
       bookType: 'category',
+      categoryNp: 'category_np',
       price: 'price',
 
       totalCopies: 'total_copies',
@@ -284,8 +290,8 @@ export class LibraryService {
     const result = await this.db.insert<BookIssue>(
       `UPDATE book_issues SET 
         return_date = $1, return_date_bs = $2, fine_amount = $3, 
-        days_overdue = $4, status = $5, remarks = $6
-      WHERE issue_id = $7
+        days_overdue = $4, status = $5, remarks = $6, remarks_np = $7
+      WHERE issue_id = $8
       RETURNING *`,
       [
         returnDate,
@@ -294,6 +300,7 @@ export class LibraryService {
         daysOverdue,
         'RETURNED',
         remarks,
+        returnDto.remarksNp ?? null,
         issueId,
       ],
     );

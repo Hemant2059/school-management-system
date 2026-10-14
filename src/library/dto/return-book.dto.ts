@@ -37,4 +37,12 @@ export class ReturnBookDto {
   @IsOptional()
   @IsString()
   readonly returnDateBs?: string;
+
+  @ApiPropertyOptional({
+    description: 'Return remarks in Nepali (provided by frontend)',
+    example: 'जरिवाना सहित फिर्ता',
+  })
+  @IsOptional()
+  @IsString()
+  readonly remarksNp?: string;
 }

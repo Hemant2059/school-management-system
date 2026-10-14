@@ -127,6 +127,15 @@ export class CreateStaffDto {
   readonly position: string;
 
   @ApiPropertyOptional({
+    description: 'Designation in Nepali (provided by frontend alongside position)',
+    example: 'प्रशासनिक अधिकृत',
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  readonly designationNp?: string;
+
+  @ApiPropertyOptional({
     description: 'Department',
     example: 'Administration',
     type: String,
@@ -134,6 +143,15 @@ export class CreateStaffDto {
   @IsOptional()
   @IsString()
   readonly department?: string;
+
+  @ApiPropertyOptional({
+    description: 'Department in Nepali (provided by frontend)',
+    example: 'प्रशासन',
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  readonly departmentNp?: string;
 
   @ApiProperty({
     description: 'Date of hiring/joining',
@@ -153,6 +171,15 @@ export class CreateStaffDto {
   @IsNotEmpty()
   @IsEnum(['PERMANENT', 'CONTRACT', 'PART_TIME', 'CASUAL'])
   readonly employmentType: string;
+
+  @ApiPropertyOptional({
+    description: 'Employment type in Nepali (provided by frontend)',
+    example: 'स्थायी',
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  readonly employmentTypeNp?: string;
 
   @ApiPropertyOptional({
     description: 'Mobile phone number',

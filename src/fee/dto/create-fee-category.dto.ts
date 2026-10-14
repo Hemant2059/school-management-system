@@ -22,4 +22,21 @@ export class CreateFeeCategoryDto {
   @IsOptional()
   @IsString()
   readonly description?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Fee category name in Nepali (provided by frontend, stored verbatim)',
+    example: 'शुल्क',
+  })
+  @IsOptional()
+  @IsString()
+  readonly categoryNameNp?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Description in Nepali (provided by frontend, stored verbatim)',
+  })
+  @IsOptional()
+  @IsString()
+  readonly descriptionNp?: string;
 }

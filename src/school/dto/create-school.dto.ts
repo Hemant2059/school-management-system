@@ -51,6 +51,15 @@ export class CreateSchoolDto {
   schoolType?: string;
 
   @ApiPropertyOptional({
+    description: 'Type of school (Nepali, provided by frontend)',
+    example: 'दिवा आवासीय',
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  schoolTypeNp?: string;
+
+  @ApiPropertyOptional({
     description: 'Ownership/management type of the school',
     example: 'PRIVATE',
     enum: ['PRIVATE', 'COMMUNITY', 'INSTITUTIONAL'],
@@ -58,6 +67,33 @@ export class CreateSchoolDto {
   @IsOptional()
   @IsEnum(['PRIVATE', 'COMMUNITY', 'INSTITUTIONAL'])
   ownershipType?: string;
+
+  @ApiPropertyOptional({
+    description: 'Ownership/management type (Nepali, provided by frontend)',
+    example: 'निजी',
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  ownershipTypeNp?: string;
+
+  @ApiPropertyOptional({
+    description: 'School name (Nepali twin of legacy name column, provided by frontend)',
+    example: 'एभरेस्ट उच्च माध्यमिक विद्यालय',
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  nameNp?: string;
+
+  @ApiPropertyOptional({
+    description: 'School address (Nepali, provided by frontend)',
+    example: 'काठमाडौं, नेपाल',
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  addressNp?: string;
 
   @ApiPropertyOptional({
     description: 'Date when the school was established',

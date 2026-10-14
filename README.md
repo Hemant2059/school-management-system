@@ -137,6 +137,19 @@ curl -H "Authorization: Bearer $TOKEN" -H "X-School-Id: 1" \
   "http://localhost:3001/api/v1/assignments?classId=1&page=1&limit=12"
 ```
 
+## Admin Catalog Endpoints
+
+These school-level masters are managed through CRUD endpoints (all bilingual EN+NP):
+
+| Group | Endpoints |
+| ----- | --------- |
+| Fee discount rules | `POST/GET /fee/discount-rules`, `PATCH/DELETE /fee/discount-rules/:id` |
+| Fee penalty rules | `POST/GET /fee/penalty-rules`, `PATCH/DELETE /fee/penalty-rules/:id` |
+| Leave types | `POST/GET /hr/leave-types`, `PATCH/DELETE /hr/leave-types/:id` |
+| Document templates | `POST/GET /documents/templates`, `GET/PATCH/DELETE /documents/templates/:id` |
+
+Deletes are soft (deactivate); leave-type delete is blocked while pending requests reference it.
+
 ## Nepal-Specific Features
 
 - **Bikram Sambat (BS) Dates**: Every business date is stored as an AD+BS pair (e.g. `due_date` + `due_date_bs`). `created_at`/`updated_at` are AD-only.

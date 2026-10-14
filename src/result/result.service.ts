@@ -73,6 +73,7 @@ export class ResultService {
     practicalMarks?: number;
     isAbsent?: boolean;
     remarks?: string;
+    remarksNp?: string;
   }): Promise<Mark> {
     const fullMarks = createDto.fullMarks || 100;
     const totalMarks = createDto.isAbsent ? 0 : createDto.marksObtained || 0;
@@ -84,8 +85,8 @@ export class ResultService {
     );
 
     return this.db.insert<Mark>(
-      `INSERT INTO marks (school_id, student_id, exam_id, subject_id, class_id, section_id, academic_year, marks_obtained, full_marks, theory_marks, practical_marks, total_marks, grade, grade_point, is_absent, is_submitted, is_verified, is_active)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, false, false, true)
+      `INSERT INTO marks (school_id, student_id, exam_id, subject_id, class_id, section_id, academic_year, marks_obtained, full_marks, theory_marks, practical_marks, total_marks, grade, grade_point, is_absent, is_submitted, is_verified, is_active, remarks, remarks_np)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, false, false, true, $16, $17)
        RETURNING *`,
       [
         createDto.schoolId,
@@ -103,6 +104,8 @@ export class ResultService {
         grade,
         gradePoint,
         createDto.isAbsent || false,
+        createDto.remarks || null,
+        createDto.remarksNp || null,
       ],
     );
   }
@@ -118,6 +121,8 @@ export class ResultService {
       theoryMarks?: number;
       practicalMarks?: number;
       isAbsent?: boolean;
+      remarks?: string;
+      remarksNp?: string;
     }[];
   }): Promise<Mark[]> {
     const results: Mark[] = [];
@@ -139,8 +144,8 @@ export class ResultService {
       );
 
       const result = await this.db.insert<Mark>(
-        `INSERT INTO marks (school_id, student_id, exam_id, subject_id, class_id, theory_marks, practical_marks, total_marks, grade, grade_point, is_absent, is_submitted, is_verified, is_active)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, false, false, true)
+        `INSERT INTO marks (school_id, student_id, exam_id, subject_id, class_id, theory_marks, practical_marks, total_marks, grade, grade_point, is_absent, is_submitted, is_verified, is_active, remarks, remarks_np)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, false, false, true, $12, $13)
          ON CONFLICT (school_id, student_id, exam_id, subject_id) DO UPDATE SET
            marks_obtained = EXCLUDED.marks_obtained,
            theory_marks = EXCLUDED.theory_marks,
@@ -149,6 +154,8 @@ export class ResultService {
            grade = EXCLUDED.grade,
            grade_point = EXCLUDED.grade_point,
            is_absent = EXCLUDED.is_absent,
+           remarks = EXCLUDED.remarks,
+           remarks_np = EXCLUDED.remarks_np,
            updated_at = NOW()
          RETURNING *`,
         [
@@ -163,6 +170,8 @@ export class ResultService {
           grade,
           gradePoint,
           mark.isAbsent || false,
+          mark.remarks || null,
+          mark.remarksNp || null,
         ],
       );
       results.push(result[0]);
@@ -227,6 +236,7 @@ export class ResultService {
       fullMarks?: number;
       isAbsent?: boolean;
       remarks?: string;
+      remarksNp?: string;
       userId?: number;
     },
   ): Promise<Mark> {
@@ -266,6 +276,7 @@ export class ResultService {
         grade_point = $7,
         is_absent = COALESCE($8, is_absent),
         remarks = COALESCE($9, remarks),
+        remarks_np = COALESCE($10, remarks_np),
         updated_at = NOW()
        WHERE mark_id = $1`,
       [
@@ -278,6 +289,7 @@ export class ResultService {
         gradePoint,
         updateDto.isAbsent ?? null,
         updateDto.remarks ?? null,
+        updateDto.remarksNp ?? null,
       ],
     );
 

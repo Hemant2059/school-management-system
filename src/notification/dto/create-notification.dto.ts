@@ -17,6 +17,16 @@ export class CreateNotificationDto {
   @IsString()
   readonly title: string;
 
+  @ApiPropertyOptional({
+    description:
+      'Notification title in Nepali (provided by frontend, stored verbatim)',
+    example: 'परीक्षा तालिका प्रकाशित',
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  readonly titleNp?: string;
+
   @ApiProperty({
     description: 'Notification message in English',
     example: 'First terminal examination schedule has been published.',
@@ -27,7 +37,8 @@ export class CreateNotificationDto {
   readonly message: string;
 
   @ApiPropertyOptional({
-    description: 'Notification message in Nepali',
+    description:
+      'Notification message in Nepali (provided by frontend, stored verbatim)',
     example: 'पहिलो टर्मिनल परीक्षाको तालिका प्रकाशन गरिएको छ।',
     type: String,
   })

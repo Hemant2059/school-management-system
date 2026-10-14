@@ -8,7 +8,7 @@ import {
   IsNumber,
   IsOptional,
 } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateUserDto {
   @ApiProperty({
@@ -59,6 +59,16 @@ export class CreateUserDto {
   @IsNotEmpty()
   @IsString()
   fullName: string;
+
+  @ApiPropertyOptional({
+    description: 'Full name in Nepali (Devanagari, provided by frontend)',
+    example: 'राम बहादुर',
+    type: String,
+    required: false,
+  })
+  @IsOptional()
+  @IsString()
+  fullNameNp?: string;
 
   @ApiProperty({
     description: 'Email address of the user',

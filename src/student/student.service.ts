@@ -170,16 +170,16 @@ export class StudentService {
         gender, date_of_birth_ad, date_of_birth_bs,
         student_email, student_mobile,
         current_status, is_active, is_govt_mandated_free_seat, is_economically_disadvantaged,
-        caste_code, caste_ethnicity, citizenship_number, citizenship_issue_district, citizenship_issue_date, citizenship_issue_date_bs, birth_certificate_number, nin,
-        iemis_student_id, has_disability, disability_type,
-        blood_group, religion, mother_tongue,
+        caste_code, caste_ethnicity, caste_ethnicity_np, citizenship_number, citizenship_issue_district, citizenship_issue_date, citizenship_issue_date_bs, birth_certificate_number, nin,
+        iemis_student_id, has_disability, disability_type, disability_type_np,
+        blood_group, religion, religion_np, nationality_np, mother_tongue, mother_tongue_np, birthplace_np, father_name_np, mother_name_np,
         permanent_province_id, permanent_district_id, permanent_municipality_id, permanent_ward_no,
         permanent_tole_en, permanent_tole_np,
         temporary_province_id, temporary_district_id, temporary_municipality_id, temporary_ward_no,
         temporary_tole_en, temporary_address_en, temporary_tole_np, temporary_address_np,
         created_by, updated_by
       )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55, $56, $57, $58, $59, $60)
        RETURNING *`,
         [
           createStudentDto.schoolId,
@@ -206,6 +206,7 @@ export class StudentService {
           false,
           casteCode,
           createStudentDto.casteEthnicity || null,
+          createStudentDto.casteEthnicityNp || null,
           enc(createStudentDto.citizenshipNumber),
           createStudentDto.citizenshipIssueDistrict || null,
           createStudentDto.citizenshipIssueDate || null,
@@ -215,10 +216,17 @@ export class StudentService {
           createStudentDto.iemisStudentId || null,
           createStudentDto.hasDisability || false,
           createStudentDto.disabilityType || null,
+          createStudentDto.disabilityTypeNp || null,
 
           createStudentDto.bloodGroup || null,
           createStudentDto.religion || null,
+          createStudentDto.religionNp || null,
+          createStudentDto.nationalityNp || null,
           createStudentDto.motherTongue || null,
+          createStudentDto.motherTongueNp || null,
+          createStudentDto.birthplaceNp || null,
+          createStudentDto.fatherNameNp || null,
+          createStudentDto.motherNameNp || null,
           createStudentDto.permanentProvinceId || null,
           createStudentDto.permanentDistrictId || null,
           createStudentDto.permanentMunicipalityId || null,
@@ -427,6 +435,14 @@ export class StudentService {
       nin: 'nin',
       iemisStudentId: 'iemis_student_id',
       admissionDateBs: 'admission_date_bs',
+      religionNp: 'religion_np',
+      nationalityNp: 'nationality_np',
+      motherTongueNp: 'mother_tongue_np',
+      casteEthnicityNp: 'caste_ethnicity_np',
+      birthplaceNp: 'birthplace_np',
+      disabilityTypeNp: 'disability_type_np',
+      fatherNameNp: 'father_name_np',
+      motherNameNp: 'mother_name_np',
     };
 
     // PII at rest: encrypt identity/financial fields on the way in.

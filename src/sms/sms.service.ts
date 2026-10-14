@@ -227,16 +227,20 @@ export class SmsService {
       templateCode: string;
       messageEn: string;
       messageNp: string;
+      nameNp?: string;
+      templateTextNp?: string;
     },
   ): Promise<SmsTemplate> {
     return this.db.insert<SmsTemplate>(
-      `INSERT INTO sms_templates (school_id, name, template_text, template_name, template_code, message_en, message_np, is_active)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, true)
+      `INSERT INTO sms_templates (school_id, name, name_np, template_text, template_text_np, template_name, template_code, message_en, message_np, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true)
        RETURNING *`,
       [
         schoolId,
         dto.templateName,
+        dto.nameNp || null,
         dto.messageEn,
+        dto.templateTextNp || null,
         dto.templateName,
         dto.templateCode,
         dto.messageEn,

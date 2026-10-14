@@ -66,6 +66,15 @@ export class CreateTimetableDto {
   @Max(6)
   readonly dayOfWeek: number;
 
+  @ApiPropertyOptional({
+    description: 'Day of week in Nepali (provided by frontend)',
+    example: 'सोमबार',
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  readonly dayOfWeekNp?: string;
+
   @ApiProperty({
     description: 'Period start time (HH:MM format)',
     example: '09:00',

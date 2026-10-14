@@ -15,10 +15,47 @@ import {
   EnhancedPayment,
   EnhancedFee,
 } from '../database/entities/interfaces';
+import { CreateDiscountRuleDto } from './dto/create-discount-rule.dto';
+import { UpdateDiscountRuleDto } from './dto/update-discount-rule.dto';
+import { CreatePenaltyRuleDto } from './dto/create-penalty-rule.dto';
+import { UpdatePenaltyRuleDto } from './dto/update-penalty-rule.dto';
 
 export interface FeeCategory extends DbFeeCategory {
   category_code?: string;
   is_system_defined?: boolean;
+}
+
+export interface DiscountRule {
+  discount_rule_id: number;
+  school_id: number;
+  code: string;
+  name_en: string;
+  name_np: string | null;
+  discount_type: 'PERCENT' | 'FIXED';
+  value: number;
+  applies_to: string;
+  min_siblings: number | null;
+  valid_from_ad: Date | null;
+  valid_to_ad: Date | null;
+  valid_from_bs: string | null;
+  valid_to_bs: string | null;
+  is_stackable: boolean;
+  is_active: boolean;
+}
+
+export interface PenaltyRule {
+  penalty_rule_id: number;
+  school_id: number;
+  code: string;
+  name_en: string;
+  name_np: string | null;
+  fee_head_id: number | null;
+  grace_days: number;
+  mode: 'FIXED_PER_DAY' | 'PERCENT_PER_MONTH' | 'FLAT';
+  amount: number;
+  percent: number;
+  max_cap: number | null;
+  is_active: boolean;
 }
 
 @Injectable()
@@ -29,15 +66,19 @@ export class FeeService {
     schoolId: number;
     categoryName: string;
     description?: string;
+    categoryNameNp?: string;
+    descriptionNp?: string;
   }): Promise<FeeCategory> {
     return this.db.insert<FeeCategory>(
-      `INSERT INTO fee_categories (school_id, category_name, description, is_active)
-       VALUES ($1, $2, $3, true)
+      `INSERT INTO fee_categories (school_id, category_name, category_name_np, description, description_np, is_active)
+       VALUES ($1, $2, $3, $4, $5, true)
        RETURNING *`,
       [
         createDto.schoolId,
         createDto.categoryName,
+        (createDto as any).categoryNameNp || null,
         createDto.description || null,
+        (createDto as any).descriptionNp || null,
       ],
     );
   }
@@ -146,10 +187,11 @@ export class FeeService {
     finePercent?: number;
     scholarshipPercent?: number;
     notes?: string;
+    notesNp?: string;
   }): Promise<EnhancedFee> {
     const result = await this.db.insert<EnhancedFee>(
-      `INSERT INTO fees (school_id, student_id, fee_type, amount, discount_amount, fine_amount, total_amount, due_date, status, academic_year, class_id, section_id, invoice_number, discount_type, discount_percent, fine_type, fine_percent, scholarship_percent, notes, is_active, is_fully_paid, paid_amount, remaining_amount)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, true, false, 0, $7)
+      `INSERT INTO fees (school_id, student_id, fee_type, amount, discount_amount, fine_amount, total_amount, due_date, status, academic_year, class_id, section_id, invoice_number, discount_type, discount_percent, fine_type, fine_percent, scholarship_percent, notes, notes_np, is_active, is_fully_paid, paid_amount, remaining_amount)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, true, false, 0, $7)
        RETURNING *`,
       [
         createDto.schoolId,
@@ -170,6 +212,7 @@ export class FeeService {
         createDto.finePercent || null,
         createDto.scholarshipPercent || 0,
         createDto.notes || null,
+        createDto.notesNp || null,
       ],
     );
     return result;
@@ -212,6 +255,7 @@ export class FeeService {
       chequeDateBs?: string;
       referenceNumber?: string;
       remarks?: string;
+      remarksNp?: string;
       idempotencyKey?: string;
     },
     userId?: number,
@@ -227,8 +271,8 @@ export class FeeService {
     }
 
     const payment = await this.db.insert<EnhancedPayment>(
-      `INSERT INTO payments (school_id, fee_id, invoice_id, student_id, amount, payment_date, payment_date_bs, payment_method, transaction_id, transaction_uuid, gateway_name, received_by, bank_name, branch_name, cheque_number, cheque_date, cheque_date_bs, reference_number, remarks, idempotency_key, is_verified)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, false)
+      `INSERT INTO payments (school_id, fee_id, invoice_id, student_id, amount, payment_date, payment_date_bs, payment_method, transaction_id, transaction_uuid, gateway_name, received_by, bank_name, branch_name, cheque_number, cheque_date, cheque_date_bs, reference_number, remarks, remarks_np, idempotency_key, is_verified)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, false)
        RETURNING *`,
       [
         createDto.schoolId,
@@ -251,6 +295,7 @@ export class FeeService {
         createDto.chequeDateBs || null,
         createDto.referenceNumber || null,
         createDto.remarks || null,
+        createDto.remarksNp || null,
         createDto.idempotencyKey || null,
       ],
     );
@@ -371,6 +416,7 @@ export class FeeService {
     toAcademicYear: string,
     amount: number,
     notes?: string,
+    notesNp?: string,
   ): Promise<StudentBalance> {
     const student = await this.db.queryOne<any>(
       `SELECT school_id FROM students WHERE student_id = $1`,
@@ -388,17 +434,17 @@ export class FeeService {
 
     if (existing) {
       await this.db.update(
-        `UPDATE student_balances SET brought_forward_amount = $1, notes = $2, updated_at = NOW() WHERE balance_id = $3`,
-        [amount, notes || existing.notes, existing.balance_id],
+        `UPDATE student_balances SET brought_forward_amount = $1, notes = $2, notes_np = $3, updated_at = NOW() WHERE balance_id = $4`,
+        [amount, notes || existing.notes, notesNp || null, existing.balance_id],
       );
       return this.getStudentBalance(studentId, toAcademicYear);
     }
 
     return this.db.insert<StudentBalance>(
-      `INSERT INTO student_balances (school_id, student_id, academic_year, brought_forward_amount, total_paid, total_adjusted, total_due, current_balance, notes)
-       VALUES ($1, $2, $3, $4, 0, 0, 0, $4, $5)
+      `INSERT INTO student_balances (school_id, student_id, academic_year, brought_forward_amount, total_paid, total_adjusted, total_due, current_balance, notes, notes_np)
+       VALUES ($1, $2, $3, $4, 0, 0, 0, $4, $5, $6)
        RETURNING *`,
-      [student.school_id, studentId, toAcademicYear, amount, notes || null],
+      [student.school_id, studentId, toAcademicYear, amount, notes || null, notesNp || null],
     );
   }
 
@@ -458,6 +504,7 @@ export class FeeService {
   async createLateFineRule(createDto: {
     schoolId: number;
     ruleName: string;
+    ruleNameNp?: string;
     fineType: 'per_day' | 'flat' | 'percentage';
     fineAmount: number;
     gracePeriodDays?: number;
@@ -465,12 +512,13 @@ export class FeeService {
     applicableFrom: Date;
   }): Promise<LateFineRule> {
     return this.db.insert<LateFineRule>(
-      `INSERT INTO late_fine_rules (school_id, rule_name, fine_type, fine_amount, grace_period_days, max_fine_amount, applicable_from, is_active)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, true)
+      `INSERT INTO late_fine_rules (school_id, rule_name, rule_name_np, fine_type, fine_amount, grace_period_days, max_fine_amount, applicable_from, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)
        RETURNING *`,
       [
         createDto.schoolId,
         createDto.ruleName,
+        createDto.ruleNameNp || null,
         createDto.fineType,
         createDto.fineAmount,
         createDto.gracePeriodDays || 0,
@@ -487,6 +535,194 @@ export class FeeService {
     );
   }
 
+  // ---- Discount rules (admin-managed; EN+NP stored verbatim) ----
+  async createDiscountRule(
+    createDto: CreateDiscountRuleDto,
+  ): Promise<DiscountRule> {
+    const dup = await this.db.queryOne<DiscountRule>(
+      `SELECT discount_rule_id FROM discount_rules WHERE school_id = $1 AND code = $2`,
+      [createDto.schoolId, createDto.code],
+    );
+    if (dup) {
+      throw new BadRequestException(
+        `Discount rule code '${createDto.code}' already exists for this school`,
+      );
+    }
+    return this.db.insert<DiscountRule>(
+      `INSERT INTO discount_rules (school_id, code, name_en, name_np, discount_type, value, applies_to, min_siblings, valid_from_ad, valid_to_ad, valid_from_bs, valid_to_bs, is_stackable, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, true)
+       RETURNING *`,
+      [
+        createDto.schoolId,
+        createDto.code,
+        createDto.nameEn,
+        createDto.nameNp || null,
+        createDto.discountType,
+        createDto.value,
+        createDto.appliesTo || 'ALL',
+        createDto.minSiblings ?? null,
+        createDto.validFromAd || null,
+        createDto.validToAd || null,
+        createDto.validFromBs || null,
+        createDto.validToBs || null,
+        createDto.isStackable ?? false,
+      ],
+    );
+  }
+
+  async getDiscountRules(schoolId: number): Promise<DiscountRule[]> {
+    return this.db.query<DiscountRule>(
+      `SELECT * FROM discount_rules WHERE school_id = $1 AND is_active = true ORDER BY code ASC`,
+      [schoolId],
+    );
+  }
+
+  async updateDiscountRule(
+    id: number,
+    schoolId: number,
+    updateDto: UpdateDiscountRuleDto,
+  ): Promise<DiscountRule> {
+    const existing = await this.db.queryOne<DiscountRule>(
+      `SELECT * FROM discount_rules WHERE discount_rule_id = $1 AND school_id = $2`,
+      [id, schoolId],
+    );
+    if (!existing) {
+      throw new NotFoundException(`Discount rule with ID ${id} not found`);
+    }
+    const fieldMap: Record<string, string> = {
+      code: 'code',
+      nameEn: 'name_en',
+      nameNp: 'name_np',
+      discountType: 'discount_type',
+      value: 'value',
+      appliesTo: 'applies_to',
+      minSiblings: 'min_siblings',
+      validFromAd: 'valid_from_ad',
+      validToAd: 'valid_to_ad',
+      validFromBs: 'valid_from_bs',
+      validToBs: 'valid_to_bs',
+      isStackable: 'is_stackable',
+      isActive: 'is_active',
+    };
+    const updates: string[] = [];
+    const params: any[] = [];
+    let i = 1;
+    for (const [key, col] of Object.entries(fieldMap)) {
+      const v = (updateDto as any)[key];
+      if (v !== undefined) {
+        updates.push(`${col} = $${i++}`);
+        params.push(v);
+      }
+    }
+    if (updates.length === 0) return existing;
+    params.push(id);
+    return this.db.insert<DiscountRule>(
+      `UPDATE discount_rules SET ${updates.join(', ')} WHERE discount_rule_id = $${i} RETURNING *`,
+      params,
+    );
+  }
+
+  async deleteDiscountRule(id: number, schoolId: number): Promise<void> {
+    const n = await this.db.update(
+      `UPDATE discount_rules SET is_active = false WHERE discount_rule_id = $1 AND school_id = $2`,
+      [id, schoolId],
+    );
+    if (n === 0) {
+      throw new NotFoundException(`Discount rule with ID ${id} not found`);
+    }
+  }
+
+  // ---- Penalty rules (admin-managed; EN+NP stored verbatim) ----
+  async createPenaltyRule(
+    createDto: CreatePenaltyRuleDto,
+  ): Promise<PenaltyRule> {
+    const dup = await this.db.queryOne<PenaltyRule>(
+      `SELECT penalty_rule_id FROM penalty_rules WHERE school_id = $1 AND code = $2`,
+      [createDto.schoolId, createDto.code],
+    );
+    if (dup) {
+      throw new BadRequestException(
+        `Penalty rule code '${createDto.code}' already exists for this school`,
+      );
+    }
+    return this.db.insert<PenaltyRule>(
+      `INSERT INTO penalty_rules (school_id, code, name_en, name_np, fee_head_id, grace_days, mode, amount, percent, max_cap, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true)
+       RETURNING *`,
+      [
+        createDto.schoolId,
+        createDto.code,
+        createDto.nameEn,
+        createDto.nameNp || null,
+        createDto.feeHeadId ?? null,
+        createDto.graceDays ?? 0,
+        createDto.mode,
+        createDto.amount ?? 0,
+        createDto.percent ?? 0,
+        createDto.maxCap ?? null,
+      ],
+    );
+  }
+
+  async getPenaltyRules(schoolId: number): Promise<PenaltyRule[]> {
+    return this.db.query<PenaltyRule>(
+      `SELECT * FROM penalty_rules WHERE school_id = $1 AND is_active = true ORDER BY code ASC`,
+      [schoolId],
+    );
+  }
+
+  async updatePenaltyRule(
+    id: number,
+    schoolId: number,
+    updateDto: UpdatePenaltyRuleDto,
+  ): Promise<PenaltyRule> {
+    const existing = await this.db.queryOne<PenaltyRule>(
+      `SELECT * FROM penalty_rules WHERE penalty_rule_id = $1 AND school_id = $2`,
+      [id, schoolId],
+    );
+    if (!existing) {
+      throw new NotFoundException(`Penalty rule with ID ${id} not found`);
+    }
+    const fieldMap: Record<string, string> = {
+      code: 'code',
+      nameEn: 'name_en',
+      nameNp: 'name_np',
+      feeHeadId: 'fee_head_id',
+      graceDays: 'grace_days',
+      mode: 'mode',
+      amount: 'amount',
+      percent: 'percent',
+      maxCap: 'max_cap',
+      isActive: 'is_active',
+    };
+    const updates: string[] = [];
+    const params: any[] = [];
+    let i = 1;
+    for (const [key, col] of Object.entries(fieldMap)) {
+      const v = (updateDto as any)[key];
+      if (v !== undefined) {
+        updates.push(`${col} = $${i++}`);
+        params.push(v);
+      }
+    }
+    if (updates.length === 0) return existing;
+    params.push(id);
+    return this.db.insert<PenaltyRule>(
+      `UPDATE penalty_rules SET ${updates.join(', ')} WHERE penalty_rule_id = $${i} RETURNING *`,
+      params,
+    );
+  }
+
+  async deletePenaltyRule(id: number, schoolId: number): Promise<void> {
+    const n = await this.db.update(
+      `UPDATE penalty_rules SET is_active = false WHERE penalty_rule_id = $1 AND school_id = $2`,
+      [id, schoolId],
+    );
+    if (n === 0) {
+      throw new NotFoundException(`Penalty rule with ID ${id} not found`);
+    }
+  }
+
   async createScholarship(createDto: {
     schoolId: number;
     studentId: number;
@@ -495,11 +731,12 @@ export class FeeService {
     discountAmount?: number;
     academicYear: string;
     reason?: string;
+    reasonNp?: string;
     requestedBy?: number;
   }): Promise<Scholarship> {
     return this.db.insert<Scholarship>(
-      `INSERT INTO scholarships (school_id, student_id, scholarship_type, discount_percent, discount_amount, academic_year, reason, status, requested_by, requested_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8, NOW())
+      `INSERT INTO scholarships (school_id, student_id, scholarship_type, discount_percent, discount_amount, academic_year, reason, reason_np, status, requested_by, requested_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', $9, NOW())
        RETURNING *`,
       [
         createDto.schoolId,
@@ -509,6 +746,7 @@ export class FeeService {
         createDto.discountAmount || null,
         createDto.academicYear,
         createDto.reason || null,
+        createDto.reasonNp || null,
         createDto.requestedBy || null,
       ],
     );
@@ -518,6 +756,7 @@ export class FeeService {
     scholarshipId: number,
     approvedBy: number,
     remarks?: string,
+    remarksNp?: string,
   ): Promise<Scholarship> {
     const scholarship = await this.db.queryOne<Scholarship>(
       `SELECT * FROM scholarships WHERE scholarship_id = $1`,
@@ -535,10 +774,10 @@ export class FeeService {
     }
 
     return this.db.insert<Scholarship>(
-      `UPDATE scholarships SET status = 'approved', approved_by = $1, approved_at = NOW(), remarks = $2
-       WHERE scholarship_id = $3
+      `UPDATE scholarships SET status = 'approved', approved_by = $1, approved_at = NOW(), remarks = $2, remarks_np = $3
+       WHERE scholarship_id = $4
        RETURNING *`,
-      [approvedBy, remarks || null, scholarshipId],
+      [approvedBy, remarks || null, remarksNp || null, scholarshipId],
     );
   }
 
@@ -546,12 +785,13 @@ export class FeeService {
     scholarshipId: number,
     approvedBy: number,
     remarks: string,
+    remarksNp?: string,
   ): Promise<Scholarship> {
     return this.db.insert<Scholarship>(
-      `UPDATE scholarships SET status = 'rejected', approved_by = $1, approved_at = NOW(), remarks = $2
-       WHERE scholarship_id = $3
+      `UPDATE scholarships SET status = 'rejected', approved_by = $1, approved_at = NOW(), remarks = $2, remarks_np = $3
+       WHERE scholarship_id = $4
        RETURNING *`,
-      [approvedBy, remarks, scholarshipId],
+      [approvedBy, remarks, remarksNp || null, scholarshipId],
     );
   }
 
@@ -626,12 +866,13 @@ export class FeeService {
     waiverType: string;
     requestedAmount: number;
     reason?: string;
+    reasonNp?: string;
     supportingDocuments?: string[];
     requestedBy?: number;
   }): Promise<FeeWaiverRequest> {
     return this.db.insert<FeeWaiverRequest>(
-      `INSERT INTO fee_waiver_requests (school_id, student_id, fee_id, waiver_type, requested_amount, reason, supporting_documents, status, requested_by, requested_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending', $8, NOW())
+      `INSERT INTO fee_waiver_requests (school_id, student_id, fee_id, waiver_type, requested_amount, reason, reason_np, supporting_documents, status, requested_by, requested_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pending', $9, NOW())
        RETURNING *`,
       [
         createDto.schoolId,
@@ -640,6 +881,7 @@ export class FeeService {
         createDto.waiverType,
         createDto.requestedAmount,
         createDto.reason || null,
+        createDto.reasonNp || null,
         createDto.supportingDocuments || null,
         createDto.requestedBy || null,
       ],
@@ -651,6 +893,7 @@ export class FeeService {
     approvedBy: number,
     approvedAmount: number,
     remarks?: string,
+    remarksNp?: string,
   ): Promise<FeeWaiverRequest> {
     const waiver = await this.db.queryOne<FeeWaiverRequest>(
       `SELECT * FROM fee_waiver_requests WHERE waiver_id = $1`,
@@ -666,10 +909,10 @@ export class FeeService {
     }
 
     const result = await this.db.insert<FeeWaiverRequest>(
-      `UPDATE fee_waiver_requests SET status = 'approved', approved_amount = $1, approved_by = $2, approved_at = NOW(), remarks = $3
-       WHERE waiver_id = $4
+      `UPDATE fee_waiver_requests SET status = 'approved', approved_amount = $1, approved_by = $2, approved_at = NOW(), remarks = $3, remarks_np = $4
+       WHERE waiver_id = $5
        RETURNING *`,
-      [approvedAmount, approvedBy, remarks || null, waiverId],
+      [approvedAmount, approvedBy, remarks || null, remarksNp || null, waiverId],
     );
 
     if (waiver.fee_id) {
@@ -697,12 +940,13 @@ export class FeeService {
     waiverId: number,
     approvedBy: number,
     remarks: string,
+    remarksNp?: string,
   ): Promise<FeeWaiverRequest> {
     return this.db.insert<FeeWaiverRequest>(
-      `UPDATE fee_waiver_requests SET status = 'rejected', approved_by = $1, approved_at = NOW(), remarks = $2
-       WHERE waiver_id = $3
+      `UPDATE fee_waiver_requests SET status = 'rejected', approved_by = $1, approved_at = NOW(), remarks = $2, remarks_np = $3
+       WHERE waiver_id = $4
        RETURNING *`,
-      [approvedBy, remarks, waiverId],
+      [approvedBy, remarks, remarksNp || null, waiverId],
     );
   }
 

@@ -29,7 +29,10 @@ export interface CreateLiveClassDto {
   subjectId?: number;
   teacherId?: number;
   title: string;
+  classNameNp?: string;
+  titleNp?: string;
   description?: string;
+  descriptionNp?: string;
   scheduledAt: string;
   scheduledAtBs?: string;
   duration?: number;
@@ -73,10 +76,10 @@ export class VideoClassService {
 
     const query = `
       INSERT INTO live_classes (
-        school_id, class_id, subject_id, teacher_id, class_name, description,
+        school_id, class_id, subject_id, teacher_id, class_name, class_name_np, description, description_np,
         scheduled_at, scheduled_at_bs, duration, platform, meeting_id,
         meeting_url, host_url, password, status, recording_enabled
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
       RETURNING *
     `;
 
@@ -86,7 +89,9 @@ export class VideoClassService {
       dto.subjectId || null,
       teacherId || null,
       dto.title,
+      dto.classNameNp || dto.titleNp || null,
       dto.description || null,
+      dto.descriptionNp || null,
       dto.scheduledAt ? new Date(dto.scheduledAt) : null,
       // BS date comes from the frontend — the backend stores it as given.
       dto.scheduledAtBs || null,

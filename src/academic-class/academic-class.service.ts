@@ -39,8 +39,8 @@ export class AcademicClassService {
     }
 
     return this.db.insert<AcademicClass>(
-      `INSERT INTO classes (school_id, class_name, class_code, class_order, education_level, min_age, max_age, is_active)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, true)
+      `INSERT INTO classes (school_id, class_name, class_code, class_order, education_level, min_age, max_age, class_name_np, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, true)
        RETURNING *`,
       [
         createDto.schoolId,
@@ -50,6 +50,7 @@ export class AcademicClassService {
         createDto.educationLevel,
         createDto.minAge || null,
         createDto.maxAge || null,
+        createDto.classNameNp || null,
       ],
     );
   }
@@ -89,6 +90,7 @@ export class AcademicClassService {
 
     const fieldMap: Record<string, string> = {
       className: 'class_name',
+      classNameNp: 'class_name_np',
       classOrder: 'class_order',
       educationLevel: 'education_level',
       minAge: 'min_age',

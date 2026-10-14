@@ -52,6 +52,22 @@ export class CreateDocumentDto {
   @IsString()
   description?: string;
 
+  @ApiPropertyOptional({
+    description:
+      'Document title in Nepali (provided by frontend, stored verbatim)',
+  })
+  @IsOptional()
+  @IsString()
+  titleNp?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Description in Nepali (provided by frontend, stored verbatim)',
+  })
+  @IsOptional()
+  @IsString()
+  descriptionNp?: string;
+
   @ApiPropertyOptional({ description: 'School ID', example: 1 })
   @IsOptional()
   @IsInt()

@@ -38,8 +38,8 @@ export class SectionService {
     }
 
     return this.db.insert<Section>(
-      `INSERT INTO sections (school_id, class_id, section_name, section_code, section_order, capacity, is_active)
-       VALUES ($1, $2, $3, $4, $5, $6, true)
+      `INSERT INTO sections (school_id, class_id, section_name, section_code, section_order, capacity, section_name_np, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, true)
        RETURNING *`,
       [
         createDto.schoolId,
@@ -48,6 +48,7 @@ export class SectionService {
         createDto.sectionCode,
         createDto.sectionOrder ?? 0,
         createDto.capacity ?? 40,
+        createDto.sectionNameNp || null,
       ],
     );
   }
@@ -93,6 +94,7 @@ export class SectionService {
 
     const fieldMap: Record<string, string> = {
       sectionName: 'section_name',
+      sectionNameNp: 'section_name_np',
       sectionOrder: 'section_order',
       capacity: 'capacity',
     };
