@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Body,
   Param,
   ParseIntPipe,
@@ -80,6 +81,23 @@ export class TransportController {
     return this.transportService.updateVehicle(id, schoolId, updateDto);
   }
 
+  @Delete('vehicles/:id')
+  @ApiOperation({
+    summary: 'Delete vehicle',
+    description:
+      'Soft-deletes the vehicle. Blocked while active transport assignments reference it.',
+  })
+  @ApiParam({ name: 'id', type: Number })
+  @ApiResponse({ status: 200, description: 'Vehicle deleted successfully' })
+  @ApiResponse({ status: 404, description: 'Vehicle not found' })
+  async deleteVehicle(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser('schoolId') schoolId: number,
+  ) {
+    await this.transportService.deleteVehicle(id, schoolId);
+    return { message: 'Vehicle deleted successfully' };
+  }
+
   // Routes
   @Post('routes')
   @ApiOperation({
@@ -114,6 +132,23 @@ export class TransportController {
     @Body() updateDto: UpdateRouteDto,
   ) {
     return this.transportService.updateRoute(id, schoolId, updateDto);
+  }
+
+  @Delete('routes/:id')
+  @ApiOperation({
+    summary: 'Delete transport route',
+    description:
+      'Soft-deletes the route. Blocked while active assignments or configured stops reference it.',
+  })
+  @ApiParam({ name: 'id', type: Number })
+  @ApiResponse({ status: 200, description: 'Route deleted successfully' })
+  @ApiResponse({ status: 404, description: 'Route not found' })
+  async deleteRoute(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser('schoolId') schoolId: number,
+  ) {
+    await this.transportService.deleteRoute(id, schoolId);
+    return { message: 'Route deleted successfully' };
   }
 
   @Post('routes/stops')

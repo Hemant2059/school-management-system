@@ -285,8 +285,54 @@ export class TransportService {
     );
   }
 
-  async createRouteStop(createDto: CreateRouteStopDto): Promise<RouteStop> {
-    const result = await this.db.insert<RouteStop>(
+  async deleteVehicle(id: number, schoolId: number): Promise<void> {
+    const inUse = await this.db.queryOne<{ count: string }>(
+      `SELECT COUNT(*) as count FROM transport_assignments WHERE vehicle_id = $1 AND (effective_to IS NULL OR effective_to >= CURRENT_DATE)`,
+      [id],
+    );
+    if (inUse && parseInt(inUse.count, 10) > 0) {
+      throw new BadRequestException(
+        'Cannot delete vehicle with active transport assignments',
+      );
+    }
+    const n = await this.db.update(
+      `UPDATE vehicles SET deleted_at = NOW() WHERE vehicle_id = $1 AND school_id = $2 AND deleted_at IS NULL`,
+      [id, schoolId],
+    );
+    if (n === 0) {
+      throw new NotFoundException(`Vehicle with ID ${id} not found`);
+    }
+  }
+
+  async deleteRoute(id: number, schoolId: number): Promise<void> {
+    const assigned = await this.db.queryOne<{ count: string }>(
+      `SELECT COUNT(*) as count FROM transport_assignments WHERE route_id = $1 AND is_active = true`,
+      [id],
+    );
+    if (assigned && parseInt(assigned.count, 10) > 0) {
+      throw new BadRequestException(
+        'Cannot delete route with active student assignments',
+      );
+    }
+    const stops = await this.db.queryOne<{ count: string }>(
+      `SELECT COUNT(*) as count FROM route_stops WHERE route_id = $1 AND is_active = true`,
+      [id],
+    );
+    if (stops && parseInt(stops.count, 10) > 0) {
+      throw new BadRequestException(
+        'Cannot delete route with configured stops. Remove stops first.',
+      );
+    }
+    const n = await this.db.update(
+      `UPDATE routes SET deleted_at = NOW() WHERE route_id = $1 AND school_id = $2 AND deleted_at IS NULL`,
+      [id, schoolId],
+    );
+    if (n === 0) {
+      throw new NotFoundException(`Route with ID ${id} not found`);
+    }
+  }
+
+  async createRouteStop(createDto: CreateRouteStopDto): Promise<RouteStop> {    const result = await this.db.insert<RouteStop>(
       `INSERT INTO route_stops (
         school_id, route_id, stop_name, stop_name_np, stop_order, latitude, longitude,
         pickup_time, drop_time, is_active
