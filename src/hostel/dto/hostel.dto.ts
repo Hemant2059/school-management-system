@@ -202,6 +202,14 @@ export class UpdateHostelDto {
   addressNp?: string;
 
   @ApiPropertyOptional({
+    description: 'Warden name',
+    example: 'Kedar Nath',
+  })
+  @IsOptional()
+  @IsString()
+  wardenName?: string;
+
+  @ApiPropertyOptional({
     description: 'Warden name in Nepali (provided by frontend)',
   })
   @IsOptional()
