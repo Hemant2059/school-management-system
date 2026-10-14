@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Post,
+  Patch,
   Body,
   Param,
   ParseIntPipe,
@@ -20,6 +21,8 @@ import { CreateVehicleDto } from './dto/create-vehicle.dto';
 import { CreateRouteDto } from './dto/create-route.dto';
 import { CreateRouteStopDto } from './dto/create-route-stop.dto';
 import { AssignStudentDto } from './dto/assign-student.dto';
+import { UpdateVehicleDto } from './dto/update-vehicle.dto';
+import { UpdateRouteDto } from './dto/update-route.dto';
 
 @ApiTags('Transport Management')
 @ApiBearerAuth()
@@ -59,6 +62,24 @@ export class TransportController {
     return this.transportService.findAllVehicles(schoolId);
   }
 
+  @Patch('vehicles/:id')
+  @ApiOperation({
+    summary: 'Update vehicle',
+    description:
+      'Update vehicle details. Names and dates stored in English + Nepali as sent by frontend.',
+  })
+  @ApiParam({ name: 'id', type: Number })
+  @ApiBody({ type: UpdateVehicleDto })
+  @ApiResponse({ status: 200, description: 'Vehicle updated successfully' })
+  @ApiResponse({ status: 404, description: 'Vehicle not found' })
+  updateVehicle(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser('schoolId') schoolId: number,
+    @Body() updateDto: UpdateVehicleDto,
+  ) {
+    return this.transportService.updateVehicle(id, schoolId, updateDto);
+  }
+
   // Routes
   @Post('routes')
   @ApiOperation({
@@ -75,6 +96,24 @@ export class TransportController {
   @ApiResponse({ status: 422, description: 'Validation failed' })
   createRoute(@Body() createDto: CreateRouteDto) {
     return this.transportService.createRoute(createDto);
+  }
+
+  @Patch('routes/:id')
+  @ApiOperation({
+    summary: 'Update transport route',
+    description:
+      'Update route details. Names and points stored in English + Nepali as sent by frontend.',
+  })
+  @ApiParam({ name: 'id', type: Number })
+  @ApiBody({ type: UpdateRouteDto })
+  @ApiResponse({ status: 200, description: 'Route updated successfully' })
+  @ApiResponse({ status: 404, description: 'Route not found' })
+  updateRoute(
+    @Param('id', ParseIntPipe) id: number,
+    @GetUser('schoolId') schoolId: number,
+    @Body() updateDto: UpdateRouteDto,
+  ) {
+    return this.transportService.updateRoute(id, schoolId, updateDto);
   }
 
   @Post('routes/stops')

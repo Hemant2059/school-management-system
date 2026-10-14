@@ -292,6 +292,26 @@ export class TeacherService {
       }
     }
 
+    // Keep display_name fresh when any name part changes (same NP-preferred
+    // rule as create; plain concatenation, no conversion).
+    const teacherNameKeys = [
+      'firstNameEn',
+      'lastNameEn',
+      'firstNameNp',
+      'lastNameNp',
+    ] as const;
+    if (teacherNameKeys.some((k) => updateTeacherDto[k] !== undefined)) {
+      const firstNp = updateTeacherDto.firstNameNp ?? teacher.first_name_np;
+      const lastNp = updateTeacherDto.lastNameNp ?? teacher.last_name_np;
+      const firstEn = updateTeacherDto.firstNameEn ?? teacher.first_name_en;
+      const lastEn = updateTeacherDto.lastNameEn ?? teacher.last_name_en;
+      const display = firstNp
+        ? `${firstNp} ${lastNp ?? ''}`.trim()
+        : `${firstEn ?? ''} ${lastEn ?? ''}`.trim();
+      updates.push(`display_name = $${paramIndex++}`);
+      params.push(display);
+    }
+
     if (updates.length > 0) {
       params.push(id);
       await this.db.query(

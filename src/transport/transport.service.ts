@@ -8,14 +8,19 @@ import { CreateVehicleDto } from './dto/create-vehicle.dto';
 import { CreateRouteDto } from './dto/create-route.dto';
 import { CreateRouteStopDto } from './dto/create-route-stop.dto';
 import { AssignStudentDto } from './dto/assign-student.dto';
+import { UpdateVehicleDto } from './dto/update-vehicle.dto';
+import { UpdateRouteDto } from './dto/update-route.dto';
 import { NepaliNumberUtil } from '../utils/nepali-number.util';
 
 export interface Vehicle {
   vehicle_id: number;
   school_id: number;
+  transport_id: number | null;
   vehicle_number: string;
   vehicle_name: string;
+  vehicle_name_np: string | null;
   vehicle_type: string;
+  vehicle_type_np: string | null;
   capacity: number;
   manufacturer: string | null;
   manufacturer_np: string | null;
@@ -25,7 +30,9 @@ export interface Vehicle {
   chassis_number: string | null;
   engine_number: string | null;
   insurance_expiry: Date | null;
+  insurance_expiry_bs: string | null;
   permit_expiry: Date | null;
+  permit_expiry_bs: string | null;
   is_active: boolean;
   created_at: Date;
   updated_at: Date;
@@ -115,8 +122,8 @@ export class TransportService {
       `INSERT INTO vehicles (
         school_id, transport_id, vehicle_number, vehicle_name, vehicle_name_np, vehicle_type, vehicle_type_np, capacity,
         manufacturer, manufacturer_np, year, color, color_np, chassis_number, engine_number,
-        insurance_expiry, permit_expiry, is_active
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
+        insurance_expiry, insurance_expiry_bs, permit_expiry, permit_expiry_bs, is_active
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
       RETURNING *`,
       [
         createDto.schoolId,
@@ -135,11 +142,62 @@ export class TransportService {
         createDto.chassisNumber || null,
         createDto.engineNumber || null,
         createDto.insuranceExpiry || null,
+        createDto.insuranceExpiryBs ?? null,
         createDto.permitExpiry || null,
+        createDto.permitExpiryBs ?? null,
         true,
       ],
     );
     return result;
+  }
+
+  async updateVehicle(
+    id: number,
+    schoolId: number,
+    updateDto: UpdateVehicleDto,
+  ): Promise<Vehicle> {
+    const existing = await this.db.queryOne<Vehicle>(
+      `SELECT * FROM vehicles WHERE vehicle_id = $1 AND school_id = $2 AND deleted_at IS NULL`,
+      [id, schoolId],
+    );
+    if (!existing) {
+      throw new NotFoundException(`Vehicle with ID ${id} not found`);
+    }
+    const fieldMap: Record<string, string> = {
+      vehicleName: 'vehicle_name',
+      vehicleNameNp: 'vehicle_name_np',
+      vehicleType: 'vehicle_type',
+      vehicleTypeNp: 'vehicle_type_np',
+      capacity: 'capacity',
+      manufacturer: 'manufacturer',
+      manufacturerNp: 'manufacturer_np',
+      year: 'year',
+      color: 'color',
+      colorNp: 'color_np',
+      chassisNumber: 'chassis_number',
+      engineNumber: 'engine_number',
+      insuranceExpiry: 'insurance_expiry',
+      insuranceExpiryBs: 'insurance_expiry_bs',
+      permitExpiry: 'permit_expiry',
+      permitExpiryBs: 'permit_expiry_bs',
+      isActive: 'is_active',
+    };
+    const updates: string[] = [];
+    const params: any[] = [];
+    let i = 1;
+    for (const [key, col] of Object.entries(fieldMap)) {
+      const v = (updateDto as any)[key];
+      if (v !== undefined) {
+        updates.push(`${col} = $${i++}`);
+        params.push(v);
+      }
+    }
+    if (updates.length === 0) return existing;
+    params.push(id);
+    return this.db.insert<Vehicle>(
+      `UPDATE vehicles SET ${updates.join(', ')} WHERE vehicle_id = $${i} RETURNING *`,
+      params,
+    );
   }
 
   async findAllVehicles(schoolId: number): Promise<Vehicle[]> {
@@ -177,6 +235,54 @@ export class TransportService {
       ],
     );
     return result;
+  }
+
+  async updateRoute(
+    id: number,
+    schoolId: number,
+    updateDto: UpdateRouteDto,
+  ): Promise<Route> {
+    const existing = await this.db.queryOne<Route>(
+      `SELECT * FROM routes WHERE route_id = $1 AND school_id = $2 AND deleted_at IS NULL`,
+      [id, schoolId],
+    );
+    if (!existing) {
+      throw new NotFoundException(`Route with ID ${id} not found`);
+    }
+    const fieldMap: Record<string, string> = {
+      routeName: 'route_name',
+      routeNameNp: 'route_name_np',
+      routeDescription: 'route_description',
+      routeDescriptionNp: 'route_description_np',
+      startPoint: 'start_point',
+      startPointNp: 'start_point_np',
+      endPoint: 'end_point',
+      endPointNp: 'end_point_np',
+      distanceKm: 'distance_km',
+      estimatedTime: 'estimated_time',
+      estimatedTimeNp: 'estimated_time_np',
+      provinceId: 'province_id',
+      districtId: 'district_id',
+      municipalityId: 'municipality_id',
+      fare: 'fare',
+      isActive: 'is_active',
+    };
+    const updates: string[] = [];
+    const params: any[] = [];
+    let i = 1;
+    for (const [key, col] of Object.entries(fieldMap)) {
+      const v = (updateDto as any)[key];
+      if (v !== undefined) {
+        updates.push(`${col} = $${i++}`);
+        params.push(v);
+      }
+    }
+    if (updates.length === 0) return existing;
+    params.push(id);
+    return this.db.insert<Route>(
+      `UPDATE routes SET ${updates.join(', ')} WHERE route_id = $${i} RETURNING *`,
+      params,
+    );
   }
 
   async createRouteStop(createDto: CreateRouteStopDto): Promise<RouteStop> {

@@ -405,7 +405,7 @@ export class StudentService {
     updateStudentDto: UpdateStudentDto,
     userId: number = 1,
   ): Promise<Student> {
-    await this.findOne(id);
+    const existing = await this.findOne(id);
 
     const updates: string[] = [];
     const params: any[] = [];
@@ -465,6 +465,26 @@ export class StudentService {
       params.push(await this.resolveCasteCode(updateStudentDto.casteEthnicity));
       updates.push(`caste_ethnicity = $${paramIndex++}`);
       params.push(updateStudentDto.casteEthnicity);
+    }
+
+    // Keep display_name fresh when any name part changes (same NP-preferred
+    // rule as create; plain concatenation, no conversion).
+    const studentNameKeys = [
+      'firstNameEn',
+      'lastNameEn',
+      'firstNameNp',
+      'lastNameNp',
+    ] as const;
+    if (studentNameKeys.some((k) => updateStudentDto[k] !== undefined)) {
+      const firstNp = updateStudentDto.firstNameNp ?? existing.first_name_np;
+      const lastNp = updateStudentDto.lastNameNp ?? existing.last_name_np;
+      const firstEn = updateStudentDto.firstNameEn ?? existing.first_name_en;
+      const lastEn = updateStudentDto.lastNameEn ?? existing.last_name_en;
+      const display = firstNp
+        ? `${firstNp} ${lastNp || ''}`.trim()
+        : `${firstEn || ''} ${lastEn || ''}`.trim();
+      updates.push(`display_name = $${paramIndex++}`);
+      params.push(display);
     }
 
     if (updates.length > 0) {

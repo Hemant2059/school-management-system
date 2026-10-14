@@ -146,7 +146,7 @@ export class GuardianService {
     schoolId: number,
     updateGuardianDto: UpdateGuardianDto,
   ): Promise<Guardian> {
-    await this.findOne(id, schoolId);
+    const existing = await this.findOne(id, schoolId);
 
     if (
       updateGuardianDto.userId !== undefined &&
@@ -202,6 +202,26 @@ export class GuardianService {
         const value = updateGuardianDto[key as keyof UpdateGuardianDto];
         params.push(piiKeys.has(key) ? enc(value as string) : value);
       }
+    }
+
+    // Keep display_name fresh when any name part changes (same NP-preferred
+    // rule as create; plain concatenation, no conversion).
+    const guardianNameKeys = [
+      'firstNameEn',
+      'lastNameEn',
+      'firstNameNp',
+      'lastNameNp',
+    ] as const;
+    if (guardianNameKeys.some((k) => updateGuardianDto[k] !== undefined)) {
+      const firstNp = updateGuardianDto.firstNameNp ?? existing.first_name_np;
+      const lastNp = updateGuardianDto.lastNameNp ?? existing.last_name_np;
+      const firstEn = updateGuardianDto.firstNameEn ?? existing.first_name_en;
+      const lastEn = updateGuardianDto.lastNameEn ?? existing.last_name_en;
+      const display = firstNp
+        ? `${firstNp} ${lastNp ?? ''}`.trim()
+        : `${firstEn ?? ''} ${lastEn ?? ''}`.trim();
+      updates.push(`display_name = $${paramIndex++}`);
+      params.push(display);
     }
 
     if (updates.length > 0) {

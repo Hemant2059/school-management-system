@@ -108,6 +108,14 @@ export class CreateVehicleDto {
   readonly insuranceExpiry?: Date;
 
   @ApiPropertyOptional({
+    description: 'Insurance expiry date in BS (provided by frontend)',
+    example: '2082-09-16',
+  })
+  @IsOptional()
+  @IsString()
+  readonly insuranceExpiryBs?: string;
+
+  @ApiPropertyOptional({
     description: 'Permit expiry date',
     example: '2025-12-31',
   })
@@ -115,4 +123,12 @@ export class CreateVehicleDto {
   @IsDate()
   @Type(() => Date)
   readonly permitExpiry?: Date;
+
+  @ApiPropertyOptional({
+    description: 'Permit expiry date in BS (provided by frontend)',
+    example: '2082-09-16',
+  })
+  @IsOptional()
+  @IsString()
+  readonly permitExpiryBs?: string;
 }
