@@ -68,8 +68,13 @@ npm install
 cp .env.example .env
 # Edit .env with your database credentials
 
-# Run database migration
-psql -U postgres -d sms_nepal -f src/database/migrations/1706200000000-NepalSchemaEnhancement.sql
+# Start infrastructure (Postgres on 5544, Redis on 6379)
+docker compose up -d postgres redis
+
+# DB schema + file migrations (src/database/migrations/*.sql) apply automatically on boot
+
+# Seed sample data for every model
+npm run seed:full
 
 # Start development server
 npm run start:dev
@@ -94,7 +99,7 @@ JWT_SECRET=your_jwt_secret
 JWT_EXPIRES_IN=7d
 
 # Server
-PORT=3000
+PORT=3001
 NODE_ENV=development
 ```
 
@@ -102,12 +107,40 @@ NODE_ENV=development
 
 Once running, visit:
 
-- **Swagger UI**: http://localhost:3000/docs
-- **OpenAPI JSON**: http://localhost:3000/docs-json
+- **Swagger UI**: http://localhost:3001/docs
+- **OpenAPI JSON**: http://localhost:3001/docs-json
+- **Base URL**: http://localhost:3001/api/v1
+- **Health**: http://localhost:3001/api/v1/health
+
+## API Response Format
+
+Every endpoint returns the same envelope:
+
+```json
+{
+  "data": [],
+  "total": 47,
+  "page": 1,
+  "limit": 12
+}
+```
+
+- List endpoints honour `?page=` and `?limit=` (max 500). Without them, the full list is returned with `total` set to its length.
+- Single objects (login, dashboards, created records) are wrapped as `data: [obj]` with `total: 1`.
+- `null` results (e.g. DELETEs) return `data: []` with `total: 0`.
+- Errors keep the standard shape (`statusCode`, `message`, `path`) — only success responses are enveloped.
+
+Example:
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" -H "X-School-Id: 1" \
+  "http://localhost:3001/api/v1/assignments?classId=1&page=1&limit=12"
+```
 
 ## Nepal-Specific Features
 
-- **Bikram Sambat (BS) Dates**: Full support throughout the system
+- **Bikram Sambat (BS) Dates**: Every business date is stored as an AD+BS pair (e.g. `due_date` + `due_date_bs`). `created_at`/`updated_at` are AD-only.
+- **Date convention**: the frontend converts and sends both dates; the backend stores them verbatim and never auto-converts. All calculations (overdue, fines, ranges) run on AD dates; BS is kept for legal proof and display.
 - **Geographic Structure**: Provinces, Districts, Municipalities, Wards
 - **Compliance Fields**: MOEST codes, PAN numbers, SSF tracking
 - **Digital Payments**: eSewa, Khalti, Fonepay, ConnectIPS, IME Pay
@@ -140,7 +173,8 @@ npm run build          # Build for production
 npm run start:prod     # Run production build
 npm run lint           # Lint code
 npm run test           # Run tests
-npm run seed           # Seed database
+npm run seed:full      # Seed sample data for every model
+npm run seed:bs-backfill  # Backfill *_bs twins from AD dates (one-off)
 ```
 
 ## Documentation

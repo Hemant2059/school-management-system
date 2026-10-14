@@ -56,6 +56,7 @@ import { AdminModule } from './admin/admin.module';
 import { RbacModule } from './rbac/rbac.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { RolesGuard } from './auth/roles.guard';
+import { ResponseEnvelopeInterceptor } from './common/interceptors/response-envelope.interceptor';
 import { AppController } from './app.controller';
 
 let redisStore: any;
@@ -193,6 +194,11 @@ try {
   ],
   controllers: [AppController],
   providers: [
+    {
+      // Registered first = outermost: final say on the response shape.
+      provide: APP_INTERCEPTOR,
+      useClass: ResponseEnvelopeInterceptor,
+    },
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
