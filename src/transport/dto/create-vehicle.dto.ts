@@ -59,6 +59,14 @@ export class CreateVehicleDto {
   @IsString()
   readonly manufacturer?: string;
 
+  @ApiPropertyOptional({
+    description: 'Manufacturer in Nepali (provided by frontend)',
+    example: 'टाटा मोटर्स',
+  })
+  @IsOptional()
+  @IsString()
+  readonly manufacturerNp?: string;
+
   @ApiPropertyOptional({ description: 'Year of manufacture', example: 2022 })
   @IsOptional()
   @IsInt()
@@ -68,6 +76,14 @@ export class CreateVehicleDto {
   @IsOptional()
   @IsString()
   readonly color?: string;
+
+  @ApiPropertyOptional({
+    description: 'Vehicle color in Nepali (provided by frontend)',
+    example: 'पहेंलो',
+  })
+  @IsOptional()
+  @IsString()
+  readonly colorNp?: string;
 
   @ApiPropertyOptional({
     description: 'Chassis number',

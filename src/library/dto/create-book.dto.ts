@@ -231,6 +231,15 @@ export class CreateBookDto {
   readonly edition?: string;
 
   @ApiPropertyOptional({
+    description: 'Edition in Nepali (provided by frontend)',
+    example: 'पाँचौं संस्करण',
+    type: String,
+  })
+  @IsOptional()
+  @IsString()
+  readonly editionNp?: string;
+
+  @ApiPropertyOptional({
     description: 'Total number of pages',
     example: 320,
     type: Number,

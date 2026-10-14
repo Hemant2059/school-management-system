@@ -99,4 +99,12 @@ export class CreateRouteDto {
   @IsOptional()
   @IsString()
   readonly estimatedTime?: string;
+
+  @ApiPropertyOptional({
+    description: 'Estimated travel time in Nepali (provided by frontend)',
+    example: '४५ मिनेट',
+  })
+  @IsOptional()
+  @IsString()
+  readonly estimatedTimeNp?: string;
 }

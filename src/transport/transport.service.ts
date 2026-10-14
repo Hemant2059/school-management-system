@@ -18,8 +18,10 @@ export interface Vehicle {
   vehicle_type: string;
   capacity: number;
   manufacturer: string | null;
+  manufacturer_np: string | null;
   year: number | null;
   color: string | null;
+  color_np: string | null;
   chassis_number: string | null;
   engine_number: string | null;
   insurance_expiry: Date | null;
@@ -47,6 +49,7 @@ export interface Route {
   end_point_np: string | null;
   distance_km: number;
   estimated_time: string | null;
+  estimated_time_np: string | null;
   is_active: boolean;
   created_at: Date;
   updated_at: Date;
@@ -111,9 +114,9 @@ export class TransportService {
     const result = await this.db.insert<Vehicle>(
       `INSERT INTO vehicles (
         school_id, transport_id, vehicle_number, vehicle_name, vehicle_name_np, vehicle_type, vehicle_type_np, capacity,
-        manufacturer, year, color, chassis_number, engine_number,
+        manufacturer, manufacturer_np, year, color, color_np, chassis_number, engine_number,
         insurance_expiry, permit_expiry, is_active
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
       RETURNING *`,
       [
         createDto.schoolId,
@@ -125,8 +128,10 @@ export class TransportService {
         createDto.vehicleTypeNp ?? null,
         createDto.capacity,
         createDto.manufacturer || null,
+        createDto.manufacturerNp ?? null,
         createDto.year || null,
         createDto.color || null,
+        createDto.colorNp ?? null,
         createDto.chassisNumber || null,
         createDto.engineNumber || null,
         createDto.insuranceExpiry || null,
@@ -148,8 +153,8 @@ export class TransportService {
     const result = await this.db.insert<Route>(
       `INSERT INTO routes (
         school_id, route_name, route_name_np, route_code, province_id, district_id, municipality_id,
-        route_description, route_description_np, start_point, start_point_np, end_point, end_point_np, distance_km, estimated_time, is_active
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+        route_description, route_description_np, start_point, start_point_np, end_point, end_point_np, distance_km, estimated_time, estimated_time_np, is_active
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
       RETURNING *`,
       [
         createDto.schoolId,
@@ -167,6 +172,7 @@ export class TransportService {
         createDto.endPointNp ?? null,
         createDto.distanceKm,
         createDto.estimatedTime,
+        createDto.estimatedTimeNp ?? null,
         true,
       ],
     );

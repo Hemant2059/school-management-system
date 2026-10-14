@@ -70,8 +70,8 @@ export class LibraryService {
     }
 
     const result = await this.db.insert<Book>(
-      `INSERT INTO books (school_id, isbn, book_code, title, title_en, author, publisher, publisher_np, category, category_np, subject, subject_np, total_copies, available_copies, is_active)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, true)
+      `INSERT INTO books (school_id, isbn, book_code, title, title_en, author, publisher, publisher_np, category, category_np, subject, subject_np, edition, edition_np, total_copies, available_copies, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, true)
        RETURNING *`,
       [
         createDto.schoolId,
@@ -86,6 +86,8 @@ export class LibraryService {
         createDto.categoryNp ?? null,
         createDto.subject || null,
         createDto.subjectNp ?? null,
+        createDto.edition || null,
+        createDto.editionNp ?? null,
         createDto.totalCopies,
         createDto.totalCopies,
       ],
@@ -161,6 +163,8 @@ export class LibraryService {
       subjectNp: 'subject_np',
       bookType: 'category',
       categoryNp: 'category_np',
+      edition: 'edition',
+      editionNp: 'edition_np',
       price: 'price',
 
       totalCopies: 'total_copies',
