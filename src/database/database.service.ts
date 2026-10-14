@@ -6,6 +6,14 @@ import {
 } from '@nestjs/common';
 import { Pool, PoolConfig, PoolClient } from 'pg';
 import * as dotenv from 'dotenv';
+import * as fs from 'fs';
+import * as path from 'path';
+import {
+  TENANT_SETTING,
+  TENANT_USER_SETTING,
+  getTenantSchoolId,
+  getTenantUserId,
+} from './tenant-context';
 dotenv.config();
 
 @Injectable()
@@ -21,7 +29,6 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       user: process.env.DB_USERNAME || 'postgres',
       password: process.env.DB_PASSWORD || '1234',
       database: process.env.DB_NAME || 'sms_nepal',
-      schema: process.env.DB_SCHEMA || 'public',
       max: parseInt(process.env.DB_POOL_MAX || '20', 10),
       min: parseInt(process.env.DB_POOL_MIN || '5', 10),
       idleTimeoutMillis: 30000,
@@ -75,7 +82,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
 
       this.logger.log('Ensuring database schema...');
 
-      await this.pool.query(`
+      const legacySchemaDDL = `
         -- Schools
         CREATE TABLE IF NOT EXISTS schools (
           school_id SERIAL PRIMARY KEY,
@@ -731,12 +738,26 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
-      `);
+      `;
+
+      // Statement-by-statement with dependency retries: the legacy bundle has
+      // forward FK references (e.g. documents -> staff). A single multi-
+      // statement query aborts everything on first error, so fresh databases
+      // ended up with ZERO tables. Retrying failures resolves ordering.
+      await this.applyLegacyDDL(legacySchemaDDL);
 
       this.schemaInitialized = true;
       this.logger.log('Database schema initialized successfully');
     } catch (error) {
       this.logger.error('Failed to initialize schema: ' + error.message);
+    }
+
+    // File migrations run even if the legacy inline DDL above fails —
+    // each file is idempotent and tracked in schema_migrations.
+    try {
+      await this.runFileMigrations();
+    } catch (error) {
+      this.logger.error('Failed to run file migrations: ' + error.message);
     }
   }
 
@@ -749,8 +770,46 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   }
 
   // Basic query methods
+  //
+  // Tenant propagation: when a request scope is active (TenantInterceptor),
+  // every helper runs inside a BEGIN + SET LOCAL transaction so RLS sees the
+  // tenant. Without a scope (migrations, scripts, jobs) it is a plain query.
+  // Code holding its own client (transaction/tenantTransaction/getClient)
+  // manages context itself.
+  private async scopedQuery(text: string, params?: any[]) {
+    const tenant = getTenantSchoolId();
+    if (tenant === undefined) {
+      return this.pool.query(text, params);
+    }
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      // NOTE: SET LOCAL does not accept $n bind parameters in the extended
+      // protocol (utility statements aren't plannable) — set_config() with
+      // is_local=true is the equivalent and binds fine.
+      await client.query(`SELECT set_config('${TENANT_SETTING}', $1, true)`, [
+        String(tenant),
+      ]);
+      const alsUser = getTenantUserId();
+      if (alsUser !== undefined) {
+        await client.query(
+          `SELECT set_config('${TENANT_USER_SETTING}', $1, true)`,
+          [String(alsUser)],
+        );
+      }
+      const result = await client.query(text, params);
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
   async query<T = any>(text: string, params?: any[]): Promise<T[]> {
-    const result = await this.pool.query(text, params);
+    const result = await this.scopedQuery(text, params);
     return result.rows;
   }
 
@@ -760,12 +819,12 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   }
 
   async insert<T = any>(text: string, params?: any[]): Promise<T> {
-    const result = await this.pool.query(text, params);
+    const result = await this.scopedQuery(text, params);
     return result.rows[0];
   }
 
   async update(text: string, params?: any[]): Promise<number> {
-    const result = await this.pool.query(text, params);
+    const result = await this.scopedQuery(text, params);
     return result.rowCount || 0;
   }
 
@@ -780,6 +839,12 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
+      const tenant = getTenantSchoolId();
+      if (tenant !== undefined) {
+        await client.query(`SELECT set_config('${TENANT_SETTING}', $1, true)`, [
+          String(tenant),
+        ]);
+      }
       const result = await callback(client);
       await client.query('COMMIT');
       return result;
@@ -818,7 +883,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       RETURNING ${returning}
     `;
 
-    const result = await this.pool.query(query, values);
+    const result = await this.scopedQuery(query, values);
     return result.rows;
   }
 
@@ -833,6 +898,12 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     const client = await this.pool.connect();
     try {
       await client.query('BEGIN');
+      const tenant = getTenantSchoolId();
+      if (tenant !== undefined) {
+        await client.query(`SELECT set_config('${TENANT_SETTING}', $1, true)`, [
+          String(tenant),
+        ]);
+      }
 
       let totalUpdated = 0;
       for (const row of data) {
@@ -872,7 +943,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       ? `SELECT COUNT(*) as count FROM ${tableName} WHERE ${whereClause}`
       : `SELECT COUNT(*) as count FROM ${tableName}`;
 
-    const result = await this.pool.query(query, params);
+    const result = await this.scopedQuery(query, params);
     return parseInt(result.rows[0]?.count || '0', 10);
   }
 
@@ -883,7 +954,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     params?: any[],
   ): Promise<boolean> {
     const query = `SELECT 1 FROM ${tableName} WHERE ${whereClause} LIMIT 1`;
-    const result = await this.pool.query(query, params);
+    const result = await this.scopedQuery(query, params);
     return result.rows.length > 0;
   }
 
@@ -924,13 +995,13 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       .replace(/LIMIT.*$/i, '')
       .replace(/OFFSET.*$/i, '');
 
-    const countResult = await this.pool.query(countQuery, params);
+    const countResult = await this.scopedQuery(countQuery, params);
     const total = parseInt(countResult.rows[0]?.total || '0', 10);
 
     // Get paginated data
     const paginatedQuery = `${query} LIMIT $${(params?.length || 0) + 1} OFFSET $${(params?.length || 0) + 2}`;
     const dataParams = [...(params || []), limit, offset];
-    const dataResult = await this.pool.query(paginatedQuery, dataParams);
+    const dataResult = await this.scopedQuery(paginatedQuery, dataParams);
 
     return {
       data: dataResult.rows,
@@ -965,16 +1036,170 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       RETURNING *
     `;
 
-    const result = await this.pool.query(query, [
+    const result = await this.scopedQuery(query, [
       ...values,
       ...updateCols.map((c) => data[c]),
     ]);
     return result.rows[0];
   }
 
-  // Raw query with client for complex operations
+  // Raw query with client for complex operations.
+  // NOTE: bypasses tenant scoping — callers inside a request must issue
+  // SET LOCAL app.current_school_id themselves (see tenantTransaction).
   getClient(): Promise<PoolClient> {
     return this.pool.connect();
+  }
+
+  /**
+   * Applies the legacy inline DDL bundle statement-by-statement, retrying
+   * failures (dependency order). Each statement is idempotent
+   * (IF NOT EXISTS), so replays are safe.
+   */
+  private async applyLegacyDDL(ddl: string): Promise<void> {
+    const statements = ddl
+      .split(';')
+      .map((s) => s.trim())
+      .filter((s) => /CREATE|ALTER|DROP/i.test(s));
+    let pending = statements;
+    for (let pass = 1; pass <= 5 && pending.length > 0; pass++) {
+      const failed: string[] = [];
+      for (const stmt of pending) {
+        try {
+          await this.pool.query(stmt);
+        } catch (error: any) {
+          failed.push(stmt);
+          if (pass === 5) {
+            const firstLine = stmt
+              .split('\n')
+              .find((l) => /CREATE|ALTER|DROP/i.test(l))
+              ?.trim();
+            this.logger.error(
+              `Legacy DDL failed after retries [${firstLine}]: ${error.message}`,
+            );
+          }
+        }
+      }
+      pending = failed;
+    }
+    if (pending.length > 0) {
+      throw new Error(
+        `${pending.length} legacy DDL statement(s) failed (see errors above)`,
+      );
+    }
+  }
+
+  /**
+   * Tenant-scoped transaction: pins app.current_school_id via SET LOCAL so
+   * RLS policies (002_tenancy_rls) enforce isolation for every statement.
+   * SET LOCAL is transaction-scoped, hence safe on pooled connections.
+   */
+  async tenantTransaction<T>(
+    schoolId: number,
+    callback: (client: PoolClient) => Promise<T>,
+  ): Promise<T> {
+    const client = await this.pool.connect();
+    try {
+      await client.query('BEGIN');
+      await client.query(`SELECT set_config('${TENANT_SETTING}', $1, true)`, [
+        String(schoolId),
+      ]);
+      const alsUser = getTenantUserId();
+      if (alsUser !== undefined) {
+        await client.query(
+          `SELECT set_config('${TENANT_USER_SETTING}', $1, true)`,
+          [String(alsUser)],
+        );
+      }
+      const result = await callback(client);
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+
+  /**
+   * File-based migrations (src/database/migrations/*.sql), tracked in
+   * schema_migrations. 000/001 are baselined as BASELINE_MANUAL: 000 is
+   * covered by the legacy inline DDL above and 001 stays manual until the
+   * Phase-2 normalization reconciles shapes. Everything from 002 upward
+   * auto-applies exactly once, in filename order.
+   */
+  async runFileMigrations(): Promise<void> {
+    // Resolve across layouts: ts-node dev (src/database/migrations),
+    // webpack bundle (dist/database/migrations, __dirname=dist),
+    // tsc build (dist/src/database/migrations). First hit wins.
+    const candidates = [
+      path.join(__dirname, 'migrations'),
+      path.join(__dirname, 'database', 'migrations'),
+      path.join(process.cwd(), 'src', 'database', 'migrations'),
+      path.join(process.cwd(), 'dist', 'src', 'database', 'migrations'),
+    ];
+    let dir: string | null = null;
+    for (const candidate of candidates) {
+      try {
+        const stat = await fs.promises.stat(candidate);
+        if (stat.isDirectory()) {
+          dir = candidate;
+          break;
+        }
+      } catch {
+        // try next candidate
+      }
+    }
+    if (!dir) {
+      this.logger.warn(
+        `Migration dir not found (tried: ${candidates.join(', ')}) (skipping)`,
+      );
+      return;
+    }
+    let files: string[];
+    try {
+      files = (await fs.promises.readdir(dir))
+        .filter((f) => f.endsWith('.sql'))
+        .sort();
+    } catch {
+      this.logger.warn(`Migration dir not readable: ${dir} (skipping)`);
+      return;
+    }
+
+    await this.pool.query(`
+      CREATE TABLE IF NOT EXISTS schema_migrations (
+        filename VARCHAR(255) PRIMARY KEY,
+        applied_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+        note TEXT
+      )
+    `);
+
+    for (const base of ['000_base_schema.sql', '001_nepal_core.sql']) {
+      await this.pool.query(
+        `INSERT INTO schema_migrations (filename, note)
+         VALUES ($1, 'BASELINE_MANUAL') ON CONFLICT (filename) DO NOTHING`,
+        [base],
+      );
+    }
+
+    for (const file of files) {
+      if (file === '000_base_schema.sql' || file === '001_nepal_core.sql') {
+        continue;
+      }
+      const done = await this.pool.query(
+        `SELECT 1 FROM schema_migrations WHERE filename = $1`,
+        [file],
+      );
+      if ((done.rowCount ?? 0) > 0) continue;
+      this.logger.log(`Applying file migration ${file}...`);
+      const sql = await fs.promises.readFile(path.join(dir, file), 'utf8');
+      await this.pool.query(sql);
+      await this.pool.query(
+        `INSERT INTO schema_migrations (filename) VALUES ($1)`,
+        [file],
+      );
+      this.logger.log(`Applied file migration ${file}`);
+    }
   }
 
   // Execute with retry logic

@@ -132,7 +132,7 @@ describe('FeeService', () => {
 
       expect(result).toEqual(mockFeeCategory);
       expect(mockDatabaseService.queryOne).toHaveBeenCalledWith(
-        expect.stringContaining('WHERE category_id = $1'),
+        expect.stringContaining('WHERE id = $1'),
         [1],
       );
     });
@@ -236,7 +236,10 @@ describe('FeeService', () => {
     const createDto = {
       schoolId: 1,
       studentId: 1,
-      structureId: 1,
+      feeType: 'tuition',
+      amount: 12000,
+      totalAmount: 12000,
+      dueDate: new Date('2025-01-01'),
       academicYear: '2081',
     };
 
@@ -257,7 +260,7 @@ describe('FeeService', () => {
     it('should return fees for a student', async () => {
       mockDatabaseService.query.mockResolvedValue([]);
 
-      const result = await service.getStudentFees(1, 1);
+      const result = await service.getStudentFees(1, '2081');
 
       expect(result).toBeDefined();
     });
@@ -268,6 +271,7 @@ describe('FeeService', () => {
       schoolId: 1,
       studentId: 1,
       amount: 5000,
+      paymentDate: new Date('2025-01-15'),
       paymentMethod: 'CASH',
     };
 

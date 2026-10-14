@@ -102,6 +102,9 @@ export enum Permission {
   // Date Management (BS/AD)
   DATE_BS_CONVERT = 'date:bs-convert',
 
+  // Roles (dynamic RBAC administration)
+  ROLE_MANAGE = 'role:manage',
+
   // All access
   ADMIN = 'admin:full',
 }

@@ -18,7 +18,6 @@ import {
   ApiParam,
   ApiQuery,
   ApiBody,
-  ApiExtraModels,
 } from '@nestjs/swagger';
 import { FeeService } from './fee.service';
 import { CreateFeeCategoryDto } from './dto/create-fee-category.dto';

@@ -8,7 +8,7 @@ import * as crypto from 'crypto';
 import { UserService } from '../user/user.service';
 import { LoginDto } from '../user/dto/login.dto';
 import { NepaliDateUtil } from '../utils/nepali-date.util';
-import { User, UserSession } from '../user/entities/interfaces';
+import { User } from '../user/entities/interfaces';
 
 @Injectable()
 export class AuthService {
@@ -140,7 +140,7 @@ export class AuthService {
     const user = await this.userService.findOne(userId);
     if (user) {
       await this.db.insert(
-        `INSERT INTO audit_logs (user_id, school_id, action, module, details)
+        `INSERT INTO audit_logs (user_id, school_id, action, entity_type, new_value)
          VALUES ($1, $2, 'LOGOUT_ALL', 'AUTH', $3)`,
         [
           userId,
@@ -151,7 +151,7 @@ export class AuthService {
     }
   }
 
-  async refreshTokens(refreshToken: string, ip: string, userAgent: string) {
+  async refreshTokens(refreshToken: string, _ip: string, _userAgent: string) {
     let payload: any;
     try {
       const secret = this.configService.get<string>('JWT_REFRESH_SECRET');

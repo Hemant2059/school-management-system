@@ -39,6 +39,28 @@ export class SeedService implements OnModuleInit {
     }
   }
 
+  /**
+   * Demo-school resolution: prefer Shree Nepal Primary School, else the
+   * oldest school, else create Default School. Every seed method below uses
+   * this instead of a hardcoded school_id, so seeds survive non-fresh DBs.
+   */
+  async seedSchoolId(): Promise<number> {
+    const named = await this.db.query(
+      `SELECT school_id FROM schools WHERE name = 'Shree Nepal Primary School' LIMIT 1`,
+    );
+    if (named.length > 0) return named[0].school_id;
+    const first = await this.db.query(
+      `SELECT school_id FROM schools ORDER BY school_id LIMIT 1`,
+    );
+    if (first.length > 0) return first[0].school_id;
+    const created = await this.db.query(
+      `INSERT INTO schools (name, address, phone, email, is_active, created_at, updated_at)
+       VALUES ('Default School', 'Kathmandu', '01-1234567', 'info@school.edu.np', true, NOW(), NOW())
+       RETURNING school_id`,
+    );
+    return created[0].school_id;
+  }
+
   async seedAll() {
     this.logger.log('Starting seed data...');
     try {
@@ -142,6 +164,7 @@ export class SeedService implements OnModuleInit {
     }
 
     const passwordHash = await bcrypt.hash('password123', 10);
+    const sid = await this.seedSchoolId();
 
     const users = [
       [
@@ -192,6 +215,7 @@ export class SeedService implements OnModuleInit {
     ];
 
     for (const u of users) {
+      u[u.length - 1] = sid;
       await this.db.query(
         `INSERT INTO users (username, email, password, password_hash, full_name, phone, user_type, school_id, is_active, is_verified, created_at, updated_at)
          VALUES ($1, $2, $3, $3, $4, $5, $6, $7, true, true, NOW(), NOW())`,
@@ -202,237 +226,504 @@ export class SeedService implements OnModuleInit {
   }
 
   async seedClasses() {
+    const sid = await this.seedSchoolId();
     const existing = await this.db.query(
-      'SELECT class_id FROM classes WHERE school_id = 1 AND class_name = $1',
-      ['Nursery'],
+      'SELECT class_id FROM classes WHERE school_id = $1 AND class_name = $2',
+      [sid, 'Nursery'],
     );
     if (existing.length > 0) {
       this.logger.log('Classes already seeded');
       return;
     }
 
-    await this.db.query(`
-      INSERT INTO classes (school_id, class_name, class_code, class_order, education_level, is_active, created_at)
-      VALUES 
-        (1, 'Nursery', 'NUR', 0, 'PRE_PRIMARY', true, NOW()),
-        (1, 'L.K.G', 'LKG', 1, 'PRE_PRIMARY', true, NOW()),
-        (1, 'U.K.G', 'UKG', 2, 'PRE_PRIMARY', true, NOW()),
-        (1, 'Class 1', '1', 3, 'PRIMARY', true, NOW()),
-        (1, 'Class 2', '2', 4, 'PRIMARY', true, NOW()),
-        (1, 'Class 3', '3', 5, 'PRIMARY', true, NOW()),
-        (1, 'Class 4', '4', 6, 'PRIMARY', true, NOW()),
-        (1, 'Class 5', '5', 7, 'PRIMARY', true, NOW()),
-        (2, 'Nursery', 'NUR', 0, 'PRE_PRIMARY', true, NOW()),
-        (2, 'L.K.G', 'LKG', 1, 'PRE_PRIMARY', true, NOW()),
-        (2, 'U.K.G', 'UKG', 2, 'PRE_PRIMARY', true, NOW()),
-        (2, 'Class 1', '1', 3, 'PRIMARY', true, NOW()),
-        (2, 'Class 2', '2', 4, 'PRIMARY', true, NOW()),
-        (3, 'Nursery', 'NUR', 0, 'PRE_PRIMARY', true, NOW()),
-        (3, 'Class 1', '1', 1, 'PRIMARY', true, NOW())
-    `);
+    const schoolIds = await this.db.query<{ school_id: number; name: string }>(
+      `SELECT school_id, name FROM schools WHERE name = ANY($1)`,
+      [
+        [
+          'Shree Nepal Primary School',
+          'Little Stars Academy',
+          'Garden View School',
+        ],
+      ],
+    );
+    const byName = new Map(schoolIds.map((s) => [s.name, s.school_id]));
+    // (schoolName, class_name, class_code, class_order, education_level)
+    const rows: Array<[string, string, string, number, string]> = [
+      ['Shree Nepal Primary School', 'Nursery', 'NUR', 0, 'PRE_PRIMARY'],
+      ['Shree Nepal Primary School', 'L.K.G', 'LKG', 1, 'PRE_PRIMARY'],
+      ['Shree Nepal Primary School', 'U.K.G', 'UKG', 2, 'PRE_PRIMARY'],
+      ['Shree Nepal Primary School', 'Class 1', '1', 3, 'PRIMARY'],
+      ['Shree Nepal Primary School', 'Class 2', '2', 4, 'PRIMARY'],
+      ['Shree Nepal Primary School', 'Class 3', '3', 5, 'PRIMARY'],
+      ['Shree Nepal Primary School', 'Class 4', '4', 6, 'PRIMARY'],
+      ['Shree Nepal Primary School', 'Class 5', '5', 7, 'PRIMARY'],
+      ['Little Stars Academy', 'Nursery', 'NUR', 0, 'PRE_PRIMARY'],
+      ['Little Stars Academy', 'L.K.G', 'LKG', 1, 'PRE_PRIMARY'],
+      ['Little Stars Academy', 'U.K.G', 'UKG', 2, 'PRE_PRIMARY'],
+      ['Little Stars Academy', 'Class 1', '1', 3, 'PRIMARY'],
+      ['Little Stars Academy', 'Class 2', '2', 4, 'PRIMARY'],
+      ['Garden View School', 'Nursery', 'NUR', 0, 'PRE_PRIMARY'],
+      ['Garden View School', 'Class 1', '1', 1, 'PRIMARY'],
+    ];
+    for (const [schoolName, className, classCode, classOrder, level] of rows) {
+      const schoolId =
+        byName.get(schoolName) ??
+        (schoolName === 'Shree Nepal Primary School' ? sid : undefined);
+      if (!schoolId) {
+        this.logger.warn(`Skipping classes for missing school ${schoolName}`);
+        continue;
+      }
+      await this.db.query(
+        `INSERT INTO classes (school_id, class_name, class_code, class_order, education_level, is_active, created_at)
+         VALUES ($1, $2, $3, $4, $5, true, NOW())
+         ON CONFLICT DO NOTHING`,
+        [schoolId, className, classCode, classOrder, level],
+      );
+    }
     this.logger.log('Classes seeded');
   }
 
   async seedSections() {
+    const sid = await this.seedSchoolId();
     const existing = await this.db.query(
-      'SELECT section_id FROM sections WHERE school_id = 1 LIMIT 1',
+      'SELECT section_id FROM sections WHERE school_id = $1 LIMIT 1',
+      [sid],
     );
     if (existing.length > 0) {
       this.logger.log('Sections already seeded');
       return;
     }
 
-    await this.db.query(`
-      INSERT INTO sections (school_id, class_id, section_name, section_code, section_order, is_active, created_at)
-      VALUES 
-        (1, 3, 'A', 'A', 1, true, NOW()),
-        (1, 3, 'B', 'B', 2, true, NOW()),
-        (1, 4, 'A', 'A', 1, true, NOW()),
-        (1, 4, 'B', 'B', 2, true, NOW()),
-        (1, 5, 'A', 'A', 1, true, NOW()),
-        (1, 6, 'A', 'A', 1, true, NOW()),
-        (1, 7, 'A', 'A', 1, true, NOW()),
-        (1, 8, 'A', 'A', 1, true, NOW()),
-        (2, 9, 'A', 'A', 1, true, NOW()),
-        (2, 10, 'A', 'A', 1, true, NOW()),
-        (2, 11, 'A', 'A', 1, true, NOW()),
-        (3, 14, 'A', 'A', 1, true, NOW())
-    `);
+    // (schoolName, class_code, section_name, section_order)
+    const rows: Array<[string, string, string, number]> = [
+      ['Shree Nepal Primary School', 'UKG', 'A', 1],
+      ['Shree Nepal Primary School', 'UKG', 'B', 2],
+      ['Shree Nepal Primary School', '1', 'A', 1],
+      ['Shree Nepal Primary School', '1', 'B', 2],
+      ['Shree Nepal Primary School', '2', 'A', 1],
+      ['Shree Nepal Primary School', '3', 'A', 1],
+      ['Shree Nepal Primary School', '4', 'A', 1],
+      ['Shree Nepal Primary School', '5', 'A', 1],
+      ['Little Stars Academy', 'NUR', 'A', 1],
+      ['Little Stars Academy', 'LKG', 'A', 1],
+      ['Little Stars Academy', 'UKG', 'A', 1],
+      ['Garden View School', '1', 'A', 1],
+    ];
+    const schoolIds = await this.db.query<{ school_id: number; name: string }>(
+      `SELECT school_id, name FROM schools WHERE name = ANY($1)`,
+      [Array.from(new Set(rows.map((r) => r[0])))],
+    );
+    const byName = new Map(schoolIds.map((s) => [s.name, s.school_id]));
+    for (const [schoolName, classCode, sectionName, sectionOrder] of rows) {
+      const schoolId =
+        byName.get(schoolName) ??
+        (schoolName === 'Shree Nepal Primary School' ? sid : undefined);
+      if (!schoolId) {
+        this.logger.warn(
+          `Skipping section ${sectionName} for missing school ${schoolName}`,
+        );
+        continue;
+      }
+      const cls = await this.db.query(
+        `SELECT class_id FROM classes WHERE school_id = $1 AND class_code = $2 LIMIT 1`,
+        [schoolId, classCode],
+      );
+      if (cls.length === 0) {
+        this.logger.warn(
+          `Skipping section ${sectionName}: class ${classCode} missing`,
+        );
+        continue;
+      }
+      await this.db.query(
+        `INSERT INTO sections (school_id, class_id, section_name, section_code, section_order, is_active, created_at)
+         VALUES ($1, $2, $3, $3, $4, true, NOW())
+         ON CONFLICT DO NOTHING`,
+        [schoolId, cls[0].class_id, sectionName, sectionOrder],
+      );
+    }
     this.logger.log('Sections seeded');
   }
 
   async seedSubjects() {
+    const sid = await this.seedSchoolId();
     const existing = await this.db.query(
-      'SELECT subject_id FROM subjects WHERE school_id = 1 LIMIT 1',
+      'SELECT subject_id FROM subjects WHERE school_id = $1 LIMIT 1',
+      [sid],
     );
     if (existing.length > 0) {
       this.logger.log('Subjects already seeded');
       return;
     }
 
-    await this.db.query(`
-      INSERT INTO subjects (school_id, subject_name_en, subject_name_np, subject_code, subject_type, class_id, is_active, created_at)
-      VALUES 
-        (1, 'English', 'अंग्रेजी', 'ENG', 'CORE', 4, true, NOW()),
-        (1, 'Nepali', 'नेपाली', 'NEP', 'CORE', 4, true, NOW()),
-        (1, 'Mathematics', 'गणित', 'MATH', 'CORE', 4, true, NOW()),
-        (1, 'Science', 'विज्ञान', 'SCI', 'CORE', 4, true, NOW()),
-        (1, 'Social Studies', 'सामाजिक अध्ययन', 'SST', 'CORE', 4, true, NOW()),
-        (1, 'English', 'अंग्रेजी', 'ENG', 'CORE', 5, true, NOW()),
-        (1, 'Nepali', 'नेपाली', 'NEP', 'CORE', 5, true, NOW()),
-        (1, 'Mathematics', 'गणित', 'MATH', 'CORE', 5, true, NOW()),
-        (1, 'Science', 'विज्ञान', 'SCI', 'CORE', 5, true, NOW()),
-        (1, 'Social Studies', 'सामाजिक अध्ययन', 'SST', 'CORE', 5, true, NOW()),
-        (1, 'English', 'अंग्रेजी', 'ENG', 'CORE', 6, true, NOW()),
-        (1, 'Nepali', 'नेपाली', 'NEP', 'CORE', 6, true, NOW()),
-        (1, 'Mathematics', 'गणित', 'MATH', 'CORE', 6, true, NOW()),
-        (1, 'Science', 'विज्ञान', 'SCI', 'CORE', 6, true, NOW()),
-        (1, 'Social Studies', 'सामाजिक अध्ययन', 'SST', 'CORE', 6, true, NOW())
-    `);
+    // (class_code, name_en, name_np, subject_code) for the seed school
+    const catalog: Array<[string, string, string, string]> = [
+      ['1', 'English', 'अंग्रेजी', 'ENG'],
+      ['1', 'Nepali', 'नेपाली', 'NEP'],
+      ['1', 'Mathematics', 'गणित', 'MATH'],
+      ['1', 'Science', 'विज्ञान', 'SCI'],
+      ['1', 'Social Studies', 'सामाजिक अध्ययन', 'SST'],
+      ['2', 'English', 'अंग्रेजी', 'ENG'],
+      ['2', 'Nepali', 'नेपाली', 'NEP'],
+      ['2', 'Mathematics', 'गणित', 'MATH'],
+      ['2', 'Science', 'विज्ञान', 'SCI'],
+      ['2', 'Social Studies', 'सामाजिक अध्ययन', 'SST'],
+      ['3', 'English', 'अंग्रेजी', 'ENG'],
+      ['3', 'Nepali', 'नेपाली', 'NEP'],
+      ['3', 'Mathematics', 'गणित', 'MATH'],
+      ['3', 'Science', 'विज्ञान', 'SCI'],
+      ['3', 'Social Studies', 'सामाजिक अध्ययन', 'SST'],
+    ];
+    for (const [classCode, nameEn, nameNp, subjectCode] of catalog) {
+      const cls = await this.db.query(
+        `SELECT class_id FROM classes WHERE school_id = $1 AND class_code = $2 LIMIT 1`,
+        [sid, classCode],
+      );
+      if (cls.length === 0) {
+        this.logger.warn(`Skipping subjects: class ${classCode} missing`);
+        continue;
+      }
+      await this.db.query(
+        `INSERT INTO subjects (school_id, subject_name_en, subject_name_np, subject_code, subject_type, class_id, is_active, created_at)
+         VALUES ($1, $2, $3, $4, 'CORE', $5, true, NOW())
+         ON CONFLICT DO NOTHING`,
+        [sid, nameEn, nameNp, subjectCode, cls[0].class_id],
+      );
+    }
     this.logger.log('Subjects seeded');
   }
 
   async seedStudents() {
+    const sid = await this.seedSchoolId();
     const existing = await this.db.query(
-      'SELECT student_id FROM students WHERE school_id = 1 LIMIT 1',
+      'SELECT student_id FROM students WHERE school_id = $1 LIMIT 1',
+      [sid],
     );
     if (existing.length > 0) {
       this.logger.log('Students already seeded');
       return;
     }
 
-    await this.db.query(`
-      INSERT INTO students (school_id, admission_number, first_name_en, middle_name_en, last_name_en, first_name_np, last_name_np, gender, date_of_birth, date_of_birth_bs, nationality, ethnicity, religion, current_class_id, current_section_id, academic_year, roll_number, current_status, is_active, created_at, updated_at)
+    await this.db.query(
+      `
+      INSERT INTO students (school_id, admission_number, first_name_en, middle_name_en, last_name_en, first_name_np, last_name_np, gender, date_of_birth_ad, date_of_birth_bs, nationality, caste_ethnicity, caste_code, religion, roll_number, current_status, is_active, created_at, updated_at)
       VALUES 
-        (1, '2079-001', 'Kiran', 'Kumar', 'Sharma', 'किरण', 'शर्मा', 'Male', '2016-03-15', '2072-12-02', 'Nepali', 'Brahmin', 'Hindu', 4, 3, '2082', 1, 'ACTIVE', true, NOW(), NOW()),
-        (1, '2079-002', 'Sunita', '', 'Khatri', 'सुनिता', 'खत्री', 'Female', '2016-05-20', '2072-12-08', 'Nepali', 'Chhetri', 'Hindu', 4, 3, '2082', 2, 'ACTIVE', true, NOW(), NOW()),
-        (1, '2079-003', 'Raj', 'Kumar', 'Yadav', 'राज', 'यादव', 'Male', '2016-07-10', '2073-03-23', 'Nepali', 'Yadav', 'Hindu', 4, 4, '2082', 1, 'ACTIVE', true, NOW(), NOW()),
-        (1, '2079-004', 'Anita', 'Devi', 'Chaudhary', 'अनिता', 'चौधरी', 'Female', '2016-02-28', '2072-11-16', 'Nepali', 'Tharu', 'Hindu', 4, 4, '2082', 2, 'ACTIVE', true, NOW(), NOW()),
-        (1, '2079-005', 'Niraj', '', 'Maharjan', 'निरज', 'महर्जन', 'Male', '2015-11-05', '2072-07-18', 'Nepali', 'Newar', 'Buddhist', 5, 5, '2082', 1, 'ACTIVE', true, NOW(), NOW()),
-        (1, '2079-006', 'Sabina', '', 'Rai', 'सबिना', 'राई', 'Female', '2015-08-12', '2072-04-28', 'Nepali', 'Rai', 'Christian', 5, 5, '2082', 2, 'ACTIVE', true, NOW(), NOW()),
-        (1, '2079-007', 'Prakash', 'Bahadur', 'Thapa', 'प्रकाश', 'थापा', 'Male', '2015-04-22', '2071-12-09', 'Nepali', 'Gurung', 'Hindu', 6, 6, '2082', 1, 'ACTIVE', true, NOW(), NOW()),
-        (1, '2079-008', 'Maya', '', 'Lama', 'माया', 'लामा', 'Female', '2015-06-30', '2072-03-15', 'Nepali', 'Lama', 'Buddhist', 6, 6, '2082', 2, 'ACTIVE', true, NOW(), NOW()),
-        (1, '2079-009', 'Santosh', 'Kumar', 'Mahato', 'सन्तोष', 'महतो', 'Male', '2014-09-18', '2071-05-01', 'Nepali', 'Mahato', 'Hindu', 7, 7, '2082', 1, 'ACTIVE', true, NOW(), NOW()),
-        (1, '2079-010', 'Laxmi', '', 'Poudel', 'लक्ष्मी', 'पौडेल', 'Female', '2014-12-25', '2071-08-10', 'Nepali', 'Brahmin', 'Hindu', 7, 7, '2082', 2, 'ACTIVE', true, NOW(), NOW()),
-        (1, '2079-011', 'Bibek', '', 'Shrestha', 'बिबेक', 'श्रेष्ठ', 'Male', '2014-03-14', '2070-11-30', 'Nepali', 'Newar', 'Hindu', 8, 8, '2082', 1, 'ACTIVE', true, NOW(), NOW()),
-        (1, '2079-012', 'Sarita', 'Kumari', 'Basnet', 'सरिता', 'बस्नेत', 'Female', '2014-07-08', '2071-03-25', 'Nepali', 'Chhetri', 'Hindu', 8, 8, '2082', 2, 'ACTIVE', true, NOW(), NOW())
-    `);
+        ($1, '2079-001', 'Kiran', 'Kumar', 'Sharma', 'किरण', 'शर्मा', 'MALE', '2016-03-15', '2072-12-02', 'Nepali', 'Brahmin', '01A', 'Hindu', 1, 'ACTIVE', true, NOW(), NOW()),
+        ($1, '2079-002', 'Sunita', '', 'Khatri', 'सुनिता', 'खत्री', 'FEMALE', '2016-05-20', '2072-12-08', 'Nepali', 'Chhetri', '02B', 'Hindu', 2, 'ACTIVE', true, NOW(), NOW()),
+        ($1, '2079-003', 'Raj', 'Kumar', 'Yadav', 'राज', 'यादव', 'MALE', '2016-07-10', '2073-03-23', 'Nepali', 'Yadav', '03Y', 'Hindu', 1, 'ACTIVE', true, NOW(), NOW()),
+        ($1, '2079-004', 'Anita', 'Devi', 'Chaudhary', 'अनिता', 'चौधरी', 'FEMALE', '2016-02-28', '2072-11-16', 'Nepali', 'Tharu', '09T', 'Hindu', 2, 'ACTIVE', true, NOW(), NOW()),
+        ($1, '2079-005', 'Niraj', '', 'Maharjan', 'निरज', 'महर्जन', 'MALE', '2015-11-05', '2072-07-18', 'Nepali', 'Newar', '10N', 'Buddhist', 1, 'ACTIVE', true, NOW(), NOW()),
+        ($1, '2079-006', 'Sabina', '', 'Rai', 'सबिना', 'राई', 'FEMALE', '2015-08-12', '2072-04-28', 'Nepali', 'Rai', '06C', 'Christian', 2, 'ACTIVE', true, NOW(), NOW()),
+        ($1, '2079-007', 'Prakash', 'Bahadur', 'Thapa', 'प्रकाश', 'थापा', 'MALE', '2015-04-22', '2071-12-09', 'Nepali', 'Gurung', '06E', 'Hindu', 1, 'ACTIVE', true, NOW(), NOW()),
+        ($1, '2079-008', 'Maya', '', 'Lama', 'माया', 'लामा', 'FEMALE', '2015-06-30', '2072-03-15', 'Nepali', 'Lama', NULL, 'Buddhist', 2, 'ACTIVE', true, NOW(), NOW()),
+        ($1, '2079-009', 'Santosh', 'Kumar', 'Mahato', 'सन्तोष', 'महतो', 'MALE', '2014-09-18', '2071-05-01', 'Nepali', 'Mahato', '03H', 'Hindu', 1, 'ACTIVE', true, NOW(), NOW()),
+        ($1, '2079-010', 'Laxmi', '', 'Poudel', 'लक्ष्मी', 'पौडेल', 'FEMALE', '2014-12-25', '2071-08-10', 'Nepali', 'Brahmin', '01A', 'Hindu', 2, 'ACTIVE', true, NOW(), NOW()),
+        ($1, '2079-011', 'Bibek', '', 'Shrestha', 'बिबेक', 'श्रेष्ठ', 'MALE', '2014-03-14', '2070-11-30', 'Nepali', 'Newar', '10N', 'Hindu', 1, 'ACTIVE', true, NOW(), NOW()),
+        ($1, '2079-012', 'Sarita', 'Kumari', 'Basnet', 'सरिता', 'बस्नेत', 'FEMALE', '2014-07-08', '2071-03-25', 'Nepali', 'Chhetri', '02B', 'Hindu', 2, 'ACTIVE', true, NOW(), NOW())
+    `,
+      [sid],
+    );
     this.logger.log('Students seeded');
   }
 
   async seedGuardians() {
+    const sid = await this.seedSchoolId();
     const existing = await this.db.query(
-      'SELECT guardian_id FROM guardians WHERE school_id = 1 LIMIT 1',
+      'SELECT guardian_id FROM guardians WHERE school_id = $1 LIMIT 1',
+      [sid],
     );
     if (existing.length > 0) {
       this.logger.log('Guardians already seeded');
       return;
     }
 
-    await this.db.query(`
-      INSERT INTO guardians (school_id, first_name, middle_name, last_name, phone, email, occupation, relationship, is_active, created_at)
+    await this.db.query(
+      `
+      INSERT INTO guardians (school_id, guardian_code, first_name_en, middle_name_en, last_name_en, mobile, email, occupation, relation_to_student, is_active, created_at)
       VALUES 
-        (1, 'Deepak', 'Kumar', 'Sharma', '9841001001', 'deepak@email.com', 'Business', 'Father', true, NOW()),
-        (1, 'Bikram', '', 'Khatri', '9841001002', 'bikram@email.com', 'Teacher', 'Father', true, NOW()),
-        (1, 'Ramesh', 'Bahadur', 'Yadav', '9841001003', 'ramesh@email.com', 'Farmer', 'Father', true, NOW()),
-        (1, 'Tilak', 'Ram', 'Chaudhary', '9841001004', 'tilak@email.com', 'Driver', 'Father', true, NOW()),
-        (1, 'Dinesh', '', 'Maharjan', '9841001005', 'dinesh@email.com', 'Engineer', 'Father', true, NOW()),
-        (1, 'Milan', 'Kumar', 'Rai', '9841001006', 'milan@email.com', 'Doctor', 'Father', true, NOW()),
-        (1, 'Gopal', 'Bahadur', 'Thapa', '9841001007', 'gopal@email.com', 'Police', 'Father', true, NOW()),
-        (1, 'Tenzin', '', 'Lama', '9841001008', 'tenzin@email.com', 'Monk', 'Father', true, NOW()),
-        (1, 'Shiv', 'Prasad', 'Mahato', '9841001009', 'shiv@email.com', 'Banker', 'Father', true, NOW()),
-        (1, 'Kedar', 'Nath', 'Poudel', '9841001010', 'kedar@email.com', 'Professor', 'Father', true, NOW()),
-        (1, 'Rajesh', 'Kumar', 'Shrestha', '9841001011', 'rajesh@email.com', 'Manager', 'Father', true, NOW()),
-        (1, 'Hom', 'Nath', 'Basnet', '9841001012', 'homenath@email.com', 'Contractor', 'Father', true, NOW())
-    `);
+        ($1, 'GRD-SEED-01', 'Deepak', 'Kumar', 'Sharma', '9841001001', 'deepak@email.com', 'Business', 'FATHER', true, NOW()),
+        ($1, 'GRD-SEED-02', 'Bikram', '', 'Khatri', '9841001002', 'bikram@email.com', 'Teacher', 'FATHER', true, NOW()),
+        ($1, 'GRD-SEED-03', 'Ramesh', 'Bahadur', 'Yadav', '9841001003', 'ramesh@email.com', 'Farmer', 'FATHER', true, NOW()),
+        ($1, 'GRD-SEED-04', 'Tilak', 'Ram', 'Chaudhary', '9841001004', 'tilak@email.com', 'Driver', 'FATHER', true, NOW()),
+        ($1, 'GRD-SEED-05', 'Dinesh', '', 'Maharjan', '9841001005', 'dinesh@email.com', 'Engineer', 'FATHER', true, NOW()),
+        ($1, 'GRD-SEED-06', 'Milan', 'Kumar', 'Rai', '9841001006', 'milan@email.com', 'Doctor', 'FATHER', true, NOW()),
+        ($1, 'GRD-SEED-07', 'Gopal', 'Bahadur', 'Thapa', '9841001007', 'gopal@email.com', 'Police', 'FATHER', true, NOW()),
+        ($1, 'GRD-SEED-08', 'Tenzin', '', 'Lama', '9841001008', 'tenzin@email.com', 'Monk', 'FATHER', true, NOW()),
+        ($1, 'GRD-SEED-09', 'Shiv', 'Prasad', 'Mahato', '9841001009', 'shiv@email.com', 'Banker', 'FATHER', true, NOW()),
+        ($1, 'GRD-SEED-10', 'Kedar', 'Nath', 'Poudel', '9841001010', 'kedar@email.com', 'Professor', 'FATHER', true, NOW()),
+        ($1, 'GRD-SEED-11', 'Rajesh', 'Kumar', 'Shrestha', '9841001011', 'rajesh@email.com', 'Manager', 'FATHER', true, NOW()),
+        ($1, 'GRD-SEED-12', 'Hom', 'Nath', 'Basnet', '9841001012', 'homenath@email.com', 'Contractor', 'FATHER', true, NOW())
+    `,
+      [sid],
+    );
     this.logger.log('Guardians seeded');
   }
 
   async seedStudentGuardians() {
+    const sid = await this.seedSchoolId();
     const existing = await this.db.query(
-      'SELECT student_guardian_id FROM student_guardians LIMIT 1',
+      'SELECT student_guardian_id FROM student_guardians WHERE student_id IN (SELECT student_id FROM students WHERE school_id = $1) LIMIT 1',
+      [sid],
     );
     if (existing.length > 0) {
       this.logger.log('Student guardians already seeded');
       return;
     }
 
-    await this.db.query(`
-      INSERT INTO student_guardians (student_id, guardian_id, relationship_type, is_primary, is_emergency_contact, is_active, created_at)
-      VALUES 
-        (1, 1, 'FATHER', true, true, true, NOW()),
-        (2, 2, 'FATHER', true, true, true, NOW()),
-        (3, 3, 'FATHER', true, true, true, NOW()),
-        (4, 4, 'FATHER', true, true, true, NOW()),
-        (5, 5, 'FATHER', true, true, true, NOW()),
-        (6, 6, 'FATHER', true, true, true, NOW()),
-        (7, 7, 'FATHER', true, true, true, NOW()),
-        (8, 8, 'FATHER', true, true, true, NOW()),
-        (9, 9, 'FATHER', true, true, true, NOW()),
-        (10, 10, 'FATHER', true, true, true, NOW()),
-        (11, 11, 'FATHER', true, true, true, NOW()),
-        (12, 12, 'FATHER', true, true, true, NOW())
-    `);
+    // Pair i-th student with i-th guardian (no serial-id assumptions).
+    const students = await this.db.query(
+      `SELECT student_id FROM students WHERE school_id = $1 ORDER BY admission_number`,
+      [sid],
+    );
+    const guardians = await this.db.query(
+      `SELECT guardian_id FROM guardians WHERE school_id = $1 ORDER BY guardian_id`,
+      [sid],
+    );
+    const pairs = students.slice(0, guardians.length);
+    for (let i = 0; i < pairs.length; i++) {
+      await this.db.query(
+        `INSERT INTO student_guardians (student_id, guardian_id, relationship_type, is_primary, is_emergency_contact, is_active, created_at)
+         VALUES ($1, $2, 'FATHER', true, true, true, NOW())
+         ON CONFLICT (student_id, guardian_id) DO NOTHING`,
+        [pairs[i].student_id, guardians[i].guardian_id],
+      );
+    }
     this.logger.log('Student guardians seeded');
   }
 
   async seedFees() {
+    const sid = await this.seedSchoolId();
     const existing = await this.db.query(
-      'SELECT fee_id FROM fees WHERE school_id = 1 LIMIT 1',
+      'SELECT fee_id FROM fees WHERE school_id = $1 LIMIT 1',
+      [sid],
     );
     if (existing.length > 0) {
       this.logger.log('Fees already seeded');
       return;
     }
 
-    await this.db.query(`
-      INSERT INTO fees (school_id, student_id, fee_type, amount, discount_amount, fine_amount, total_amount, due_date, status, academic_year, class_id, section_id, invoice_number, is_active, created_at, updated_at)
-      VALUES 
-        (1, 1, 'TUITION', 12000, 0, 0, 12000, '2082-04-01', 'PAID', '2082', 4, 3, 'INV-2082-001', true, NOW(), NOW()),
-        (1, 2, 'TUITION', 12000, 1200, 0, 10800, '2082-04-01', 'PAID', '2082', 4, 3, 'INV-2082-002', true, NOW(), NOW()),
-        (1, 3, 'TUITION', 12000, 0, 0, 12000, '2082-04-01', 'PENDING', '2082', 4, 4, 'INV-2082-003', true, NOW(), NOW()),
-        (1, 4, 'TUITION', 12000, 0, 500, 12500, '2082-04-01', 'PARTIAL', '2082', 4, 4, 'INV-2082-004', true, NOW(), NOW()),
-        (1, 5, 'TUITION', 15000, 0, 0, 15000, '2082-04-01', 'PAID', '2082', 5, 5, 'INV-2082-005', true, NOW(), NOW()),
-        (1, 6, 'TUITION', 15000, 1500, 0, 13500, '2082-04-01', 'PAID', '2082', 5, 5, 'INV-2082-006', true, NOW(), NOW()),
-        (1, 7, 'TUITION', 18000, 0, 0, 18000, '2082-04-01', 'PAID', '2082', 6, 6, 'INV-2082-007', true, NOW(), NOW()),
-        (1, 8, 'TUITION', 18000, 0, 0, 18000, '2082-04-01', 'PENDING', '2082', 6, 6, 'INV-2082-008', true, NOW(), NOW()),
-        (1, 9, 'TUITION', 20000, 2000, 0, 18000, '2082-04-01', 'PAID', '2082', 7, 7, 'INV-2082-009', true, NOW(), NOW()),
-        (1, 10, 'TUITION', 20000, 0, 0, 20000, '2082-04-01', 'PAID', '2082', 7, 7, 'INV-2082-010', true, NOW(), NOW()),
-        (1, 11, 'TUITION', 22000, 0, 0, 22000, '2082-04-01', 'PAID', '2082', 8, 8, 'INV-2082-011', true, NOW(), NOW()),
-        (1, 12, 'TUITION', 22000, 2200, 0, 19800, '2082-04-01', 'PAID', '2082', 8, 8, 'INV-2082-012', true, NOW(), NOW())
-    `);
+    // (admission_number, class_code, section_name, amount, discount, fine, total, status, invoice)
+    const rows: Array<
+      [string, string, string, number, number, number, number, string, string]
+    > = [
+      ['2079-001', '1', 'A', 12000, 0, 0, 12000, 'PAID', 'INV-2082-001'],
+      ['2079-002', '1', 'A', 12000, 1200, 0, 10800, 'PAID', 'INV-2082-002'],
+      ['2079-003', '1', 'B', 12000, 0, 0, 12000, 'PENDING', 'INV-2082-003'],
+      ['2079-004', '1', 'B', 12000, 0, 500, 12500, 'PARTIAL', 'INV-2082-004'],
+      ['2079-005', '2', 'A', 15000, 0, 0, 15000, 'PAID', 'INV-2082-005'],
+      ['2079-006', '2', 'A', 15000, 1500, 0, 13500, 'PAID', 'INV-2082-006'],
+      ['2079-007', '3', 'A', 18000, 0, 0, 18000, 'PAID', 'INV-2082-007'],
+      ['2079-008', '3', 'A', 18000, 0, 0, 18000, 'PENDING', 'INV-2082-008'],
+      ['2079-009', '4', 'A', 20000, 2000, 0, 18000, 'PAID', 'INV-2082-009'],
+      ['2079-010', '4', 'A', 20000, 0, 0, 20000, 'PAID', 'INV-2082-010'],
+      ['2079-011', '5', 'A', 22000, 0, 0, 22000, 'PAID', 'INV-2082-011'],
+      ['2079-012', '5', 'A', 22000, 2200, 0, 19800, 'PAID', 'INV-2082-012'],
+    ];
+    for (const [
+      adm,
+      classCode,
+      sectionName,
+      amount,
+      disc,
+      fine,
+      total,
+      status,
+      invoice,
+    ] of rows) {
+      const st = await this.db.query(
+        `SELECT student_id FROM students WHERE school_id = $1 AND admission_number = $2 LIMIT 1`,
+        [sid, adm],
+      );
+      const cl = await this.db.query(
+        `SELECT class_id FROM classes WHERE school_id = $1 AND class_code = $2 LIMIT 1`,
+        [sid, classCode],
+      );
+      if (st.length === 0 || cl.length === 0) {
+        this.logger.warn(`Skipping fee ${invoice}: student or class missing`);
+        continue;
+      }
+      const sec = await this.db.query(
+        `SELECT section_id FROM sections WHERE class_id = $1 AND section_name = $2 LIMIT 1`,
+        [cl[0].class_id, sectionName],
+      );
+      await this.db.query(
+        `INSERT INTO fees (school_id, student_id, fee_type, amount, discount_amount, fine_amount, total_amount, due_date, status, academic_year, class_id, section_id, invoice_number, is_active, created_at, updated_at)
+         VALUES ($1, $2, 'TUITION', $3, $4, $5, $6, '2082-04-01', $7, '2082', $8, $9, $10, true, NOW(), NOW())`,
+        [
+          sid,
+          st[0].student_id,
+          amount,
+          disc,
+          fine,
+          total,
+          status,
+          cl[0].class_id,
+          sec[0]?.section_id || null,
+          invoice,
+        ],
+      );
+    }
     this.logger.log('Fees seeded');
   }
 
   async seedPayments() {
+    const sid = await this.seedSchoolId();
     const existing = await this.db.query(
-      'SELECT payment_id FROM payments WHERE school_id = 1 LIMIT 1',
+      'SELECT payment_id FROM payments WHERE school_id = $1 LIMIT 1',
+      [sid],
     );
     if (existing.length > 0) {
       this.logger.log('Payments already seeded');
       return;
     }
 
-    await this.db.query(`
-      INSERT INTO payments (school_id, student_id, fee_id, amount, payment_date, payment_method, transaction_id, received_by, bank_name, remarks, is_verified, created_at)
-      VALUES 
-        (1, 1, 1, 12000, '2082-01-15', 'CASH', 'TXN-001', 1, NULL, 'Full payment', true, NOW()),
-        (1, 2, 2, 10800, '2082-01-16', 'BANK_TRANSFER', 'TXN-002', 1, 'NMB Bank', 'Full payment with discount', true, NOW()),
-        (1, 4, 4, 5000, '2082-01-20', 'CASH', 'TXN-003', 5, NULL, 'Partial payment', true, NOW()),
-        (1, 5, 5, 15000, '2082-01-18', 'ESEWA', 'TXN-004', 5, NULL, 'Full payment via e-sewa', true, NOW()),
-        (1, 6, 6, 13500, '2082-01-19', 'BANK_TRANSFER', 'TXN-005', 5, 'Siddhartha Bank', 'Full payment with discount', true, NOW()),
-        (1, 7, 7, 18000, '2082-01-22', 'CASH', 'TXN-006', 5, NULL, 'Full payment', true, NOW()),
-        (1, 9, 9, 18000, '2082-01-25', 'BANK_TRANSFER', 'TXN-007', 5, 'Prabhu Bank', 'Full payment with scholarship', true, NOW()),
-        (1, 10, 10, 20000, '2082-01-26', 'CASH', 'TXN-008', 5, NULL, 'Full payment', true, NOW()),
-        (1, 11, 11, 22000, '2082-01-28', 'ESEWA', 'TXN-009', 5, NULL, 'Full payment via e-sewa', true, NOW()),
-        (1, 12, 12, 19800, '2082-01-29', 'BANK_TRANSFER', 'TXN-010', 5, 'NIC Asia', 'Full payment with sibling discount', true, NOW())
-    `);
+    // (invoice_number, amount, payment_date, method, txn, received_by, bank, remarks)
+    const rows: Array<
+      [string, number, string, string, string, number, string | null, string]
+    > = [
+      [
+        'INV-2082-001',
+        12000,
+        '2082-01-15',
+        'CASH',
+        'TXN-001',
+        1,
+        null,
+        'Full payment',
+      ],
+      [
+        'INV-2082-002',
+        10800,
+        '2082-01-16',
+        'BANK_TRANSFER',
+        'TXN-002',
+        1,
+        'NMB Bank',
+        'Full payment with discount',
+      ],
+      [
+        'INV-2082-004',
+        5000,
+        '2082-01-20',
+        'CASH',
+        'TXN-003',
+        5,
+        null,
+        'Partial payment',
+      ],
+      [
+        'INV-2082-005',
+        15000,
+        '2082-01-18',
+        'ESEWA',
+        'TXN-004',
+        5,
+        null,
+        'Full payment via e-sewa',
+      ],
+      [
+        'INV-2082-006',
+        13500,
+        '2082-01-19',
+        'BANK_TRANSFER',
+        'TXN-005',
+        5,
+        'Siddhartha Bank',
+        'Full payment with discount',
+      ],
+      [
+        'INV-2082-007',
+        18000,
+        '2082-01-22',
+        'CASH',
+        'TXN-006',
+        5,
+        null,
+        'Full payment',
+      ],
+      [
+        'INV-2082-009',
+        18000,
+        '2082-01-25',
+        'BANK_TRANSFER',
+        'TXN-007',
+        5,
+        'Prabhu Bank',
+        'Full payment with scholarship',
+      ],
+      [
+        'INV-2082-010',
+        20000,
+        '2082-01-26',
+        'CASH',
+        'TXN-008',
+        5,
+        null,
+        'Full payment',
+      ],
+      [
+        'INV-2082-011',
+        22000,
+        '2082-01-28',
+        'ESEWA',
+        'TXN-009',
+        5,
+        null,
+        'Full payment via e-sewa',
+      ],
+      [
+        'INV-2082-012',
+        19800,
+        '2082-01-29',
+        'BANK_TRANSFER',
+        'TXN-010',
+        5,
+        'NIC Asia',
+        'Full payment with sibling discount',
+      ],
+    ];
+    for (const [
+      invoice,
+      amount,
+      payDate,
+      method,
+      txn,
+      receivedBy,
+      bank,
+      remarks,
+    ] of rows) {
+      const fee = await this.db.query(
+        `SELECT fee_id, student_id FROM fees WHERE school_id = $1 AND invoice_number = $2 LIMIT 1`,
+        [sid, invoice],
+      );
+      if (fee.length === 0) {
+        this.logger.warn(`Skipping payment ${txn}: fee ${invoice} missing`);
+        continue;
+      }
+      await this.db.query(
+        `INSERT INTO payments (school_id, student_id, fee_id, amount, payment_date, payment_method, transaction_id, received_by, bank_name, remarks, is_verified, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true, NOW())`,
+        [
+          sid,
+          fee[0].student_id,
+          fee[0].fee_id,
+          amount,
+          payDate,
+          method,
+          txn,
+          receivedBy,
+          bank,
+          remarks,
+        ],
+      );
+    }
     this.logger.log('Payments seeded');
   }
 
   async seedAttendance() {
+    const sid = await this.seedSchoolId();
     const existing = await this.db.query(
-      'SELECT attendance_id FROM attendance WHERE school_id = 1 LIMIT 1',
+      'SELECT attendance_id FROM attendance WHERE school_id = $1 LIMIT 1',
+      [sid],
     );
     if (existing.length > 0) {
       this.logger.log('Attendance already seeded');
@@ -449,16 +740,20 @@ export class SeedService implements OnModuleInit {
       'ABSENT',
       'PRESENT',
     ];
-
-    for (let studentId = 1; studentId <= 12; studentId++) {
-      const studentStatus = status[studentId % 7];
+    const students = await this.db.query(
+      `SELECT student_id FROM students WHERE school_id = $1 ORDER BY student_id LIMIT 12`,
+      [sid],
+    );
+    for (let i = 0; i < students.length; i++) {
+      const studentStatus = status[i % 7];
       await this.db.query(
         `
         INSERT INTO attendance (school_id, student_id, attendance_date, status, remarks, marked_by, created_at)
-        VALUES (1, $1, $2, $3, $4, 2, NOW())
+        VALUES ($1, $2, $3, $4, $5, 2, NOW())
       `,
         [
-          studentId,
+          sid,
+          students[i].student_id,
           today,
           studentStatus,
           studentStatus === 'ABSENT' ? 'Sick leave' : null,
@@ -469,31 +764,49 @@ export class SeedService implements OnModuleInit {
   }
 
   async seedExams() {
+    const sid = await this.seedSchoolId();
     const existing = await this.db.query(
-      'SELECT exam_id FROM exams WHERE school_id = 1 LIMIT 1',
+      'SELECT exam_id FROM exams WHERE school_id = $1 LIMIT 1',
+      [sid],
     );
     if (existing.length > 0) {
       this.logger.log('Exams already seeded');
       return;
     }
 
-    await this.db.query(`
-      INSERT INTO exams (school_id, exam_name, exam_type, class_id, academic_year, start_date, end_date, is_active, created_at)
-      VALUES 
-        (1, 'First Terminal', 'TERMINAL', 4, '2082', '2082-04-15', '2082-04-25', true, NOW()),
-        (1, 'First Terminal', 'TERMINAL', 5, '2082', '2082-04-15', '2082-04-25', true, NOW()),
-        (1, 'First Terminal', 'TERMINAL', 6, '2082', '2082-04-15', '2082-04-25', true, NOW()),
-        (1, 'Half Yearly', 'HALF_YEARLY', 4, '2082', '2082-08-01', '2082-08-15', true, NOW()),
-        (1, 'Half Yearly', 'HALF_YEARLY', 5, '2082', '2082-08-01', '2082-08-15', true, NOW()),
-        (1, 'Final', 'FINAL', 4, '2082', '2082-11-15', '2082-11-30', true, NOW()),
-        (1, 'Final', 'FINAL', 5, '2082', '2082-11-15', '2082-11-30', true, NOW())
-    `);
+    // (name, type, class_code, start, end)
+    const rows: Array<[string, string, string, string, string]> = [
+      ['First Terminal', 'TERMINAL', '1', '2082-04-15', '2082-04-25'],
+      ['First Terminal', 'TERMINAL', '2', '2082-04-15', '2082-04-25'],
+      ['First Terminal', 'TERMINAL', '3', '2082-04-15', '2082-04-25'],
+      ['Half Yearly', 'HALF_YEARLY', '1', '2082-08-01', '2082-08-15'],
+      ['Half Yearly', 'HALF_YEARLY', '2', '2082-08-01', '2082-08-15'],
+      ['Final', 'FINAL', '1', '2082-11-15', '2082-11-30'],
+      ['Final', 'FINAL', '2', '2082-11-15', '2082-11-30'],
+    ];
+    for (const [name, type, classCode, start, end] of rows) {
+      const cl = await this.db.query(
+        `SELECT class_id FROM classes WHERE school_id = $1 AND class_code = $2 LIMIT 1`,
+        [sid, classCode],
+      );
+      if (cl.length === 0) {
+        this.logger.warn(`Skipping exam ${name}: class ${classCode} missing`);
+        continue;
+      }
+      await this.db.query(
+        `INSERT INTO exams (school_id, exam_name, exam_type, class_id, academic_year, start_date, end_date, is_active, created_at)
+         VALUES ($1, $2, $3, $4, '2082', $5, $6, true, NOW())`,
+        [sid, name, type, cl[0].class_id, start, end],
+      );
+    }
     this.logger.log('Exams seeded');
   }
 
   async seedMarks() {
+    const sid = await this.seedSchoolId();
     const existing = await this.db.query(
-      'SELECT mark_id FROM marks WHERE school_id = 1 LIMIT 1',
+      'SELECT mark_id FROM marks WHERE school_id = $1 LIMIT 1',
+      [sid],
     );
     if (existing.length > 0) {
       this.logger.log('Marks already seeded');
@@ -502,134 +815,201 @@ export class SeedService implements OnModuleInit {
 
     const marksData = [
       {
-        studentId: 1,
-        examId: 1,
-        subjectId: 1,
-        classId: 4,
+        adm: '2079-001',
+        examName: 'First Terminal',
+        examType: 'TERMINAL',
+        classCode: '1',
+        subjectCode: 'ENG',
         theory: 85,
         practical: 12,
         total: 97,
       },
       {
-        studentId: 1,
-        examId: 1,
-        subjectId: 2,
-        classId: 4,
+        adm: '2079-001',
+        examName: 'First Terminal',
+        examType: 'TERMINAL',
+        classCode: '1',
+        subjectCode: 'NEP',
         theory: 78,
         practical: 10,
         total: 88,
       },
       {
-        studentId: 1,
-        examId: 1,
-        subjectId: 3,
-        classId: 4,
+        adm: '2079-001',
+        examName: 'First Terminal',
+        examType: 'TERMINAL',
+        classCode: '1',
+        subjectCode: 'MATH',
         theory: 92,
         practical: 15,
         total: 107,
       },
       {
-        studentId: 2,
-        examId: 1,
-        subjectId: 1,
-        classId: 4,
+        adm: '2079-002',
+        examName: 'First Terminal',
+        examType: 'TERMINAL',
+        classCode: '1',
+        subjectCode: 'ENG',
         theory: 90,
         practical: 14,
         total: 104,
       },
       {
-        studentId: 2,
-        examId: 1,
-        subjectId: 2,
-        classId: 4,
+        adm: '2079-002',
+        examName: 'First Terminal',
+        examType: 'TERMINAL',
+        classCode: '1',
+        subjectCode: 'NEP',
         theory: 88,
         practical: 12,
         total: 100,
       },
       {
-        studentId: 2,
-        examId: 1,
-        subjectId: 3,
-        classId: 4,
+        adm: '2079-002',
+        examName: 'First Terminal',
+        examType: 'TERMINAL',
+        classCode: '1',
+        subjectCode: 'MATH',
         theory: 75,
         practical: 12,
         total: 87,
       },
       {
-        studentId: 3,
-        examId: 1,
-        subjectId: 1,
-        classId: 4,
+        adm: '2079-003',
+        examName: 'First Terminal',
+        examType: 'TERMINAL',
+        classCode: '1',
+        subjectCode: 'ENG',
         theory: 70,
         practical: 10,
         total: 80,
       },
       {
-        studentId: 3,
-        examId: 1,
-        subjectId: 2,
-        classId: 4,
+        adm: '2079-003',
+        examName: 'First Terminal',
+        examType: 'TERMINAL',
+        classCode: '1',
+        subjectCode: 'NEP',
         theory: 65,
         practical: 8,
         total: 73,
       },
       {
-        studentId: 4,
-        examId: 1,
-        subjectId: 1,
-        classId: 4,
+        adm: '2079-004',
+        examName: 'First Terminal',
+        examType: 'TERMINAL',
+        classCode: '1',
+        subjectCode: 'ENG',
         theory: 95,
         practical: 15,
         total: 110,
       },
       {
-        studentId: 4,
-        examId: 1,
-        subjectId: 3,
-        classId: 4,
+        adm: '2079-004',
+        examName: 'First Terminal',
+        examType: 'TERMINAL',
+        classCode: '1',
+        subjectCode: 'MATH',
         theory: 88,
         practical: 14,
         total: 102,
       },
       {
-        studentId: 5,
-        examId: 2,
-        subjectId: 6,
-        classId: 5,
+        adm: '2079-005',
+        examName: 'First Terminal',
+        examType: 'TERMINAL',
+        classCode: '2',
+        subjectCode: 'ENG',
         theory: 82,
         practical: 12,
         total: 94,
       },
       {
-        studentId: 6,
-        examId: 2,
-        subjectId: 6,
-        classId: 5,
+        adm: '2079-006',
+        examName: 'First Terminal',
+        examType: 'TERMINAL',
+        classCode: '2',
+        subjectCode: 'ENG',
         theory: 78,
         practical: 10,
         total: 88,
       },
       {
-        studentId: 7,
-        examId: 3,
-        subjectId: 11,
-        classId: 6,
+        adm: '2079-007',
+        examName: 'First Terminal',
+        examType: 'TERMINAL',
+        classCode: '3',
+        subjectCode: 'ENG',
         theory: 88,
         practical: 14,
         total: 102,
       },
       {
-        studentId: 8,
-        examId: 3,
-        subjectId: 11,
-        classId: 6,
+        adm: '2079-008',
+        examName: 'First Terminal',
+        examType: 'TERMINAL',
+        classCode: '3',
+        subjectCode: 'ENG',
         theory: 75,
         practical: 10,
         total: 85,
       },
     ];
 
+    const classCache = new Map<string, number>();
+    const examCache = new Map<string, number>();
+    const subjectCache = new Map<string, number>();
+    const resolveClass = async (code: string): Promise<number | null> => {
+      if (!classCache.has(code)) {
+        const r = await this.db.query(
+          `SELECT class_id FROM classes WHERE school_id = $1 AND class_code = $2 LIMIT 1`,
+          [sid, code],
+        );
+        if (r.length === 0) return null;
+        classCache.set(code, r[0].class_id);
+      }
+      return classCache.get(code)!;
+    };
     for (const m of marksData) {
+      const student = await this.db.query(
+        `SELECT student_id FROM students WHERE school_id = $1 AND admission_number = $2 LIMIT 1`,
+        [sid, m.adm],
+      );
+      const classId = await resolveClass(m.classCode);
+      const examKey = `${m.examName}|${m.examType}|${m.classCode}`;
+      if (!examCache.has(examKey)) {
+        const r = await this.db.query(
+          `SELECT exam_id FROM exams WHERE school_id = $1 AND exam_name = $2 AND exam_type = $3 AND class_id = $4 LIMIT 1`,
+          [sid, m.examName, m.examType, classId],
+        );
+        if (r.length > 0) examCache.set(examKey, r[0].exam_id);
+      }
+      const subjKey = `${m.classCode}|${m.subjectCode}`;
+      if (!subjectCache.has(subjKey) && classId) {
+        const r = await this.db.query(
+          `SELECT subject_id FROM subjects WHERE school_id = $1 AND class_id = $2 AND subject_code = $3 LIMIT 1`,
+          [sid, classId, m.subjectCode],
+        );
+        if (r.length > 0) subjectCache.set(subjKey, r[0].subject_id);
+      }
+      if (
+        student.length === 0 ||
+        !classId ||
+        !examCache.has(examKey) ||
+        !subjectCache.has(subjKey)
+      ) {
+        this.logger.warn(`Skipping mark row for ${m.adm}: references missing`);
+        continue;
+      }
+      const mark = {
+        studentId: student[0].student_id,
+        examId: examCache.get(examKey)!,
+        subjectId: subjectCache.get(subjKey)!,
+        classId,
+        theory: m.theory,
+        practical: m.practical,
+        total: m.total,
+      };
       const grade =
         m.total >= 90
           ? 'A+'
@@ -645,16 +1025,17 @@ export class SeedService implements OnModuleInit {
       await this.db.query(
         `
         INSERT INTO marks (school_id, student_id, exam_id, subject_id, class_id, section_id, academic_year, theory_marks, practical_marks, total_marks, grade, is_absent, created_at, updated_at)
-        VALUES (1, $1, $2, $3, $4, NULL, '2082', $5, $6, $7, $8, false, NOW(), NOW())
+        VALUES ($1, $2, $3, $4, $5, NULL, '2082', $6, $7, $8, $9, false, NOW(), NOW())
       `,
         [
-          m.studentId,
-          m.examId,
-          m.subjectId,
-          m.classId,
-          m.theory,
-          m.practical,
-          m.total,
+          sid,
+          mark.studentId,
+          mark.examId,
+          mark.subjectId,
+          mark.classId,
+          mark.theory,
+          mark.practical,
+          mark.total,
           grade,
         ],
       );
@@ -663,8 +1044,10 @@ export class SeedService implements OnModuleInit {
   }
 
   async seedTeachers() {
+    const sid = await this.seedSchoolId();
     const existing = await this.db.query(
-      'SELECT teacher_id FROM teachers WHERE school_id = 1 LIMIT 1',
+      'SELECT teacher_id FROM teachers WHERE school_id = $1 LIMIT 1',
+      [sid],
     );
     if (existing.length > 0) {
       this.logger.log('Teachers already seeded');
@@ -907,8 +1290,8 @@ export class SeedService implements OnModuleInit {
     for (const t of teachers) {
       await this.db.query(
         `INSERT INTO teachers (school_id, teacher_code, employee_id, first_name_en, middle_name_en, last_name_en, first_name_np, last_name_np, gender, date_of_birth, date_of_birth_bs, blood_group, nationality, religion, highest_qualification, specialization, university_board, passing_year, personal_mobile, official_email, joining_date, employment_type, current_status, is_active, created_at)
-         VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, 'ACTIVE', true, NOW())`,
-        t,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, 'ACTIVE', true, NOW())`,
+        [sid, ...t],
       );
     }
     this.logger.log('Teachers seeded');

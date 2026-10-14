@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsInt, IsDate, IsOptional } from 'class-validator';
+import { IsNotEmpty, IsInt, IsDate, IsOptional, IsString } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -33,4 +33,20 @@ export class CreateBookIssueDto {
   @IsDate()
   @Type(() => Date)
   readonly dueDate: Date;
+
+  @ApiPropertyOptional({
+    description: 'Issue date in BS (provided by frontend)',
+    example: '2081-02-02',
+  })
+  @IsOptional()
+  @IsString()
+  readonly issueDateBs?: string;
+
+  @ApiPropertyOptional({
+    description: 'Due date in BS (provided by frontend)',
+    example: '2081-02-16',
+  })
+  @IsOptional()
+  @IsString()
+  readonly dueDateBs?: string;
 }

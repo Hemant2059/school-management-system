@@ -5,10 +5,10 @@ import { UpdateExamDto } from './dto/update-exam.dto';
 import {
   Exam as DbExam,
   ExamSchedule,
-  GradeSystem,
   Mark,
   ReportCard,
 } from '../database/entities/interfaces';
+import { GradeService, GradeBand } from '../grade/grade.service';
 
 export interface Exam extends DbExam {
   total_marks?: number;
@@ -17,7 +17,10 @@ export interface Exam extends DbExam {
 
 @Injectable()
 export class ExamService {
-  constructor(private db: DatabaseService) {}
+  constructor(
+    private db: DatabaseService,
+    private gradeService: GradeService,
+  ) {}
 
   async create(
     createDto: CreateExamDto & {
@@ -156,11 +159,10 @@ export class ExamService {
     passMarks?: number;
   }): Promise<ExamSchedule> {
     return this.db.insert<ExamSchedule>(
-      `INSERT INTO exam_schedules (school_id, exam_id, class_id, subject_id, exam_date, exam_date_bs, start_time, end_time, room_number, full_marks, pass_marks, is_active)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, true)
+      `INSERT INTO exam_schedules (exam_id, class_id, subject_id, exam_date_ad, exam_date_bs, start_time, end_time, room_number, full_theory, full_practical, pass_theory, pass_practical, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 0, $10, 0, true)
        RETURNING *`,
       [
-        createDto.schoolId,
         createDto.examId,
         createDto.classId,
         createDto.subjectId,
@@ -177,7 +179,7 @@ export class ExamService {
 
   async getExamSchedules(examId: number): Promise<ExamSchedule[]> {
     return this.db.query<ExamSchedule>(
-      `SELECT * FROM exam_schedules WHERE exam_id = $1 AND is_active = true ORDER BY exam_date ASC`,
+      `SELECT * FROM exam_schedules WHERE exam_id = $1 AND is_active = true ORDER BY exam_date_ad ASC`,
       [examId],
     );
   }
@@ -190,28 +192,19 @@ export class ExamService {
     minMark: number;
     maxMark: number;
     remark?: string;
-  }): Promise<GradeSystem> {
-    return this.db.insert<GradeSystem>(
-      `INSERT INTO grade_systems (school_id, grade_name, grade_name_np, grade_points, min_mark, max_mark, remark, is_active)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, true)
-       RETURNING *`,
-      [
-        createDto.schoolId,
-        createDto.gradeName,
-        createDto.gradeNameNp || null,
-        createDto.gradePoints || null,
-        createDto.minMark,
-        createDto.maxMark,
-        createDto.remark || null,
-      ],
-    );
+  }): Promise<GradeBand> {
+    return this.gradeService.create({
+      schoolId: createDto.schoolId,
+      gradeName: createDto.gradeName,
+      minPercentage: createDto.minMark,
+      maxPercentage: createDto.maxMark,
+      gradePoint: createDto.gradePoints ?? 0,
+      gradeLabel: createDto.remark,
+    });
   }
 
-  async getGradeSystems(schoolId: number): Promise<GradeSystem[]> {
-    return this.db.query<GradeSystem>(
-      `SELECT * FROM grade_systems WHERE school_id = $1 AND is_active = true ORDER BY min_mark DESC`,
-      [schoolId],
-    );
+  async getGradeSystems(schoolId: number): Promise<GradeBand[]> {
+    return this.gradeService.findAll(schoolId);
   }
 
   async submitMarks(createDto: {
@@ -228,17 +221,13 @@ export class ExamService {
     academicYear?: string;
   }): Promise<Mark> {
     return this.db.insert<Mark>(
-      `INSERT INTO marks (school_id, exam_id, student_id, theory_marks, practical_marks, total_marks, grade, grade_point, grade_np, remarks, is_submitted, is_verified, academic_year)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true, false, $11)
-       ON CONFLICT (exam_id, student_id) DO UPDATE SET
+      `INSERT INTO marks (school_id, exam_id, student_id, theory_marks, practical_marks, total_marks, grade, academic_year)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       ON CONFLICT (school_id, exam_id, student_id, subject_id) DO UPDATE SET
          theory_marks = EXCLUDED.theory_marks,
          practical_marks = EXCLUDED.practical_marks,
          total_marks = EXCLUDED.total_marks,
          grade = EXCLUDED.grade,
-         grade_point = EXCLUDED.grade_point,
-         grade_np = EXCLUDED.grade_np,
-         remarks = EXCLUDED.remarks,
-         is_submitted = true,
          updated_at = NOW()
        RETURNING *`,
       [
@@ -249,9 +238,6 @@ export class ExamService {
         createDto.practicalMarks || null,
         createDto.totalMarks || null,
         createDto.grade || null,
-        createDto.gradePoint || null,
-        createDto.gradeNp || null,
-        createDto.remarks || null,
         createDto.academicYear || null,
       ],
     );

@@ -11,7 +11,7 @@ import {
   Req,
 } from '@nestjs/common';
 import { HostelService } from './hostel.service';
-import type { Hostel, Room, HostelStudent } from './hostel.service';
+import type { Room, HostelStudent } from './hostel.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -198,8 +198,11 @@ export class HostelController {
     description: 'List of rooms retrieved successfully',
   })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async getRooms(@Query('hostelId') hostelId: number): Promise<Room[]> {
-    return this.hostelService.getRooms(hostelId);
+  async getRooms(
+    @Query('hostelId') hostelId: number,
+    @Req() req,
+  ): Promise<Room[]> {
+    return this.hostelService.getRooms(hostelId, req.user?.schoolId);
   }
 
   @Post('students')
@@ -262,8 +265,13 @@ export class HostelController {
       properties: {
         checkOutDate: {
           type: 'string',
-          description: 'Checkout date (YYYY-MM-DD)',
+          description: 'Checkout date AD (YYYY-MM-DD, provided by frontend)',
           example: '2024-12-01',
+        },
+        checkOutDateBs: {
+          type: 'string',
+          description: 'Checkout date BS (provided by frontend)',
+          example: '2081-08-16',
         },
       },
     },
@@ -278,13 +286,14 @@ export class HostelController {
   @ApiResponse({ status: 404, description: 'Hostel student not found' })
   async checkOutStudent(
     @Param('id') id: number,
-    @Body() body: { checkOutDate: string },
+    @Body() body: { checkOutDate: string; checkOutDateBs?: string },
     @Req() req,
   ): Promise<HostelStudent> {
     return this.hostelService.checkOutStudent(
       id,
       req.user.schoolId,
       body.checkOutDate,
+      body.checkOutDateBs,
     );
   }
 }

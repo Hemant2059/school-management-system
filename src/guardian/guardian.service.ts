@@ -4,6 +4,21 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
+import { EncryptionUtil } from '../utils/encryption.util';
+
+/** PII at rest: identity fields are AES-encrypted (see 014). */
+const enc = (v: string | null | undefined): string | null =>
+  v ? EncryptionUtil.encrypt(v) : null;
+function decGuardian<T extends Record<string, any>>(row: T): T {
+  if (!row || typeof row !== 'object') return row;
+  for (const k of ['citizenship_no', 'nin'] as const) {
+    if (k in row) {
+      const v = row[k] ?? null;
+      (row as any)[k] = v ? EncryptionUtil.decrypt(v) : v;
+    }
+  }
+  return row;
+}
 import { CreateGuardianDto } from './dto/create-guardian.dto';
 import { UpdateGuardianDto } from './dto/update-guardian.dto';
 
@@ -11,6 +26,7 @@ export interface Guardian {
   guardian_id: number;
   school_id: number;
   guardian_code: string;
+  user_id?: number | null;
   first_name_en: string;
   middle_name_en: string | null;
   last_name_en: string;
@@ -25,6 +41,13 @@ export interface Guardian {
   alternate_mobile: string | null;
   email: string | null;
   annual_income: number | null;
+  citizenship_no?: string | null;
+  citizenship_issue_district?: string | null;
+  citizenship_issue_date?: Date | null;
+  citizenship_issue_date_bs?: string | null;
+  nin?: string | null;
+  address_en?: string | null;
+  address_np?: string | null;
   is_active: boolean;
   created_at: Date;
   updated_at: Date;
@@ -37,7 +60,7 @@ export class GuardianService {
 
   async create(createGuardianDto: CreateGuardianDto): Promise<Guardian> {
     const existing = await this.db.queryOne<Guardian>(
-      `SELECT * FROM guardians WHERE phone = $1 AND school_id = $2 AND is_active = true`,
+      `SELECT * FROM guardians WHERE mobile = $1 AND school_id = $2 AND is_active = true`,
       [createGuardianDto.mobile, createGuardianDto.schoolId],
     );
 
@@ -59,9 +82,9 @@ export class GuardianService {
       ? `${createGuardianDto.firstNameNp} ${createGuardianDto.lastNameNp ?? ''}`.trim()
       : `${createGuardianDto.firstNameEn} ${createGuardianDto.lastNameEn ?? ''}`.trim();
 
-    return this.db.insert<Guardian>(
-      `INSERT INTO guardians (school_id, guardian_code, first_name_en, middle_name_en, last_name_en, first_name_np, middle_name_np, last_name_np, display_name, relation_to_student, occupation, education_level, phone, alternate_mobile, email, annual_income)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+    const created = await this.db.insert<Guardian>(
+      `INSERT INTO guardians (school_id, guardian_code, first_name_en, middle_name_en, last_name_en, first_name_np, middle_name_np, last_name_np, display_name, relation_to_student, occupation, education_level, mobile, alternate_mobile, email, annual_income, citizenship_no, citizenship_issue_district, citizenship_issue_date, citizenship_issue_date_bs, nin, address_en, address_np)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
        RETURNING *`,
       [
         createGuardianDto.schoolId,
@@ -80,15 +103,24 @@ export class GuardianService {
         createGuardianDto.alternateMobile || null,
         createGuardianDto.email || null,
         createGuardianDto.annualIncome || null,
+        enc(createGuardianDto.citizenshipNumber),
+        createGuardianDto.citizenshipIssueDistrict || null,
+        createGuardianDto.citizenshipIssueDate || null,
+        createGuardianDto.citizenshipIssueDateBs || null,
+        enc(createGuardianDto.nin),
+        createGuardianDto.addressEn || null,
+        createGuardianDto.addressNp || null,
       ],
     );
+    return decGuardian(created);
   }
 
   async findAll(schoolId: number): Promise<Guardian[]> {
-    return this.db.query<Guardian>(
+    const rows = await this.db.query<Guardian>(
       `SELECT * FROM guardians WHERE school_id = $1 AND is_active = true ORDER BY created_at DESC`,
       [schoolId],
     );
+    return rows.map(decGuardian);
   }
 
   async findOne(id: number, schoolId?: number): Promise<Guardian> {
@@ -103,7 +135,7 @@ export class GuardianService {
       throw new NotFoundException(`Guardian with ID ${id} not found`);
     }
 
-    return guardian;
+    return decGuardian(guardian);
   }
 
   async update(
@@ -113,26 +145,56 @@ export class GuardianService {
   ): Promise<Guardian> {
     await this.findOne(id, schoolId);
 
+    if (
+      updateGuardianDto.userId !== undefined &&
+      updateGuardianDto.userId !== null
+    ) {
+      const owner = await this.db.queryOne<{ school_id: number | null }>(
+        `SELECT school_id FROM users WHERE user_id = $1`,
+        [updateGuardianDto.userId],
+      );
+      if (!owner) throw new NotFoundException('Linked user not found');
+      if (owner.school_id !== null && owner.school_id !== schoolId) {
+        throw new BadRequestException('Linked user belongs to another school');
+      }
+    }
+
     const updates: string[] = [];
     const params: any[] = [];
     let paramIndex = 1;
 
     const fieldMap: Record<string, string> = {
+      userId: 'user_id',
       firstNameEn: 'first_name_en',
+      middleNameEn: 'middle_name_en',
       lastNameEn: 'last_name_en',
       firstNameNp: 'first_name_np',
+      middleNameNp: 'middle_name_np',
       lastNameNp: 'last_name_np',
-      relation: 'relation',
+      relation: 'relation_to_student',
+      relationToStudent: 'relation_to_student',
       occupation: 'occupation',
+      educationLevel: 'education_level',
       mobile: 'mobile',
       alternateMobile: 'alternate_mobile',
       email: 'email',
+      annualIncome: 'annual_income',
+      citizenshipNumber: 'citizenship_no',
+      citizenshipIssueDistrict: 'citizenship_issue_district',
+      citizenshipIssueDate: 'citizenship_issue_date',
+      citizenshipIssueDateBs: 'citizenship_issue_date_bs',
+      nin: 'nin',
+      addressEn: 'address_en',
+      addressNp: 'address_np',
     };
 
+    // PII at rest: encrypt identity fields on the way in.
+    const piiKeys = new Set(['citizenshipNumber', 'nin']);
     for (const [key, dbField] of Object.entries(fieldMap)) {
       if (updateGuardianDto[key as keyof UpdateGuardianDto] !== undefined) {
         updates.push(`${dbField} = $${paramIndex++}`);
-        params.push(updateGuardianDto[key as keyof UpdateGuardianDto]);
+        const value = updateGuardianDto[key as keyof UpdateGuardianDto];
+        params.push(piiKeys.has(key) ? enc(value as string) : value);
       }
     }
 
@@ -159,15 +221,16 @@ export class GuardianService {
     mobile: string,
     schoolId: number,
   ): Promise<Guardian | null> {
-    return this.db.queryOne<Guardian>(
-      `SELECT * FROM guardians WHERE phone = $1 AND school_id = $2 AND is_active = true`,
+    const guardian = await this.db.queryOne<Guardian>(
+      `SELECT * FROM guardians WHERE mobile = $1 AND school_id = $2 AND is_active = true`,
       [mobile, schoolId],
     );
+    return guardian ? decGuardian(guardian) : guardian;
   }
 
   async searchGuardians(schoolId: number, query: string): Promise<Guardian[]> {
     const normalizedQuery = `%${query.toLowerCase()}%`;
-    return this.db.query<Guardian>(
+    const rows = await this.db.query<Guardian>(
       `SELECT * FROM guardians WHERE school_id = $1 AND is_active = true 
        AND (LOWER(first_name_en) LIKE $2 OR LOWER(last_name_en) LIKE $2 
        OR LOWER(first_name_np) LIKE $2 OR LOWER(last_name_np) LIKE $2 
@@ -175,6 +238,7 @@ export class GuardianService {
        ORDER BY created_at DESC LIMIT 50`,
       [schoolId, normalizedQuery],
     );
+    return rows.map(decGuardian);
   }
 
   async getGuardianWithDetails(id: number, schoolId: number): Promise<any> {

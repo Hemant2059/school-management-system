@@ -7,7 +7,6 @@ import {
   ApiTags,
   ApiOperation,
   ApiResponse,
-  ApiParam,
 } from '@nestjs/swagger';
 
 @ApiTags('DEO Compliance & Reports')

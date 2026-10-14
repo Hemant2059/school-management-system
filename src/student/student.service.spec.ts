@@ -138,7 +138,7 @@ describe('StudentService', () => {
       await service.create(dtoWithNpNames);
 
       const insertCall = mockDatabaseService.insert.mock.calls[0];
-      const displayName = insertCall[1][11];
+      const displayName = insertCall[1][12];
       expect(displayName).toBe('जेन स्मिथ');
     });
 
@@ -150,7 +150,7 @@ describe('StudentService', () => {
       await service.create(createStudentDto);
 
       const insertCall = mockDatabaseService.insert.mock.calls[0];
-      const displayName = insertCall[1][11];
+      const displayName = insertCall[1][12];
       expect(displayName).toBe('Jane Smith');
     });
 
@@ -267,7 +267,7 @@ describe('StudentService', () => {
       await service.findAll(1, dto);
 
       expect(mockDatabaseService.query).toHaveBeenCalledWith(
-        expect.stringContaining('e.class_id'),
+        expect.stringContaining('en.class_id'),
         expect.arrayContaining([1, 1]),
       );
     });

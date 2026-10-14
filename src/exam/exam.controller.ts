@@ -19,7 +19,6 @@ import {
   ApiParam,
   ApiQuery,
   ApiBody,
-  ApiExtraModels,
 } from '@nestjs/swagger';
 import { ExamService } from './exam.service';
 import { CreateExamDto } from './dto/create-exam.dto';

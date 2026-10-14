@@ -15,7 +15,6 @@ import {
   ApiResponse,
   ApiQuery,
   ApiBody,
-  ApiExtraModels,
 } from '@nestjs/swagger';
 import { GradeService } from './grade.service';
 import {
@@ -197,9 +196,9 @@ export class GradeController {
   @Permissions(Permission.ACADEMIC_UPDATE)
   @ApiOperation({
     summary: 'Delete Grade Scale',
-    description: `Soft delete a grade scale (marks as inactive).
+    description: `Delete a grade band from the school's scale.
 
-**Note:** Cannot delete if used in active grade scales.`,
+**Note:** Cannot delete bands of the read-only national template.`,
   })
   @ApiResponse({
     status: 200,
@@ -225,15 +224,15 @@ export class GradeController {
     summary: 'Get or Create Default Grade Scales',
     description: `Get existing or create default grade scales for a school.
 
-**Default Scale:**
+**Default Scale (NEB-2078):**
 - A+ (90-100): 4.0
 - A (80-89): 3.6
 - B+ (70-79): 3.2
 - B (60-69): 2.8
 - C+ (50-59): 2.4
 - C (40-49): 2.0
-- D (30-39): 1.6
-- E (0-29): 0.0
+- D (35-39): 1.6
+- NG (0-34): 0.0
 
 **Note:** Only creates if no grade scales exist for the school.`,
   })

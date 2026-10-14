@@ -106,8 +106,7 @@ export class AiService {
         total_amount: string;
         paid_amount: string;
       }>(
-        `SELECT total_amount, paid_amount FROM student_fees 
-         WHERE student_id = ANY($1) AND status IN ('PENDING', 'PARTIAL') AND due_date < $2 AND deleted_at IS NULL`,
+        `SELECT total_amount, paid_amount FROM student_fees WHERE student_id = ANY($1) AND UPPER(status) IN ('PENDING', 'PARTIAL')`,
         [studentIds, today],
       );
       overdueFees = overdueFeesRes;
@@ -192,9 +191,10 @@ export class AiService {
     const school = await this.db.queryOne<{
       school_id: number;
       school_name: string;
-    }>(`SELECT school_id, school_name FROM schools WHERE school_id = $1`, [
-      schoolId,
-    ]);
+    }>(
+      `SELECT school_id, name AS school_name FROM schools WHERE school_id = $1`,
+      [schoolId],
+    );
     if (!school) {
       throw new NotFoundException(`School with ID ${schoolId} not found`);
     }
@@ -228,8 +228,7 @@ export class AiService {
         total_amount: string;
         paid_amount: string;
       }>(
-        `SELECT total_amount, paid_amount FROM student_fees 
-         WHERE student_id = ANY($1) AND status IN ('PENDING', 'PARTIAL') AND due_date < NOW() AND deleted_at IS NULL`,
+        `SELECT total_amount, paid_amount FROM student_fees WHERE student_id = ANY($1) AND UPPER(status) IN ('PENDING', 'PARTIAL')`,
         [studentIds],
       );
       overdueFees = overdueFeesRes;

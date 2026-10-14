@@ -66,6 +66,7 @@ export interface AssignStudentDto {
   studentId: number;
   bedNumber: string;
   checkInDate: string;
+  checkInDateBs?: string;
 }
 
 @Injectable()
@@ -98,7 +99,8 @@ export class HostelService {
   }
 
   async getHostelById(id: number, schoolId: number): Promise<Hostel> {
-    const query = 'SELECT * FROM hostels WHERE id = $1 AND school_id = $2';
+    const query =
+      'SELECT * FROM hostels WHERE hostel_id = $1 AND school_id = $2';
     const result = await this.databaseService.query(query, [id, schoolId]);
 
     if (!result[0]) {
@@ -141,7 +143,7 @@ export class HostelService {
     values.push(id, schoolId);
     const query = `
       UPDATE hostels SET ${fields.join(', ')}
-      WHERE id = $${paramCount++} AND school_id = $${paramCount}
+      WHERE hostel_id = $${paramCount++} AND school_id = $${paramCount}
       RETURNING *
     `;
 
@@ -156,7 +158,7 @@ export class HostelService {
 
   async deleteHostel(id: number, schoolId: number): Promise<void> {
     const query =
-      'UPDATE hostels SET is_active = false WHERE id = $1 AND school_id = $2 RETURNING id';
+      'UPDATE hostels SET is_active = false WHERE hostel_id = $1 AND school_id = $2 RETURNING hostel_id';
     const result = await this.databaseService.query(query, [id, schoolId]);
 
     if (result.length === 0) {
@@ -166,7 +168,7 @@ export class HostelService {
 
   async createRoom(dto: CreateRoomDto): Promise<Room> {
     const query = `
-      INSERT INTO hostel_rooms (hostel_id, room_number, floor, total_beds, available_beds, room_type, monthly_rent)
+      INSERT INTO hostel_rooms (hostel_id, room_number, floor, capacity, available_beds, room_type, price)
       VALUES ($1, $2, $3, $4, $4, $5, $6)
       RETURNING *
     `;
@@ -183,16 +185,22 @@ export class HostelService {
     return result[0];
   }
 
-  async getRooms(hostelId?: number): Promise<Room[]> {
-    let query = 'SELECT * FROM hostel_rooms WHERE is_active = true';
+  async getRooms(hostelId?: number, schoolId?: number): Promise<Room[]> {
+    let query = `SELECT hr.* FROM hostel_rooms hr
+      JOIN hostels h ON h.hostel_id = hr.hostel_id
+      WHERE hr.is_active = true`;
     const params: any[] = [];
 
     if (hostelId) {
       params.push(hostelId);
-      query += ` AND hostel_id = $${params.length}`;
+      query += ` AND hr.hostel_id = $${params.length}`;
+    }
+    if (schoolId) {
+      params.push(schoolId);
+      query += ` AND h.school_id = $${params.length}`;
     }
 
-    query += ' ORDER BY floor, room_number';
+    query += ' ORDER BY hr.floor, hr.room_number';
     return this.databaseService.query(query, params);
   }
 
@@ -201,7 +209,7 @@ export class HostelService {
     dto: AssignStudentDto,
   ): Promise<HostelStudent> {
     const roomQuery =
-      'SELECT * FROM hostel_rooms WHERE id = $1 AND is_active = true';
+      'SELECT * FROM hostel_rooms WHERE room_id = $1 AND is_active = true';
     const room = await this.databaseService.query(roomQuery, [dto.roomId]);
 
     if (!room[0]) {
@@ -213,18 +221,20 @@ export class HostelService {
     }
 
     const query = `
-      INSERT INTO hostel_students (hostel_id, room_id, student_id, bed_number, check_in_date, check_in_date_bs, status)
-      VALUES ($1, $2, $3, $4, $5, $6, 'active')
+      INSERT INTO hostel_students (school_id, hostel_id, room_id, student_id, bed_number, check_in_date, check_in_date_bs, status)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, 'active')
       RETURNING *
     `;
 
     const result = await this.databaseService.query(query, [
+      schoolId,
       dto.hostelId,
       dto.roomId,
       dto.studentId,
       dto.bedNumber,
       new Date(dto.checkInDate),
-      dto.checkInDate,
+      // BS date comes from the frontend — the backend stores it as given.
+      dto.checkInDateBs || null,
     ]);
 
     await this.updateRoomAvailability(dto.roomId, -1);
@@ -236,11 +246,14 @@ export class HostelService {
     id: number,
     schoolId: number,
     checkOutDate: string,
+    checkOutDateBs?: string,
   ): Promise<HostelStudent> {
+    // BS date comes from the frontend — the backend stores it as given.
+    const checkOutBs = checkOutDateBs || null;
     const query = `
-      UPDATE hostel_students 
-      SET check_out_date = $3, check_out_date_bs = $3, status = 'checked_out'
-      WHERE id = $1 AND hostel_id IN (SELECT id FROM hostels WHERE school_id = $2)
+      UPDATE hostel_students
+      SET check_out_date = $3::date, check_out_date_bs = $4, status = 'checked_out'
+      WHERE id = $1 AND hostel_id IN (SELECT hostel_id FROM hostels WHERE school_id = $2)
       RETURNING *
     `;
 
@@ -248,6 +261,7 @@ export class HostelService {
       id,
       schoolId,
       checkOutDate,
+      checkOutBs,
     ]);
 
     if (!result[0]) {
@@ -265,8 +279,8 @@ export class HostelService {
              hr.room_number, hr.floor, h.name as hostel_name
       FROM hostel_students hs
       JOIN students s ON hs.student_id = s.student_id
-      JOIN hostel_rooms hr ON hs.room_id = hr.id
-      JOIN hostels h ON hs.hostel_id = h.id
+      JOIN hostel_rooms hr ON hs.room_id = hr.room_id
+      JOIN hostels h ON hs.hostel_id = h.hostel_id
       WHERE h.school_id = $1
     `;
     const params: any[] = [schoolId];
@@ -283,14 +297,14 @@ export class HostelService {
   async getHostelStatistics(schoolId: number): Promise<any> {
     const query = `
       SELECT 
-        h.id, h.name, h.type, h.total_beds, h.available_beds,
+        h.hostel_id, h.name, h.type, h.total_beds, h.available_beds,
         COUNT(DISTINCT hs.id) as "occupiedBeds",
-        COUNT(DISTINCT hr.id) as "totalRooms"
+        COUNT(DISTINCT hr.room_id) as "totalRooms"
       FROM hostels h
-      LEFT JOIN hostel_rooms hr ON h.id = hr.hostel_id AND hr.is_active = true
-      LEFT JOIN hostel_students hs ON h.id = hs.hostel_id AND hs.status = 'active'
+      LEFT JOIN hostel_rooms hr ON h.hostel_id = hr.hostel_id AND hr.is_active = true
+      LEFT JOIN hostel_students hs ON h.hostel_id = hs.hostel_id AND hs.status = 'active'
       WHERE h.school_id = $1 AND h.is_active = true
-      GROUP BY h.id
+      GROUP BY h.hostel_id
     `;
 
     return this.databaseService.query(query, [schoolId]);
@@ -303,7 +317,7 @@ export class HostelService {
     const query = `
       UPDATE hostel_rooms 
       SET available_beds = available_beds + $2
-      WHERE id = $1
+      WHERE room_id = $1
     `;
     await this.databaseService.query(query, [roomId, change]);
   }

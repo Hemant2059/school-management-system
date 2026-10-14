@@ -5,7 +5,7 @@ import { UpdateAssignmentDto } from './dto/update-assignment.dto';
 import { NepaliDateUtil } from '../utils/nepali-date.util';
 
 export interface Assignment {
-  assignment_id: number;
+  id: number;
   school_id: number;
   description: string;
   class_id: number;
@@ -13,7 +13,7 @@ export interface Assignment {
   subject_id: number;
   teacher_id: number;
   due_date: Date;
-  due_date_bs: string;
+  due_date_bs: string | null;
   total_marks: number;
   is_published: boolean;
   is_active: boolean;
@@ -27,17 +27,19 @@ export class AssignmentService {
   constructor(private db: DatabaseService) {}
 
   async create(createDto: CreateAssignmentDto): Promise<Assignment> {
-    const bsDate = NepaliDateUtil.adToBs(createDto.dueDate).bsDate;
+    // BS date comes from the frontend — the backend stores it as given.
+    const bsDate = createDto.dueDateBs || null;
 
     const result = await this.db.insert<Assignment>(
       `INSERT INTO assignments (
-        school_id, description, class_id, section_id, subject_id,
+        school_id, title, description, class_id, section_id, subject_id,
         teacher_id, due_date, due_date_bs, total_marks, is_published, is_active
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       RETURNING *`,
       [
         createDto.schoolId,
         createDto.title || createDto.description,
+        createDto.description,
         createDto.classId,
         createDto.sectionId,
         createDto.subjectId,
@@ -71,7 +73,7 @@ export class AssignmentService {
   }
 
   async findOne(id: number, schoolId?: number): Promise<Assignment> {
-    let query = `SELECT * FROM assignments WHERE assignment_id = $1 AND deleted_at IS NULL`;
+    let query = `SELECT * FROM assignments WHERE id = $1 AND deleted_at IS NULL`;
     const params: any[] = [id];
 
     if (schoolId) {
@@ -92,9 +94,17 @@ export class AssignmentService {
   ): Promise<Assignment> {
     const assignment = await this.findOne(id, schoolId);
 
+    // BS date comes from the frontend — the backend stores it as given.
+    // If the AD due date changes without a BS value, clear the stale twin
+    // rather than silently deriving a possibly wrong one.
     let dueDateBs = assignment.due_date_bs;
-    if (updateDto.dueDate && updateDto.dueDate !== assignment.due_date) {
-      dueDateBs = NepaliDateUtil.adToBs(updateDto.dueDate).bsDate;
+    if (updateDto.dueDateBs !== undefined) {
+      dueDateBs = updateDto.dueDateBs;
+    } else if (
+      updateDto.dueDate &&
+      updateDto.dueDate !== assignment.due_date
+    ) {
+      dueDateBs = null;
     }
 
     const updates: string[] = [];
@@ -130,7 +140,7 @@ export class AssignmentService {
 
     params.push(id);
     await this.db.update(
-      `UPDATE assignments SET ${updates.join(', ')} WHERE assignment_id = $${paramIndex}`,
+      `UPDATE assignments SET ${updates.join(', ')} WHERE id = $${paramIndex}`,
       params,
     );
 
@@ -140,7 +150,7 @@ export class AssignmentService {
   async remove(id: number, schoolId: number): Promise<void> {
     await this.findOne(id, schoolId);
     await this.db.update(
-      `UPDATE assignments SET is_active = false, deleted_at = NOW() WHERE assignment_id = $1`,
+      `UPDATE assignments SET is_active = false, deleted_at = NOW() WHERE id = $1`,
       [id],
     );
   }
@@ -148,7 +158,7 @@ export class AssignmentService {
   async publishAssignment(id: number, schoolId: number): Promise<Assignment> {
     await this.findOne(id, schoolId);
     await this.db.update(
-      `UPDATE assignments SET is_published = true WHERE assignment_id = $1`,
+      `UPDATE assignments SET is_published = true WHERE id = $1`,
       [id],
     );
     return this.findOne(id, schoolId);

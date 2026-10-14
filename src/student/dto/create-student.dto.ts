@@ -326,4 +326,80 @@ export class CreateStudentDto {
   @IsOptional()
   @IsBoolean()
   isGovtMandatedFreeSeat?: boolean;
+
+  // === CEHRD / IEMIS registry fields (writable subset) ===
+  @ApiPropertyOptional({
+    description: 'IEMIS permanent student ID',
+    example: 'IEMIS-12345',
+  })
+  @IsOptional()
+  @IsString()
+  iemisStudentId?: string;
+
+  @ApiPropertyOptional({ description: 'Citizenship number (16+ students)' })
+  @IsOptional()
+  @IsString()
+  citizenshipNumber?: string;
+
+  @ApiPropertyOptional({
+    description: 'Citizenship issuing district',
+    example: 'Kathmandu',
+  })
+  @IsOptional()
+  @IsString()
+  citizenshipIssueDistrict?: string;
+
+  @ApiPropertyOptional({
+    description: 'Citizenship issue date (AD)',
+    example: '2024-05-15',
+  })
+  @IsOptional()
+  @IsDate()
+  @Type(() => Date)
+  citizenshipIssueDate?: Date;
+
+  @ApiPropertyOptional({
+    description: 'Citizenship issue date (BS) – valid YYYY-MM-DD',
+    example: '2081-02-01',
+  })
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, {
+    message: 'BS date must be YYYY-MM-DD (e.g. 2081-02-01)',
+  })
+  @IsValidBsDate()
+  citizenshipIssueDateBs?: string;
+
+  @ApiPropertyOptional({ description: 'Birth registration number' })
+  @IsOptional()
+  @IsString()
+  birthCertificateNumber?: string;
+
+  @ApiPropertyOptional({
+    description: 'National Identity Number (Rastriya Parichaya Patra)',
+    example: '1234567890',
+  })
+  @IsOptional()
+  @IsString()
+  nin?: string;
+
+  @ApiPropertyOptional({ description: 'Has disability', example: false })
+  @IsOptional()
+  @IsBoolean()
+  hasDisability?: boolean;
+
+  @ApiPropertyOptional({ description: 'Disability type', example: 'Visual' })
+  @IsOptional()
+  @IsString()
+  disabilityType?: string;
+
+  @ApiPropertyOptional({
+    description: 'Admission date (BS) – valid YYYY-MM-DD',
+    example: '2082-01-15',
+  })
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'BS date must be YYYY-MM-DD' })
+  @IsValidBsDate()
+  admissionDateBs?: string;
 }

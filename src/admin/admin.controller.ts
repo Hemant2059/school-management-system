@@ -1,12 +1,4 @@
-import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Param,
-  Query,
-  UseGuards,
-} from '@nestjs/common';
+import { Controller, Get, Body, Param, Query, UseGuards } from '@nestjs/common';
 import {
   ApiBearerAuth,
   ApiTags,
@@ -20,7 +12,6 @@ import { Roles } from '../common/decorators/roles.decorator';
 import { UserRole } from '../common/enums/user-role.enum';
 import { Permissions } from '../common/decorators/roles.decorator';
 import { Permission } from '../common/decorators/roles.decorator';
-import { GetUser } from '../common/decorators/get-user.decorator';
 
 @ApiTags('Admin & Data Management')
 @ApiBearerAuth()

@@ -6,7 +6,8 @@
     "deleteOutDir": true,
     "assets": [
       { "include": "i18n/**/*", "outDir": "dist/src" },
-      "database/seeds/final.json"
+      "database/seeds/final.json",
+      "database/migrations/*.sql"
     ],
     "watchAssets": true,
     "webpack": true,

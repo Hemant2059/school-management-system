@@ -6,7 +6,13 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { UserRole } from '../enums/user-role.enum';
-import { ROLES_KEY, ROLE_PERMISSIONS } from '../decorators/roles.decorator';
+import {
+  ROLES_KEY,
+  ROLE_PERMISSIONS,
+  PERMISSIONS_KEY,
+} from '../decorators/roles.decorator';
+import { RbacService } from '../../database/rbac.service';
+import { TenantService } from '../../database/tenant.service';
 
 @Injectable()
 export class RolesGuard implements CanActivate {
@@ -42,11 +48,15 @@ export class RolesGuard implements CanActivate {
 
 @Injectable()
 export class PermissionsGuard implements CanActivate {
-  constructor(private reflector: Reflector) {}
+  constructor(
+    private reflector: Reflector,
+    private rbac: RbacService,
+    private tenants: TenantService,
+  ) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const requiredPermissions = this.reflector.getAllAndOverride<string[]>(
-      'permissions',
+      PERMISSIONS_KEY,
       [context.getHandler(), context.getClass()],
     );
 
@@ -61,16 +71,36 @@ export class PermissionsGuard implements CanActivate {
       throw new ForbiddenException('User not authenticated');
     }
 
-    const userRole = user.userType as UserRole;
-    const userPermissions = ROLE_PERMISSIONS[userRole] || [];
+    // Legacy super-admin bypass (unchanged behavior).
+    if ((user.userType as UserRole) === UserRole.ADMIN) {
+      return true;
+    }
+
+    // Same tenant resolution as the interceptor (guards run first).
+    const schoolId = await this.tenants.resolveSchoolId({
+      userId: user.userId,
+      jwtSchoolId:
+        user.schoolId !== undefined ? Number(user.schoolId) : undefined,
+      headerSchoolId: this.tenants.parseHeader(
+        request.headers?.['x-school-id'],
+      ),
+    });
+
+    const dbPerms = await this.rbac.getUserPermissions(user.userId, schoolId);
+    // Transitional fallback: users without any DB role keep the legacy
+    // static map. Remove once role assignment is wired into user creation.
+    const effective =
+      dbPerms.length > 0
+        ? dbPerms
+        : ROLE_PERMISSIONS[user.userType as UserRole] || [];
 
     const hasPermission = requiredPermissions.some((perm) =>
-      userPermissions.includes(perm as any),
+      effective.includes(perm as any),
     );
 
     if (!hasPermission) {
       throw new ForbiddenException(
-        `Access denied. Required permissions: ${requiredPermissions.join(', ')}. Your role: ${userRole}`,
+        `Access denied. Required permissions: ${requiredPermissions.join(', ')}. Your role: ${user.userType}`,
       );
     }
 
@@ -83,8 +113,6 @@ export class SchoolTenantGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
     const request = context.switchToHttp().getRequest();
     const user = request.user;
-    const path = request.route?.path || '';
-    const method = request.method;
 
     if (!user) {
       throw new ForbiddenException('User not authenticated');

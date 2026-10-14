@@ -16,8 +16,6 @@ import {
   ApiQuery,
   ApiBody,
   ApiParam,
-  ApiBearerAuth,
-  ApiExtraModels,
 } from '@nestjs/swagger';
 import { AcademicCalendarService } from './academic-calendar.service';
 import { CreateCalendarEventDto } from './dto/calendar.dto';

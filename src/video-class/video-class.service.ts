@@ -31,6 +31,7 @@ export interface CreateLiveClassDto {
   title: string;
   description?: string;
   scheduledAt: string;
+  scheduledAtBs?: string;
   duration?: number;
   platform?: 'jitsi' | 'zoom' | 'meet';
   recordingEnabled?: boolean;
@@ -72,7 +73,7 @@ export class VideoClassService {
 
     const query = `
       INSERT INTO live_classes (
-        school_id, class_id, subject_id, teacher_id, title, description,
+        school_id, class_id, subject_id, teacher_id, class_name, description,
         scheduled_at, scheduled_at_bs, duration, platform, meeting_id,
         meeting_url, host_url, password, status, recording_enabled
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
@@ -87,7 +88,8 @@ export class VideoClassService {
       dto.title,
       dto.description || null,
       dto.scheduledAt ? new Date(dto.scheduledAt) : null,
-      dto.scheduledAt || null,
+      // BS date comes from the frontend — the backend stores it as given.
+      dto.scheduledAtBs || null,
       dto.duration || null,
       dto.platform || null,
       meetingId,

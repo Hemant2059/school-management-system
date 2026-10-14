@@ -30,6 +30,14 @@ export class CreateTeacherDto {
   @Type(() => Number)
   readonly schoolId: number;
 
+  @ApiPropertyOptional({
+    description: 'Linked login user ID (enables teacher-scoped data access)',
+    example: 42,
+  })
+  @IsOptional()
+  @Type(() => Number)
+  readonly userId?: number;
+
   // === Names (Bilingual) ===
   @ApiProperty({
     description: 'Teacher first name in English',

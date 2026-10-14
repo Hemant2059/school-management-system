@@ -248,7 +248,7 @@ describe('UserService', () => {
 
       expect(mockDatabaseService.query).toHaveBeenCalledWith(
         expect.stringContaining('UPDATE users SET last_login_at = NOW()'),
-        [1, '192.168.1.1', 'Mozilla/5.0'],
+        [1, '192.168.1.1'],
       );
     });
   });

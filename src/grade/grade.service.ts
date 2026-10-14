@@ -5,23 +5,98 @@ import {
 } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 
-export interface GradeScale {
-  grade_scale_id: number;
-  school_id: number;
-  grade_name: string;
-  min_percentage: number;
-  max_percentage: number;
-  grade_point: number;
-  grade_label: string;
+/** Canonical scale header (grade_scales). NULL school_id = national template. */
+export interface GradeScaleHeader {
+  scale_id: number;
+  school_id: number | null;
+  scale_code: string;
+  scale_name: string;
+  is_default: boolean;
   is_active: boolean;
-  description: string;
-  created_at: Date;
-  updated_at: Date;
 }
+
+/** One band (grade_scale_lines). This is what findAll returns. */
+export interface GradeBand {
+  line_id: number;
+  scale_id: number;
+  grade: string;
+  grade_np: string | null;
+  grade_point: number;
+  min_percent: number;
+  max_percent: number;
+  remark: string | null;
+}
+
+/** Backwards-compatible alias: consumers treat bands as "scales". */
+export type GradeScale = GradeBand;
+
+const NEB_TEMPLATE_CODE = 'NEB-2078';
 
 @Injectable()
 export class GradeService {
   constructor(private db: DatabaseService) {}
+
+  /** School default scale id, falling back to the national template. */
+  private async resolveScaleId(schoolId: number): Promise<number | null> {
+    const own = await this.db.queryOne<{ scale_id: number }>(
+      `SELECT scale_id FROM grade_scales
+        WHERE school_id = $1 AND is_default AND is_active
+        ORDER BY scale_id LIMIT 1`,
+      [schoolId],
+    );
+    if (own) return own.scale_id;
+    const template = await this.db.queryOne<{ scale_id: number }>(
+      `SELECT scale_id FROM grade_scales
+        WHERE school_id IS NULL AND scale_code = $1 AND is_active LIMIT 1`,
+      [NEB_TEMPLATE_CODE],
+    );
+    return template?.scale_id ?? null;
+  }
+
+  /** Bands of the school's effective scale, highest band first. */
+  async findAll(schoolId: number): Promise<GradeBand[]> {
+    const scaleId = await this.resolveScaleId(schoolId);
+    if (scaleId === null) return [];
+    return this.db.query<GradeBand>(
+      `SELECT line_id, scale_id, grade, grade_np, grade_point,
+              min_percent, max_percent, remark
+         FROM grade_scale_lines WHERE scale_id = $1
+         ORDER BY min_percent DESC`,
+      [scaleId],
+    );
+  }
+
+  async findOne(id: number, schoolId: number): Promise<GradeBand> {
+    const band = await this.db.queryOne<GradeBand>(
+      `SELECT l.line_id, l.scale_id, l.grade, l.grade_np, l.grade_point,
+              l.min_percent, l.max_percent, l.remark
+         FROM grade_scale_lines l JOIN grade_scales s ON s.scale_id = l.scale_id
+        WHERE l.line_id = $1 AND s.school_id = $2 AND s.is_active`,
+      [id, schoolId],
+    );
+    if (!band) {
+      throw new NotFoundException(`Grade band with ID ${id} not found`);
+    }
+    return band;
+  }
+
+  /** Owning (writable) school scale; national template rows are read-only. */
+  private async requireOwnScaleId(schoolId: number): Promise<number> {
+    const own = await this.db.queryOne<{ scale_id: number }>(
+      `SELECT scale_id FROM grade_scales
+        WHERE school_id = $1 AND is_default AND is_active
+        ORDER BY scale_id LIMIT 1`,
+      [schoolId],
+    );
+    if (own) return own.scale_id;
+    const created = await this.db.insert<{ scale_id: number }>(
+      `INSERT INTO grade_scales (school_id, scale_code, scale_name, is_default, is_active)
+       VALUES ($1, 'CUSTOM', 'School custom scale', true, true)
+       RETURNING scale_id`,
+      [schoolId],
+    );
+    return created.scale_id;
+  }
 
   async create(createDto: {
     schoolId: number;
@@ -31,52 +106,33 @@ export class GradeService {
     gradePoint: number;
     gradeLabel?: string;
     description?: string;
-  }): Promise<GradeScale> {
-    const existing = await this.db.queryOne<GradeScale>(
-      `SELECT * FROM grade_scales WHERE school_id = $1 AND grade_name = $2 AND is_active = true`,
-      [createDto.schoolId, createDto.gradeName],
+  }): Promise<GradeBand> {
+    const scaleId = await this.requireOwnScaleId(createDto.schoolId);
+    const existing = await this.db.queryOne<GradeBand>(
+      `SELECT * FROM grade_scale_lines WHERE scale_id = $1 AND grade = $2`,
+      [scaleId, createDto.gradeName],
     );
-
     if (existing) {
       throw new BadRequestException(
         `Grade ${createDto.gradeName} already exists in this school`,
       );
     }
-
-    return this.db.insert<GradeScale>(
-      `INSERT INTO grade_scales (school_id, grade_name, min_percentage, max_percentage, grade_point, grade_label, description, is_active)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, true)
-       RETURNING *`,
+    // Overlaps beyond touching boundaries are rejected by trg_grade_band.
+    return this.db.insert<GradeBand>(
+      `INSERT INTO grade_scale_lines
+         (scale_id, grade, grade_point, min_percent, max_percent, remark)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING line_id, scale_id, grade, grade_np, grade_point,
+                 min_percent, max_percent, remark`,
       [
-        createDto.schoolId,
+        scaleId,
         createDto.gradeName,
+        createDto.gradePoint,
         createDto.minPercentage,
         createDto.maxPercentage,
-        createDto.gradePoint,
-        createDto.gradeLabel || null,
-        createDto.description || null,
+        createDto.gradeLabel ?? createDto.description ?? null,
       ],
     );
-  }
-
-  async findAll(schoolId: number): Promise<GradeScale[]> {
-    return this.db.query<GradeScale>(
-      `SELECT * FROM grade_scales WHERE school_id = $1 AND is_active = true ORDER BY min_percentage DESC`,
-      [schoolId],
-    );
-  }
-
-  async findOne(id: number, schoolId: number): Promise<GradeScale> {
-    const gradeScale = await this.db.queryOne<GradeScale>(
-      `SELECT * FROM grade_scales WHERE grade_scale_id = $1 AND school_id = $2 AND is_active = true`,
-      [id, schoolId],
-    );
-
-    if (!gradeScale) {
-      throw new NotFoundException(`Grade scale with ID ${id} not found`);
-    }
-
-    return gradeScale;
   }
 
   async update(
@@ -90,73 +146,80 @@ export class GradeService {
       gradeLabel?: string;
       description?: string;
     },
-  ): Promise<GradeScale> {
-    const gradeScale = await this.findOne(id, schoolId);
+  ): Promise<GradeBand> {
+    await this.findOne(id, schoolId);
 
     const updates: string[] = [];
-    const params: any[] = [id, schoolId];
-    let paramIndex = 3;
-
+    const params: any[] = [id];
+    let paramIndex = 2;
     if (updateDto.gradeName !== undefined) {
-      updates.push(`grade_name = $${paramIndex++}`);
+      updates.push(`grade = $${paramIndex++}`);
       params.push(updateDto.gradeName);
     }
     if (updateDto.minPercentage !== undefined) {
-      updates.push(`min_percentage = $${paramIndex++}`);
+      updates.push(`min_percent = $${paramIndex++}`);
       params.push(updateDto.minPercentage);
     }
     if (updateDto.maxPercentage !== undefined) {
-      updates.push(`max_percentage = $${paramIndex++}`);
+      updates.push(`max_percent = $${paramIndex++}`);
       params.push(updateDto.maxPercentage);
     }
     if (updateDto.gradePoint !== undefined) {
       updates.push(`grade_point = $${paramIndex++}`);
       params.push(updateDto.gradePoint);
     }
-    if (updateDto.gradeLabel !== undefined) {
-      updates.push(`grade_label = $${paramIndex++}`);
-      params.push(updateDto.gradeLabel);
+    const remark = updateDto.gradeLabel ?? updateDto.description;
+    if (remark !== undefined) {
+      updates.push(`remark = $${paramIndex++}`);
+      params.push(remark);
     }
-
     if (updates.length === 0) {
-      return gradeScale;
+      return this.findOne(id, schoolId);
     }
 
+    // Scope the write to the school's own scale (template is read-only).
     await this.db.query(
-      `UPDATE grade_scales SET ${updates.join(', ')} WHERE grade_scale_id = $1 AND school_id = $2`,
-      params,
+      `UPDATE grade_scale_lines l SET ${updates.join(', ')}
+         FROM grade_scales s
+        WHERE l.line_id = $1 AND s.scale_id = l.scale_id
+          AND s.school_id = $${paramIndex}`,
+      [...params, schoolId],
     );
-
     return this.findOne(id, schoolId);
   }
 
+  /** Hard-deletes a band (config data; no is_active on lines). */
   async remove(id: number, schoolId: number): Promise<void> {
-    await this.findOne(id, schoolId);
+    const band = await this.findOne(id, schoolId);
     await this.db.query(
-      `UPDATE grade_scales SET is_active = false, deleted_at = NOW() WHERE grade_scale_id = $1 AND school_id = $2`,
-      [id, schoolId],
+      `DELETE FROM grade_scale_lines WHERE line_id = $1 AND scale_id = $2`,
+      [id, band.scale_id],
     );
   }
 
+  /**
+   * Percent -> band. Boundary scores deterministically yield the higher band
+   * (bands ordered by min DESC; top band includes 100).
+   */
   calculateGrade(
     marks: number,
-    gradeScales: GradeScale[],
-  ): { grade: string; gradePoint: number; gradeLabel: string } {
-    const sortedScales = [...gradeScales].sort(
-      (a, b) => b.min_percentage - a.min_percentage,
+    gradeScales: GradeBand[],
+  ): { grade: string; gradePoint: number; remark: string | null } {
+    const sorted = [...gradeScales].sort(
+      (a, b) => Number(b.min_percent) - Number(a.min_percent),
     );
-
-    for (const scale of sortedScales) {
-      if (marks >= scale.min_percentage && marks <= scale.max_percentage) {
+    for (const band of sorted) {
+      const lo = Number(band.min_percent);
+      const hi = Number(band.max_percent);
+      if (marks >= lo && (marks < hi || marks === 100)) {
         return {
-          grade: scale.grade_name,
-          gradePoint: Number(scale.grade_point),
-          gradeLabel: scale.grade_label,
+          grade: band.grade,
+          gradePoint: Number(band.grade_point),
+          remark: band.remark,
         };
       }
     }
-
-    return { grade: 'N/A', gradePoint: 0, gradeLabel: 'Not Graded' };
+    return { grade: 'NG', gradePoint: 0, remark: 'Not Graded' };
   }
 
   calculateGPA(
@@ -177,87 +240,85 @@ export class GradeService {
       : 0;
   }
 
-  async getOrCreateDefaultGradeScales(schoolId: number): Promise<GradeScale[]> {
-    const existing = await this.findAll(schoolId);
-
-    if (existing.length > 0) {
-      return existing;
-    }
-
-    const defaultScales = [
-      {
-        grade_name: 'A+',
-        min_percentage: 90,
-        max_percentage: 100,
-        grade_point: 4.0,
-        grade_label: 'Outstanding',
-      },
-      {
-        grade_name: 'A',
-        min_percentage: 80,
-        max_percentage: 89,
-        grade_point: 3.6,
-        grade_label: 'Excellent',
-      },
-      {
-        grade_name: 'B+',
-        min_percentage: 70,
-        max_percentage: 79,
-        grade_point: 3.2,
-        grade_label: 'Very Good',
-      },
-      {
-        grade_name: 'B',
-        min_percentage: 60,
-        max_percentage: 69,
-        grade_point: 2.8,
-        grade_label: 'Good',
-      },
-      {
-        grade_name: 'C+',
-        min_percentage: 50,
-        max_percentage: 59,
-        grade_point: 2.4,
-        grade_label: 'Satisfactory',
-      },
-      {
-        grade_name: 'C',
-        min_percentage: 40,
-        max_percentage: 49,
-        grade_point: 2.0,
-        grade_label: 'Acceptable',
-      },
-      {
-        grade_name: 'D',
-        min_percentage: 30,
-        max_percentage: 39,
-        grade_point: 1.6,
-        grade_label: 'Partial Achievement',
-      },
-      {
-        grade_name: 'E',
-        min_percentage: 0,
-        max_percentage: 29,
-        grade_point: 0.0,
-        grade_label: 'Insufficient',
-      },
-    ];
-
-    for (const scale of defaultScales) {
-      await this.db.insert(
-        `INSERT INTO grade_scales (school_id, grade_name, min_percentage, max_percentage, grade_point, grade_label, is_active)
-         VALUES ($1, $2, $3, $4, $5, $6, true)`,
-        [
-          schoolId,
-          scale.grade_name,
-          scale.min_percentage,
-          scale.max_percentage,
-          scale.grade_point,
-          scale.grade_label,
-        ],
+  /**
+   * Returns the school's effective bands, cloning the national NEB-2078
+   * template when the school has no usable scale. Never creates a second
+   * default: empty own scales are filled in place, and adoption only happens
+   * when no default exists.
+   */
+  async getOrCreateDefaultGradeScales(schoolId: number): Promise<GradeBand[]> {
+    const bandsOf = (scaleId: number) =>
+      this.db.query<GradeBand>(
+        `SELECT line_id, scale_id, grade, grade_np, grade_point,
+                min_percent, max_percent, remark
+           FROM grade_scale_lines WHERE scale_id = $1
+           ORDER BY min_percent DESC`,
+        [scaleId],
       );
+
+    const own = await this.db.queryOne<{ scale_id: number }>(
+      `SELECT scale_id FROM grade_scales
+        WHERE school_id = $1 AND is_default AND is_active
+        ORDER BY scale_id LIMIT 1`,
+      [schoolId],
+    );
+    if (own) {
+      const bands = await bandsOf(own.scale_id);
+      if (bands.length > 0) return bands;
+      // Own default exists but is empty: fill it from the template in place.
+      const template = await this.db.queryOne<{ scale_id: number }>(
+        `SELECT scale_id FROM grade_scales
+          WHERE school_id IS NULL AND scale_code = $1 AND is_active LIMIT 1`,
+        [NEB_TEMPLATE_CODE],
+      );
+      if (template) {
+        await this.db.query(
+          `INSERT INTO grade_scale_lines
+             (scale_id, grade, grade_np, grade_point, min_percent, max_percent, remark)
+           SELECT $1, grade, grade_np, grade_point, min_percent, max_percent, remark
+             FROM grade_scale_lines WHERE scale_id = $2
+           ON CONFLICT (scale_id, grade) DO NOTHING`,
+          [own.scale_id, template.scale_id],
+        );
+        return bandsOf(own.scale_id);
+      }
+      return [];
     }
 
-    return this.findAll(schoolId);
+    // No own scale at all: create the NEB-2078 default and clone the template.
+    return this.db.transaction(async (client) => {
+      const header = await client.query(
+        `INSERT INTO grade_scales (school_id, scale_code, scale_name, is_default, is_active)
+         VALUES ($1, 'NEB-2078', 'NEB Letter Grading Guideline 2078', true, true)
+         ON CONFLICT (school_id, scale_code)
+         DO UPDATE SET is_default = true, is_active = true
+         RETURNING scale_id`,
+        [schoolId],
+      );
+      const newScaleId = header.rows[0].scale_id as number;
+      const template = await client.query(
+        `SELECT scale_id FROM grade_scales
+          WHERE school_id IS NULL AND scale_code = $1 AND is_active LIMIT 1`,
+        [NEB_TEMPLATE_CODE],
+      );
+      if (template.rows[0]) {
+        await client.query(
+          `INSERT INTO grade_scale_lines
+             (scale_id, grade, grade_np, grade_point, min_percent, max_percent, remark)
+           SELECT $1, grade, grade_np, grade_point, min_percent, max_percent, remark
+             FROM grade_scale_lines WHERE scale_id = $2
+           ON CONFLICT (scale_id, grade) DO NOTHING`,
+          [newScaleId, template.rows[0].scale_id],
+        );
+      }
+      const rows = await client.query(
+        `SELECT line_id, scale_id, grade, grade_np, grade_point,
+                min_percent, max_percent, remark
+           FROM grade_scale_lines WHERE scale_id = $1
+           ORDER BY min_percent DESC`,
+        [newScaleId],
+      );
+      return rows.rows as GradeBand[];
+    });
   }
 }

@@ -4,7 +4,10 @@ import {
   IsString,
   IsNumber,
   IsOptional,
+  IsDate,
 } from 'class-validator';
+import { Type } from 'class-transformer';
+import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class ProcessPayrollDto {
   @IsNotEmpty()
@@ -59,4 +62,21 @@ export class ProcessPayrollDto {
 
   @IsOptional()
   readonly isTaxExempt?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Payment date in AD (provided by frontend)',
+    example: '2024-05-30',
+  })
+  @IsOptional()
+  @IsDate()
+  @Type(() => Date)
+  readonly paymentDate?: Date;
+
+  @ApiPropertyOptional({
+    description: 'Payment date in BS (provided by frontend)',
+    example: '2081-02-17',
+  })
+  @IsOptional()
+  @IsString()
+  readonly paymentDateBs?: string;
 }

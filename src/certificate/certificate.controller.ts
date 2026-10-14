@@ -14,7 +14,6 @@ import {
   ApiQuery,
   ApiBody,
   ApiParam,
-  ApiExtraModels,
 } from '@nestjs/swagger';
 import { CertificateService } from './certificate.service';
 import {

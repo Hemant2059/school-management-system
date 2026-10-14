@@ -145,7 +145,7 @@ export class CertificateService {
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
        RETURNING *`,
       [
-        certificate[0].certificate_id,
+        certificate.certificate_id,
         dto.schoolId,
         dto.studentId,
         dto.leavingDate,
@@ -165,7 +165,7 @@ export class CertificateService {
       ],
     );
 
-    return tc[0];
+    return tc;
   }
 
   async createBonafide(dto: CreateBonafideDto): Promise<BonafideCertificate> {
@@ -194,7 +194,7 @@ export class CertificateService {
        VALUES ($1, $2, $3, $4, false, $5, NULL)
        RETURNING *`,
       [
-        certificate[0].certificate_id,
+        certificate.certificate_id,
         dto.schoolId,
         dto.studentId,
         dto.purpose || null,
@@ -202,7 +202,7 @@ export class CertificateService {
       ],
     );
 
-    return bonafide[0];
+    return bonafide;
   }
 
   async createCharacter(
@@ -233,7 +233,7 @@ export class CertificateService {
        VALUES ($1, $2, $3, $4, $5, false, $6, NULL)
        RETURNING *`,
       [
-        certificate[0].certificate_id,
+        certificate.certificate_id,
         dto.schoolId,
         dto.studentId,
         dto.characterGrade || null,
@@ -242,7 +242,7 @@ export class CertificateService {
       ],
     );
 
-    return character[0];
+    return character;
   }
 
   async getStudentCertificates(

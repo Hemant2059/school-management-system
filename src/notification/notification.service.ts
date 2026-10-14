@@ -26,21 +26,69 @@ export class NotificationService {
     private whatsappService: WhatsAppService,
   ) {}
 
+  /**
+   * Resolve student/guardian targets to login user ids. Students hold no
+   * logins, so student-targeted items fan out to the primary guardian's
+   * account. Returns null when no narrowing applies (school-wide).
+   */
+  private async resolveTargetUserIds(
+    schoolId: number,
+    filter: { userId?: number; studentId?: number; guardianId?: number },
+  ): Promise<number[] | null> {
+    const ids = new Set<number>();
+    if (filter.userId) ids.add(filter.userId);
+    if (filter.guardianId) {
+      const g = await this.db.queryOne<{ user_id: number | null }>(
+        `SELECT user_id FROM guardians WHERE guardian_id = $1 AND school_id = $2 AND is_active = true`,
+        [filter.guardianId, schoolId],
+      );
+      if (g?.user_id) ids.add(g.user_id);
+    }
+    if (filter.studentId) {
+      const parents = await this.db.query<{ user_id: number }>(
+        `SELECT g.user_id FROM student_guardians sg
+          JOIN guardians g ON g.guardian_id = sg.guardian_id
+         WHERE sg.student_id = $1 AND sg.is_primary = true AND sg.is_active = true
+           AND g.school_id = $2 AND g.user_id IS NOT NULL`,
+        [filter.studentId, schoolId],
+      );
+      for (const p of parents) ids.add(p.user_id);
+    }
+    if (
+      filter.userId === undefined &&
+      filter.studentId === undefined &&
+      filter.guardianId === undefined
+    ) {
+      return null;
+    }
+    return [...ids];
+  }
+
   async create(createDto: CreateNotificationDto): Promise<Notification> {
-    const result = await this.db.insert<Notification>(
-      `INSERT INTO notifications (
-        title, message, type, school_id, is_read
-      ) VALUES ($1, $2, $3, $4, $5)
-      RETURNING *`,
-      [
-        createDto.title,
-        createDto.message,
-        createDto.type || 'INFO',
-        createDto.schoolId || null,
-        false,
-      ],
+    const recipients = await this.resolveTargetUserIds(
+      createDto.schoolId || 0,
+      { studentId: createDto.studentId, guardianId: createDto.guardianId },
     );
-    return result;
+    const userIds =
+      recipients && recipients.length > 0 ? recipients : [null as any];
+    let first: Notification | null = null;
+    for (const userId of userIds) {
+      first = await this.db.insert<Notification>(
+        `INSERT INTO notifications (
+          title, message, type, school_id, user_id, is_read
+        ) VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING *`,
+        [
+          createDto.title,
+          createDto.message,
+          createDto.type || 'INFO',
+          createDto.schoolId || null,
+          userId,
+          false,
+        ],
+      );
+    }
+    return first!;
   }
 
   async findAll(
@@ -48,6 +96,7 @@ export class NotificationService {
     studentId?: number,
     guardianId?: number,
     isRead?: boolean,
+    userId?: number,
   ): Promise<Notification[]> {
     let query = `SELECT * FROM notifications WHERE is_active = true`;
     const params: any[] = [];
@@ -56,13 +105,15 @@ export class NotificationService {
       params.push(schoolId);
       query += ` AND school_id = $${params.length}`;
     }
-    if (studentId) {
-      params.push(studentId);
-      query += ` AND student_id = $${params.length}`;
-    }
-    if (guardianId) {
-      params.push(guardianId);
-      query += ` AND guardian_id = $${params.length}`;
+    const targets = await this.resolveTargetUserIds(schoolId || 0, {
+      userId,
+      studentId,
+      guardianId,
+    });
+    if (targets !== null) {
+      if (targets.length === 0) return [];
+      params.push(targets);
+      query += ` AND (user_id = ANY($${params.length}) OR user_id IS NULL)`;
     }
     if (isRead !== undefined) {
       params.push(isRead);
@@ -100,14 +151,7 @@ export class NotificationService {
     const params: any[] = [];
     let paramIndex = 1;
 
-    const fields = [
-      'title',
-      'message',
-      'message_np',
-      'type',
-      'is_read',
-      'is_sms_sent',
-    ];
+    const fields = ['title', 'message', 'type', 'is_read'];
 
     for (const field of fields) {
       if ((updateDto as any)[field] !== undefined) {
@@ -119,9 +163,9 @@ export class NotificationService {
 
     if (updates.length === 0) return this.findOne(id, schoolId);
 
-    params.push(id);
+    params.push(id, schoolId);
     await this.db.update(
-      `UPDATE notifications SET ${updates.join(', ')} WHERE notification_id = $${paramIndex}`,
+      `UPDATE notifications SET ${updates.join(', ')}, updated_at = NOW() WHERE notification_id = $${paramIndex} AND school_id = $${paramIndex + 1}`,
       params,
     );
 
@@ -131,16 +175,16 @@ export class NotificationService {
   async remove(id: number, schoolId: number): Promise<void> {
     await this.findOne(id, schoolId);
     await this.db.update(
-      `UPDATE notifications SET is_active = false WHERE notification_id = $1`,
-      [id],
+      `UPDATE notifications SET is_active = false, updated_at = NOW() WHERE notification_id = $1 AND school_id = $2`,
+      [id, schoolId],
     );
   }
 
   async markAsRead(id: number, schoolId: number): Promise<Notification> {
     await this.findOne(id, schoolId);
     await this.db.update(
-      `UPDATE notifications SET is_read = true WHERE notification_id = $1`,
-      [id],
+      `UPDATE notifications SET is_read = true, updated_at = NOW() WHERE notification_id = $1 AND school_id = $2`,
+      [id, schoolId],
     );
     return this.findOne(id, schoolId);
   }
@@ -149,17 +193,20 @@ export class NotificationService {
     schoolId: number,
     studentId?: number,
     guardianId?: number,
+    userId?: number,
   ): Promise<void> {
-    let query = `UPDATE notifications SET is_read = true WHERE school_id = $1 AND is_read = false AND is_active = true`;
+    let query = `UPDATE notifications SET is_read = true, updated_at = NOW() WHERE school_id = $1 AND is_read = false AND is_active = true`;
     const params: any[] = [schoolId];
 
-    if (studentId) {
-      params.push(studentId);
-      query += ` AND student_id = $${params.length}`;
-    }
-    if (guardianId) {
-      params.push(guardianId);
-      query += ` AND guardian_id = $${params.length}`;
+    const targets = await this.resolveTargetUserIds(schoolId, {
+      userId,
+      studentId,
+      guardianId,
+    });
+    if (targets !== null) {
+      if (targets.length === 0) return;
+      params.push(targets);
+      query += ` AND user_id = ANY($${params.length})`;
     }
 
     await this.db.update(query, params);

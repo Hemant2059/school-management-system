@@ -137,7 +137,7 @@ describe('TeacherService', () => {
       await service.create(createTeacherDto);
 
       const insertCall = mockDatabaseService.insert.mock.calls[0];
-      const teacherCode = insertCall[1][1];
+      const teacherCode = insertCall[1][2];
       expect(teacherCode).toContain('TCH-26');
       expect(teacherCode).toContain('00006');
     });
@@ -156,7 +156,7 @@ describe('TeacherService', () => {
       await service.create(dtoWithNpNames);
 
       const insertCall = mockDatabaseService.insert.mock.calls[0];
-      const displayName = insertCall[1][9];
+      const displayName = insertCall[1][10];
       expect(displayName).toBe('जेन स्मिथ');
     });
 
@@ -168,7 +168,7 @@ describe('TeacherService', () => {
       await service.create(createTeacherDto);
 
       const insertCall = mockDatabaseService.insert.mock.calls[0];
-      const displayName = insertCall[1][9];
+      const displayName = insertCall[1][10];
       expect(displayName).toBe('Jane Smith');
     });
 

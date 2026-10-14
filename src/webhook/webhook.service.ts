@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 
 export interface Webhook {
-  webhook_id: number;
+  id: number;
   school_id: number;
   webhook_type: string;
   name: string;
@@ -17,7 +17,7 @@ export interface Webhook {
 
 export interface WebhookLog {
   log_id: number;
-  webhook_id: number;
+  id: number;
   event_type: string;
   payload: Record<string, unknown> | null;
   response_status: number | null;
@@ -57,6 +57,17 @@ export class WebhookService {
     );
   }
 
+  private parseEvents<T extends { events: any }>(row: T): T {
+    if (row && typeof (row as any).events === 'string') {
+      try {
+        (row as any).events = JSON.parse((row as any).events);
+      } catch {
+        (row as any).events = [];
+      }
+    }
+    return row;
+  }
+
   async getWebhooks(schoolId: number, type?: string): Promise<Webhook[]> {
     let query = `SELECT * FROM webhooks WHERE school_id = $1 AND is_active = true`;
     const params: any[] = [schoolId];
@@ -68,12 +79,13 @@ export class WebhookService {
 
     query += ` ORDER BY created_at DESC`;
 
-    return this.db.query<Webhook>(query, params);
+    const rows = await this.db.query<Webhook>(query, params);
+    return rows.map((r) => this.parseEvents(r));
   }
 
   async getWebhookById(webhookId: number, schoolId: number): Promise<Webhook> {
     const webhook = await this.db.queryOne<Webhook>(
-      `SELECT * FROM webhooks WHERE webhook_id = $1 AND school_id = $2`,
+      `SELECT * FROM webhooks WHERE id = $1 AND school_id = $2`,
       [webhookId, schoolId],
     );
 
@@ -81,7 +93,7 @@ export class WebhookService {
       throw new NotFoundException('Webhook not found');
     }
 
-    return webhook;
+    return this.parseEvents(webhook);
   }
 
   async updateWebhook(
@@ -103,13 +115,14 @@ export class WebhookService {
         events = COALESCE($4, events),
         is_active = COALESCE($5, is_active),
         updated_at = NOW()
-       WHERE webhook_id = $1`,
+       WHERE id = $1 AND school_id = $6`,
       [
         webhookId,
         updates.name || null,
         updates.url || null,
         updates.events ? JSON.stringify(updates.events) : null,
         updates.isActive ?? null,
+        schoolId,
       ],
     );
 
@@ -120,8 +133,8 @@ export class WebhookService {
     await this.getWebhookById(webhookId, schoolId);
 
     await this.db.query(
-      `UPDATE webhooks SET is_active = false, updated_at = NOW() WHERE webhook_id = $1`,
-      [webhookId],
+      `UPDATE webhooks SET is_active = false, updated_at = NOW() WHERE id = $1 AND school_id = $2`,
+      [webhookId, schoolId],
     );
   }
 
@@ -155,7 +168,7 @@ export class WebhookService {
     await this.getWebhookById(webhookId, schoolId);
 
     return this.db.query<WebhookLog>(
-      `SELECT * FROM webhook_logs WHERE webhook_id = $1 ORDER BY created_at DESC LIMIT 100`,
+      `SELECT * FROM webhook_logs WHERE webhook_id = $1 ORDER BY attempted_at DESC, created_at DESC LIMIT 100`,
       [webhookId],
     );
   }
@@ -167,7 +180,7 @@ export class WebhookService {
   ): Promise<{ triggered: number; failed: number }> {
     const webhooks = await this.db.query<Webhook>(
       `SELECT * FROM webhooks WHERE school_id = $1 AND is_active = true 
-       AND $2 = ANY(events)`,
+       AND events::jsonb ? $2`,
       [schoolId, eventType],
     );
 
@@ -187,7 +200,7 @@ export class WebhookService {
         });
 
         await this.logWebhookDelivery(
-          webhook.webhook_id,
+          webhook.id,
           eventType,
           data,
           response.status,
@@ -200,7 +213,7 @@ export class WebhookService {
       } catch (error) {
         failed++;
         await this.logWebhookDelivery(
-          webhook.webhook_id,
+          webhook.id,
           eventType,
           data,
           0,

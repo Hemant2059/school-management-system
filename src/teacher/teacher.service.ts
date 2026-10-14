@@ -10,9 +10,23 @@ import { PageOptionsDto } from '../common/dto/page-options.dto';
 import { PageDto } from '../common/dto/page.dto';
 import { PageMetaDto } from '../common/dto/page-meta.dto';
 
+export interface TeacherAssignment {
+  assignment_id: number;
+  school_id: number;
+  teacher_id: number;
+  academic_year_id: number;
+  class_id: number;
+  section_id: number | null;
+  subject_id: number | null;
+  is_active: boolean;
+  created_at: Date;
+  updated_at: Date;
+}
+
 export interface Teacher {
   teacher_id: number;
   school_id: number;
+  user_id?: number | null;
   teacher_code: string;
   employee_id: string;
   first_name_en: string;
@@ -102,12 +116,27 @@ export class TeacherService {
       ? `${createTeacherDto.firstNameNp} ${createTeacherDto.lastNameNp ?? ''}`.trim()
       : `${createTeacherDto.firstNameEn} ${createTeacherDto.lastNameEn ?? ''}`.trim();
 
+    if (createTeacherDto.userId !== undefined) {
+      const owner = await this.db.queryOne<{ school_id: number | null }>(
+        `SELECT school_id FROM users WHERE user_id = $1`,
+        [createTeacherDto.userId],
+      );
+      if (!owner) throw new BadRequestException('Linked user not found');
+      if (
+        owner.school_id !== null &&
+        owner.school_id !== createTeacherDto.schoolId
+      ) {
+        throw new BadRequestException('Linked user belongs to another school');
+      }
+    }
+
     const teacher = await this.db.insert<Teacher>(
-      `INSERT INTO teachers (school_id, teacher_code, employee_id, first_name_en, middle_name_en, last_name_en, first_name_np, middle_name_np, last_name_np, display_name, date_of_birth, gender, blood_group, nationality, religion, highest_qualification, specialization, university_board, passing_year, teaching_license_number, license_expiry_date, personal_mobile, official_mobile, personal_email, official_email, joining_date, employment_type, department, current_status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29)
+      `INSERT INTO teachers (school_id, user_id, teacher_code, employee_id, first_name_en, middle_name_en, last_name_en, first_name_np, middle_name_np, last_name_np, display_name, date_of_birth, gender, blood_group, nationality, religion, highest_qualification, specialization, university_board, passing_year, teaching_license_number, license_expiry_date, personal_mobile, official_mobile, personal_email, official_email, joining_date, employment_type, department, current_status)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30)
        RETURNING *`,
       [
         createTeacherDto.schoolId,
+        createTeacherDto.userId ?? null,
         teacherCode,
         createTeacherDto.employeeId,
         createTeacherDto.firstNameEn,
@@ -199,13 +228,28 @@ export class TeacherService {
     id: number,
     updateTeacherDto: UpdateTeacherDto,
   ): Promise<Teacher> {
-    await this.findOne(id);
+    const teacher = await this.findOne(id);
+
+    if (
+      updateTeacherDto.userId !== undefined &&
+      updateTeacherDto.userId !== null
+    ) {
+      const owner = await this.db.queryOne<{ school_id: number | null }>(
+        `SELECT school_id FROM users WHERE user_id = $1`,
+        [updateTeacherDto.userId],
+      );
+      if (!owner) throw new BadRequestException('Linked user not found');
+      if (owner.school_id !== null && owner.school_id !== teacher.school_id) {
+        throw new BadRequestException('Linked user belongs to another school');
+      }
+    }
 
     const updates: string[] = [];
     const params: any[] = [];
     let paramIndex = 1;
 
     const fieldMap: Record<string, string> = {
+      userId: 'user_id',
       firstNameEn: 'first_name_en',
       lastNameEn: 'last_name_en',
       firstNameNp: 'first_name_np',
@@ -260,5 +304,99 @@ export class TeacherService {
 
   async getTeacherWithDetails(id: number): Promise<any> {
     return this.findOne(id);
+  }
+
+  // ------------------------------------------------------------------
+  // Teaching assignments: the grant surface for row-ownership scoping.
+  // NULL section_id = all sections of the class; NULL subject_id = all
+  // subjects of the class. Only active assignments grant visibility.
+  // ------------------------------------------------------------------
+  async assignToClass(
+    schoolId: number,
+    dto: {
+      teacherId: number;
+      academicYearId: number;
+      classId: number;
+      sectionId?: number;
+      subjectId?: number;
+    },
+  ): Promise<TeacherAssignment> {
+    const teacher = await this.db.queryOne<{ school_id: number }>(
+      `SELECT school_id FROM teachers WHERE teacher_id = $1 AND school_id = $2 AND is_active = true`,
+      [dto.teacherId, schoolId],
+    );
+    if (!teacher)
+      throw new NotFoundException('Teacher not found in this school');
+    const year = await this.db.queryOne<{ academic_year_id: number }>(
+      `SELECT academic_year_id FROM academic_years WHERE academic_year_id = $1 AND school_id = $2`,
+      [dto.academicYearId, schoolId],
+    );
+    if (!year)
+      throw new NotFoundException('Academic year not found in this school');
+    const cls = await this.db.queryOne<{ class_id: number }>(
+      `SELECT class_id FROM classes WHERE class_id = $1 AND school_id = $2`,
+      [dto.classId, schoolId],
+    );
+    if (!cls) throw new NotFoundException('Class not found in this school');
+    if (dto.sectionId !== undefined) {
+      const sec = await this.db.queryOne(
+        `SELECT section_id FROM sections WHERE section_id = $1 AND class_id = $2 AND school_id = $3`,
+        [dto.sectionId, dto.classId, schoolId],
+      );
+      if (!sec) throw new NotFoundException('Section not found in this class');
+    }
+    if (dto.subjectId !== undefined) {
+      const subj = await this.db.queryOne(
+        `SELECT subject_id FROM subjects WHERE subject_id = $1 AND school_id = $2`,
+        [dto.subjectId, schoolId],
+      );
+      if (!subj)
+        throw new NotFoundException('Subject not found in this school');
+    }
+    return this.db.insert<TeacherAssignment>(
+      `INSERT INTO teacher_assignments (school_id, teacher_id, academic_year_id, class_id, section_id, subject_id, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, true)
+       ON CONFLICT (teacher_id, academic_year_id, class_id, section_id, subject_id)
+       DO UPDATE SET is_active = true, updated_at = NOW()
+       RETURNING *`,
+      [
+        schoolId,
+        dto.teacherId,
+        dto.academicYearId,
+        dto.classId,
+        dto.sectionId ?? null,
+        dto.subjectId ?? null,
+      ],
+    );
+  }
+
+  async removeAssignment(
+    assignmentId: number,
+    schoolId: number,
+  ): Promise<void> {
+    const n = await this.db.update(
+      `UPDATE teacher_assignments SET is_active = false, updated_at = NOW()
+        WHERE assignment_id = $1 AND school_id = $2`,
+      [assignmentId, schoolId],
+    );
+    if (n === 0) throw new NotFoundException('Assignment not found');
+  }
+
+  async listAssignments(schoolId: number, teacherId?: number): Promise<any[]> {
+    const params: any[] = [schoolId];
+    let query = `SELECT ta.*, c.class_name, sec.section_name, sub.subject_name,
+                        ay.session_name AS academic_year
+                   FROM teacher_assignments ta
+                   JOIN classes c ON c.class_id = ta.class_id
+                   LEFT JOIN sections sec ON sec.section_id = ta.section_id
+                   LEFT JOIN subjects sub ON sub.subject_id = ta.subject_id
+                   JOIN academic_years ay ON ay.academic_year_id = ta.academic_year_id
+                  WHERE ta.school_id = $1 AND ta.is_active = true`;
+    if (teacherId !== undefined) {
+      params.push(teacherId);
+      query += ` AND ta.teacher_id = $${params.length}`;
+    }
+    query += ` ORDER BY ay.session_name DESC, c.class_order, sec.section_name`;
+    return this.db.query(query, params);
   }
 }

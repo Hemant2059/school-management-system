@@ -60,7 +60,7 @@ export class SchoolService {
 
     const school = await this.db.insert<School>(
       `INSERT INTO schools (school_code, school_name, school_name_nepali, school_type, ownership_type, established_date, established_date_bs, affiliation_number, registration_number, province_id, district_id, municipality_id, ward_no, tole, tole_nepali, street_address, street_address_nepali, mobile, email, is_active, created_by, updated_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, true, $21, $22)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, true, $20, $21)
        RETURNING *`,
       [
         createSchoolDto.schoolCode,

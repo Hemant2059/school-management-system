@@ -46,7 +46,7 @@ export class AttendanceService {
     userId?: number,
   ): Promise<Attendance> {
     const existing = await this.db.queryOne<Attendance>(
-      `SELECT * FROM attendance_records WHERE student_id = $1 AND academic_year = $2 AND attendance_date = $3`,
+      `SELECT * FROM attendance WHERE student_id = $1 AND academic_year = $2 AND attendance_date = $3`,
       [createDto.studentId, createDto.academicYear, createDto.attendanceDate],
     );
 
@@ -57,7 +57,7 @@ export class AttendanceService {
     }
 
     return this.db.insert<Attendance>(
-      `INSERT INTO attendance_records (school_id, student_id, class_id, section_id, academic_year, attendance_date, attendance_date_bs, status, remarks, created_by)
+      `INSERT INTO attendance (school_id, student_id, class_id, section_id, academic_year, attendance_date, attendance_date_bs, status, remarks, created_by)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
        RETURNING *`,
       [
@@ -94,7 +94,7 @@ export class AttendanceService {
       return [];
     }
     return this.db.query<Attendance>(
-      `SELECT * FROM attendance_records WHERE school_id = $1 AND academic_year = $2 ORDER BY attendance_date DESC`,
+      `SELECT * FROM attendance WHERE school_id = $1 AND academic_year = $2 ORDER BY attendance_date DESC`,
       [schoolId, academicYear],
     );
   }
@@ -102,8 +102,8 @@ export class AttendanceService {
   async findOne(id: number, schoolId?: number): Promise<Attendance> {
     const attendance = await this.db.queryOne<Attendance>(
       schoolId
-        ? `SELECT * FROM attendance_records WHERE attendance_id = $1 AND school_id = $2`
-        : `SELECT * FROM attendance_records WHERE attendance_id = $1`,
+        ? `SELECT * FROM attendance WHERE attendance_id = $1 AND school_id = $2`
+        : `SELECT * FROM attendance WHERE attendance_id = $1`,
       schoolId ? [id, schoolId] : [id],
     );
 
@@ -144,7 +144,7 @@ export class AttendanceService {
     if (updates.length > 0) {
       params.push(id);
       await this.db.query(
-        `UPDATE attendance_records SET ${updates.join(', ')}, updated_at = NOW() WHERE attendance_id = $${paramIndex}`,
+        `UPDATE attendance SET ${updates.join(', ')}, updated_at = NOW() WHERE attendance_id = $${paramIndex}`,
         params,
       );
     }
@@ -155,54 +155,49 @@ export class AttendanceService {
   async remove(id: number, schoolId: number): Promise<void> {
     await this.findOne(id, schoolId);
     await this.db.query(
-      `UPDATE attendance_records SET deleted_at = NOW() WHERE attendance_id = $1`,
-      [id],
+      `UPDATE attendance SET deleted_at = NOW() WHERE attendance_id = $1 AND school_id = $2`,
+      [id, schoolId],
     );
   }
 
   async findByStudent(
     studentId: number,
-    academicYearOrSchoolId: number | string,
+    schoolId: number,
     start?: Date,
     end?: Date,
+    academicYear?: string,
   ): Promise<Attendance[]> {
-    // If second param is schoolId (number), use it as schoolId filter
-    // Otherwise use it as academicYear
-    if (typeof academicYearOrSchoolId === 'number') {
-      // Called with (studentId, schoolId, start, end)
-      let query = `SELECT * FROM attendance_records WHERE student_id = $1 AND school_id = $2`;
-      const params: any[] = [studentId, academicYearOrSchoolId];
+    let query = `SELECT * FROM attendance WHERE student_id = $1 AND school_id = $2`;
+    const params: any[] = [studentId, schoolId];
 
-      if (start) {
-        params.push(start);
-        query += ` AND attendance_date >= $${params.length}`;
-      }
-      if (end) {
-        params.push(end);
-        query += ` AND attendance_date <= $${params.length}`;
-      }
-
-      query += ` ORDER BY attendance_date DESC`;
-      return this.db.query<Attendance>(query, params);
+    if (academicYear) {
+      params.push(academicYear);
+      query += ` AND academic_year = $${params.length}`;
+    }
+    if (start) {
+      params.push(start);
+      query += ` AND attendance_date >= $${params.length}`;
+    }
+    if (end) {
+      params.push(end);
+      query += ` AND attendance_date <= $${params.length}`;
     }
 
-    // Original: called with (studentId, academicYear)
-    return this.db.query<Attendance>(
-      `SELECT * FROM attendance_records WHERE student_id = $1 AND academic_year = $2 ORDER BY attendance_date DESC`,
-      [studentId, academicYearOrSchoolId],
-    );
+    query += ` ORDER BY attendance_date DESC`;
+    return this.db.query<Attendance>(query, params);
   }
 
   async getStudentStatistics(
     studentId: number,
-    academicYearOrSchoolId: string | number,
-    _academicYear?: string | number,
-    _start?: Date,
-    _end?: Date,
+    schoolId: number,
+    academicYear?: string,
   ): Promise<any> {
     const records = await this.findByStudent(
       studentId,
-      String(academicYearOrSchoolId),
+      schoolId,
+      undefined,
+      undefined,
+      academicYear,
     );
     const total = records.length;
     const present = records.filter((r) => r.status === 'PRESENT').length;
@@ -225,7 +220,7 @@ export class AttendanceService {
     academicYear: string,
   ): Promise<any> {
     const records = await this.db.query<Attendance>(
-      `SELECT * FROM attendance_records WHERE student_id = $1 AND attendance_date BETWEEN $2 AND $3 AND academic_year = $4`,
+      `SELECT * FROM attendance WHERE student_id = $1 AND attendance_date BETWEEN $2 AND $3 AND academic_year = $4`,
       [studentId, start, end, academicYear],
     );
 
@@ -249,7 +244,7 @@ export class AttendanceService {
     const endDate = new Date(year, month, 0);
 
     return this.db.query<any>(
-      `SELECT * FROM attendance_records WHERE school_id = $1 AND attendance_date BETWEEN $2 AND $3`,
+      `SELECT * FROM attendance WHERE school_id = $1 AND attendance_date BETWEEN $2 AND $3`,
       [schoolId, startDate, endDate],
     );
   }

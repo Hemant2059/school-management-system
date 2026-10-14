@@ -237,7 +237,7 @@ describe('SubjectService', () => {
 
       expect(result).toHaveLength(1);
       expect(mockDatabaseService.query).toHaveBeenCalledWith(
-        expect.stringContaining('subject_type = $2'),
+        expect.stringContaining('subject_group = $2'),
         [1, 'COMPULSORY'],
       );
     });

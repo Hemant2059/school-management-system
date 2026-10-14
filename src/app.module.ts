@@ -7,6 +7,7 @@ import { validate } from './config/env.validation';
 import { LoggerModule } from 'nestjs-pino';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { IdempotencyInterceptor } from './common/interceptors/idempotency.interceptor';
+import { TenantInterceptor } from './common/interceptors/tenant.interceptor';
 import { DatabaseModule } from './database/database.module';
 import { SchoolModule } from './school/school.module';
 import { UserModule } from './user/user.module';
@@ -52,6 +53,7 @@ import { ExportModule } from './export/export.module';
 import { SyncModule } from './sync/sync.module';
 import { WebhookModule } from './webhook/webhook.module';
 import { AdminModule } from './admin/admin.module';
+import { RbacModule } from './rbac/rbac.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { RolesGuard } from './auth/roles.guard';
 import { AppController } from './app.controller';
@@ -187,6 +189,7 @@ try {
     SyncModule,
     WebhookModule,
     AdminModule,
+    RbacModule,
   ],
   controllers: [AppController],
   providers: [
@@ -205,6 +208,10 @@ try {
     {
       provide: APP_INTERCEPTOR,
       useClass: IdempotencyInterceptor,
+    },
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: TenantInterceptor,
     },
   ],
 })

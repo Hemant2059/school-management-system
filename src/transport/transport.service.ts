@@ -8,7 +8,6 @@ import { CreateVehicleDto } from './dto/create-vehicle.dto';
 import { CreateRouteDto } from './dto/create-route.dto';
 import { CreateRouteStopDto } from './dto/create-route-stop.dto';
 import { AssignStudentDto } from './dto/assign-student.dto';
-import { NepaliDateUtil } from '../utils/nepali-date.util';
 import { NepaliNumberUtil } from '../utils/nepali-number.util';
 
 export interface Vehicle {
@@ -64,7 +63,7 @@ export interface RouteStop {
 }
 
 export interface TransportAssignment {
-  assignment_id: number;
+  id: number;
   school_id: number;
   student_id: number;
   route_id: number;
@@ -77,7 +76,7 @@ export interface TransportAssignment {
 }
 
 export interface TransportFee {
-  fee_id: number;
+  id: number;
   school_id: number;
   route_id: number;
   monthly_fee: number;
@@ -202,7 +201,7 @@ export class TransportService {
     assignDto: AssignStudentDto,
   ): Promise<TransportAssignment> {
     const existing = await this.db.queryOne<TransportAssignment>(
-      `SELECT assignment_id FROM transport_assignments 
+      `SELECT id FROM transport_assignments 
        WHERE student_id = $1 AND school_id = $2 AND is_active = true`,
       [assignDto.studentId, assignDto.schoolId],
     );
@@ -212,7 +211,8 @@ export class TransportService {
       );
     }
 
-    const bsDate = NepaliDateUtil.adToBs(assignDto.assignmentDate).bsDate;
+    // BS date comes from the frontend — the backend stores it as given.
+    const bsDate = assignDto.assignmentDateBs || null;
 
     const result = await this.db.insert<TransportAssignment>(
       `INSERT INTO transport_assignments (
@@ -258,12 +258,12 @@ export class TransportService {
 
     if (fee) {
       await this.db.update(
-        `UPDATE transport_fees SET monthly_fee = $1, admission_fee = $2 WHERE fee_id = $3`,
-        [monthlyFee, admissionFee || fee.admission_fee, fee.fee_id],
+        `UPDATE transport_fees SET monthly_fee = $1, admission_fee = $2 WHERE id = $3`,
+        [monthlyFee, admissionFee || fee.admission_fee, fee.id],
       );
       const updated = await this.db.queryOne<TransportFee>(
-        `SELECT * FROM transport_fees WHERE fee_id = $1`,
-        [fee.fee_id],
+        `SELECT * FROM transport_fees WHERE id = $1`,
+        [fee.id],
       );
       if (!updated) throw new NotFoundException('Fee not found after update');
       return updated;

@@ -53,10 +53,10 @@ export class DashboardService {
         ),
         this.db.query<{ count: string }>(
           `SELECT COUNT(*) as count 
-          FROM attendance_records 
-          WHERE school_id = $1 
-          AND attendance_date = $2 
-          AND status = 'PRESENT'`,
+          FROM attendance
+          WHERE school_id = $1
+          AND attendance_date = $2
+          AND status = 'PRESENT' AND deleted_at IS NULL`,
           [schoolId, todayStr],
         ),
       ]);
@@ -91,8 +91,8 @@ export class DashboardService {
         `SELECT 
           COUNT(*) as total,
           SUM(CASE WHEN status = 'PRESENT' THEN 1 ELSE 0 END) as present
-        FROM attendance_records 
-        WHERE student_id = $1 AND school_id = $2`,
+        FROM attendance
+        WHERE student_id = $1 AND school_id = $2 AND deleted_at IS NULL`,
         [studentId, schoolId],
       ),
 
@@ -102,8 +102,7 @@ export class DashboardService {
       ),
 
       this.db.query<{ total: string }>(
-        `SELECT SUM(total_amount) as total FROM student_fees 
-        WHERE student_id = $1 AND school_id = $2 AND is_active = true`,
+        `SELECT SUM(sf.total_amount) as total FROM student_fees sf JOIN students s ON s.student_id = sf.student_id WHERE sf.student_id = $1 AND s.school_id = $2`,
         [studentId, schoolId],
       ),
     ]);
@@ -152,9 +151,7 @@ export class DashboardService {
     const [feeStats, payrollStats] = await Promise.all([
       this.db.query<{ pending: string }>(
         `SELECT 
-          SUM(CASE WHEN status != 'PAID' THEN total_amount ELSE 0 END) as pending
-        FROM student_fees 
-        WHERE school_id = $1 AND is_active = true`,
+          SUM(CASE WHEN UPPER(sf.status) != 'PAID' THEN sf.total_amount ELSE 0 END) as pending FROM student_fees sf JOIN students s ON s.student_id = sf.student_id WHERE s.school_id = $1`,
         [schoolId],
       ),
 
@@ -162,8 +159,7 @@ export class DashboardService {
         `SELECT 
           SUM(CASE WHEN is_paid = true THEN net_salary ELSE 0 END) as paid,
           SUM(CASE WHEN is_paid = false THEN net_salary ELSE 0 END) as pending
-        FROM payroll 
-        WHERE school_id = $1`,
+        FROM payrolls WHERE school_id = $1`,
         [schoolId],
       ),
     ]);
@@ -192,7 +188,7 @@ export class DashboardService {
     }
 
     const studentGuardians = await this.db.query<{ student_id: number }>(
-      `SELECT student_id FROM student_guardians WHERE guardian_id = $1 AND school_id = $2`,
+      `SELECT sg.student_id FROM student_guardians sg JOIN guardians g ON g.guardian_id = sg.guardian_id WHERE sg.guardian_id = $1 AND g.school_id = $2 AND sg.is_active = true`,
       [guardian.guardian_id, schoolId],
     );
 
@@ -204,8 +200,8 @@ export class DashboardService {
           middle_name_en: string;
           last_name_en: string;
         }>(
-          `SELECT student_id, first_name_en, middle_name_en, last_name_en FROM students WHERE student_id = $1`,
-          [sg.student_id],
+          `SELECT student_id, first_name_en, middle_name_en, last_name_en FROM students WHERE student_id = $1 AND school_id = $2`,
+          [sg.student_id, schoolId],
         );
 
         const student = students[0];

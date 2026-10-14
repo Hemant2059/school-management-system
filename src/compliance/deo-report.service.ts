@@ -50,10 +50,10 @@ export class DeoReportService {
       first_name_np: string | null;
       middle_name_np: string | null;
       last_name_np: string | null;
-      caste_ethnicity_code: string | null;
+      caste_code: string | null;
+      caste_ethnicity: string | null;
       gender: string;
       is_govt_mandated_free_seat: boolean;
-      dob_bs_snapshot: string | null;
       date_of_birth_bs: string | null;
     }>(
       `SELECT * FROM students WHERE school_id = $1 AND is_active = true AND current_status = 'ACTIVE'`,
@@ -64,17 +64,20 @@ export class DeoReportService {
 
     let student_enrollments: any[] = [];
     if (studentIds.length > 0) {
+      // Canonical placement: enrollments keyed to the current session.
       student_enrollments = await this.db.query<{
         student_id: number;
         class_id: number;
         section_id: number | null;
         roll_number: number | null;
-        is_current: boolean;
         status: string;
         academic_year: string | null;
-        board_exam_registration: string | null;
       }>(
-        `SELECT * FROM student_enrollments WHERE student_id = ANY($1) AND is_current = true AND status = 'ACTIVE'`,
+        `SELECT en.student_id, en.class_id, en.section_id,
+                en.roll_no AS roll_number, ay.session_name AS academic_year
+           FROM enrollments en
+           JOIN academic_years ay ON ay.academic_year_id = en.academic_year_id
+          WHERE en.student_id = ANY($1) AND ay.is_current = true AND en.status <> 'LEFT'`,
         [studentIds],
       );
     }
@@ -141,10 +144,10 @@ export class DeoReportService {
           rollNumber: enrollment?.roll_number ?? s.roll_number,
           name: getFullName(s, 'en'),
           nameNp: getFullName(s, 'np'),
-          casteCode: s.caste_ethnicity_code || null,
+          casteCode: s.caste_code ?? s.caste_ethnicity ?? null,
           gender: s.gender,
           isGovtSeat: s.is_govt_mandated_free_seat ?? false,
-          dobBs: s.dob_bs_snapshot || s.date_of_birth_bs,
+          dobBs: s.date_of_birth_bs,
           className: ac?.class_name ?? null,
           sectionName: sec?.section_name ?? null,
           academicYear: enrollment?.academic_year ?? null,
@@ -161,7 +164,7 @@ export class DeoReportService {
       school_code: string;
       school_name: string;
     }>(
-      `SELECT school_id, school_code, school_name FROM schools WHERE school_id = $1`,
+      `SELECT school_id, school_id AS school_code, name AS school_name FROM schools WHERE school_id = $1`,
       [schoolId],
     );
     if (!school) {
@@ -211,7 +214,7 @@ export class DeoReportService {
       school_code: string;
       school_name: string;
     }>(
-      `SELECT school_id, school_code, school_name FROM schools WHERE school_id = $1`,
+      `SELECT school_id, school_id AS school_code, name AS school_name FROM schools WHERE school_id = $1`,
       [schoolId],
     );
     if (!school) {

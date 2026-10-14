@@ -164,7 +164,7 @@ describe('AttendanceService', () => {
 
       expect(result).toHaveLength(1);
       expect(mockDatabaseService.query).toHaveBeenCalledWith(
-        expect.stringContaining('SELECT * FROM attendance_records'),
+        expect.stringContaining('SELECT * FROM attendance'),
         [1, '2081'],
       );
     });
@@ -250,10 +250,8 @@ describe('AttendanceService', () => {
       await service.remove(1, 1);
 
       expect(mockDatabaseService.query).toHaveBeenCalledWith(
-        expect.stringContaining(
-          'UPDATE attendance_records SET deleted_at = NOW()',
-        ),
-        [1],
+        expect.stringContaining('UPDATE attendance SET deleted_at = NOW()'),
+        [1, 1],
       );
     });
 
@@ -268,12 +266,18 @@ describe('AttendanceService', () => {
     it('should return attendance for a student by academic year', async () => {
       mockDatabaseService.query.mockResolvedValue([mockAttendance]);
 
-      const result = await service.findByStudent(1, '2081');
+      const result = await service.findByStudent(
+        1,
+        1,
+        undefined,
+        undefined,
+        '2081',
+      );
 
       expect(result).toHaveLength(1);
       expect(mockDatabaseService.query).toHaveBeenCalledWith(
-        expect.stringContaining('student_id = $1 AND academic_year = $2'),
-        [1, '2081'],
+        expect.stringContaining('academic_year = $3'),
+        [1, 1, '2081'],
       );
     });
 
@@ -293,7 +297,7 @@ describe('AttendanceService', () => {
     it('should return student attendance statistics', async () => {
       mockDatabaseService.query.mockResolvedValue([mockAttendance]);
 
-      const result = await service.getStudentStatistics(1, '2081');
+      const result = await service.getStudentStatistics(1, 1, '2081');
 
       expect(result).toBeDefined();
     });

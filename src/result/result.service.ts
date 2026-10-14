@@ -381,7 +381,16 @@ export class ResultService {
   }
 
   async calculateGPA(studentId: number, academicYear: string): Promise<number> {
-    const marks = await this.findByStudent(studentId, 0, academicYear);
+    const owner = await this.db.queryOne<{ school_id: number }>(
+      `SELECT school_id FROM students WHERE student_id = $1`,
+      [studentId],
+    );
+    if (!owner) return 0;
+    const marks = await this.findByStudent(
+      studentId,
+      owner.school_id,
+      academicYear,
+    );
 
     const subjectGrades = marks
       .filter((m) => m.grade_point !== null)

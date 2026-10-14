@@ -18,23 +18,32 @@ export class AdminService {
       'attendance',
       'exams',
       'marks',
-      'results',
       'student_promotions',
       'book_issues',
-      'book_issues',
     ];
+    // Tables without their own school_id are scoped through a parent.
+    const scopedQueries: Record<string, string> = {
+      student_promotions: `SELECT sp.* FROM student_promotions sp
+        JOIN students s ON s.student_id = sp.student_id WHERE s.school_id = $1`,
+      book_issues: `SELECT bi.* FROM book_issues bi
+        JOIN books b ON b.book_id = bi.book_id WHERE b.school_id = $1`,
+    };
 
-    const tablesToExport = tables || defaultTables;
+    // Allowlist shape guard: table names are identifiers, never values —
+    // reject anything that is not a bare lowercase identifier.
+    const tablesToExport = (tables || defaultTables).filter((t) =>
+      /^[a-z_]+$/.test(t),
+    );
     const data: Record<string, any[]> = {};
 
     for (const table of tablesToExport) {
       try {
         const result = await this.db.query(
-          `SELECT * FROM ${table} WHERE school_id = $1`,
+          scopedQueries[table] ?? `SELECT * FROM ${table} WHERE school_id = $1`,
           [schoolId],
         );
         data[table] = result;
-      } catch (e) {
+      } catch {
         data[table] = [];
       }
     }

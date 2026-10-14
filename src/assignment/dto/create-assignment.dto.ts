@@ -75,6 +75,14 @@ export class CreateAssignmentDto {
   readonly dueDate: Date;
 
   @ApiPropertyOptional({
+    description: 'Due date in BS (provided by frontend)',
+    example: '2081-11-18',
+  })
+  @IsOptional()
+  @IsString()
+  readonly dueDateBs?: string;
+
+  @ApiPropertyOptional({
     description: 'Total marks for the assignment',
     example: 20,
     type: Number,

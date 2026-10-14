@@ -51,6 +51,14 @@ export class CreateLiveClassDto {
   @IsDateString()
   scheduledAt: string;
 
+  @ApiPropertyOptional({
+    description: 'Scheduled start date in BS (provided by frontend)',
+    example: '2082-11-18',
+  })
+  @IsOptional()
+  @IsString()
+  scheduledAtBs?: string;
+
   @ApiPropertyOptional({ description: 'Duration in minutes', example: 45 })
   @IsOptional()
   @IsInt()

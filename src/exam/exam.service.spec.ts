@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { ExamService } from './exam.service';
 import { DatabaseService } from '../database/database.service';
+import { GradeService } from '../grade/grade.service';
 import { NotFoundException } from '@nestjs/common';
 
 describe('ExamService', () => {
@@ -45,6 +46,10 @@ describe('ExamService', () => {
       providers: [
         ExamService,
         { provide: DatabaseService, useValue: mockDatabaseService },
+        {
+          provide: GradeService,
+          useValue: { create: jest.fn(), findAll: jest.fn() },
+        },
       ],
     }).compile();
     service = module.get<ExamService>(ExamService);

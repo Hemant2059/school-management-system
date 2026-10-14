@@ -89,23 +89,24 @@ export class PortalService {
     userId: number,
   ): Promise<StudentProfile> {
     const query = `
-      SELECT 
+      SELECT
         s.student_id as id,
         s.student_code as "studentCode",
         s.first_name_en as "firstNameEn",
         s.first_name_np as "firstNameNp",
         s.last_name_en as "lastNameEn",
         s.last_name_np as "lastNameNp",
-        s.date_of_birth as "dateOfBirth",
+        s.date_of_birth_ad as "dateOfBirth",
         s.gender,
         c.class_name as "className",
         sec.section_name as "sectionName",
-        e.roll_number as "rollNumber",
-        s.profile_image as "profileImage"
+        en.roll_no as "rollNumber",
+        s.profile_photo_url as "profileImage"
       FROM students s
-      LEFT JOIN student_enrollments e ON s.student_id = e.student_id AND e.is_active = true
-      LEFT JOIN classes c ON e.class_id = c.class_id
-      LEFT JOIN sections sec ON e.section_id = sec.section_id
+      LEFT JOIN enrollments en ON en.student_id = s.student_id
+      LEFT JOIN academic_years ay ON ay.academic_year_id = en.academic_year_id AND ay.is_current = true
+      LEFT JOIN classes c ON en.class_id = c.class_id
+      LEFT JOIN sections sec ON en.section_id = sec.section_id
       WHERE s.school_id = $1 AND s.user_id = $2
       LIMIT 1
     `;
@@ -239,17 +240,19 @@ export class PortalService {
 
   async getChildren(schoolId: number, userId: number): Promise<any[]> {
     const query = `
-      SELECT 
+      SELECT
         s.student_id as id,
         s.first_name_en || ' ' || s.last_name_en as name,
         c.class_name as "className",
         sec.section_name as "sectionName",
-        e.roll_number as "rollNumber"
+        en.roll_no as "rollNumber"
       FROM students s
-      JOIN guardians g ON s.guardian_id = g.guardian_id
-      LEFT JOIN student_enrollments e ON s.student_id = e.student_id AND e.is_active = true
-      LEFT JOIN classes c ON e.class_id = c.class_id
-      LEFT JOIN sections sec ON e.section_id = sec.section_id
+      JOIN student_guardians sg ON sg.student_id = s.student_id AND sg.is_active = true
+      JOIN guardians g ON g.guardian_id = sg.guardian_id
+      LEFT JOIN enrollments en ON en.student_id = s.student_id
+      LEFT JOIN academic_years ay ON ay.academic_year_id = en.academic_year_id AND ay.is_current = true
+      LEFT JOIN classes c ON en.class_id = c.class_id
+      LEFT JOIN sections sec ON en.section_id = sec.section_id
       WHERE g.user_id = $1 AND s.school_id = $2
     `;
 
@@ -258,11 +261,13 @@ export class PortalService {
 
   async getTotalDue(schoolId: number, userId: number): Promise<number> {
     const query = `
-      SELECT COALESCE(SUM(sf.total_amount - sf.paid_amount), 0) as due
-      FROM student_fees sf
-      JOIN students s ON sf.student_id = s.student_id
-      JOIN guardians g ON s.guardian_id = g.guardian_id
-      WHERE g.user_id = $1 AND sf.school_id = $2
+      SELECT COALESCE(SUM(f.total_amount - f.paid_amount), 0) as due
+      FROM fees f
+      JOIN students s ON s.student_id = f.student_id
+      JOIN student_guardians sg ON sg.student_id = s.student_id AND sg.is_active = true
+      JOIN guardians g ON g.guardian_id = sg.guardian_id
+      WHERE g.user_id = $1 AND f.school_id = $2 AND f.is_active = true
+        AND f.is_fully_paid = false
     `;
 
     const result = await this.databaseService.query(query, [userId, schoolId]);
@@ -275,19 +280,21 @@ export class PortalService {
     childId: number,
   ): Promise<any> {
     const query = `
-      SELECT 
+      SELECT
         s.student_id as id,
         s.first_name_en || ' ' || s.last_name_en as name,
-        s.date_of_birth,
+        s.date_of_birth_ad as "dateOfBirth",
         s.gender,
         c.class_name as "className",
         sec.section_name as "sectionName",
-        e.roll_number as "rollNumber"
+        en.roll_no as "rollNumber"
       FROM students s
-      JOIN guardians g ON s.guardian_id = g.guardian_id
-      LEFT JOIN student_enrollments e ON s.student_id = e.student_id AND e.is_active = true
-      LEFT JOIN classes c ON e.class_id = c.class_id
-      LEFT JOIN sections sec ON e.section_id = sec.section_id
+      JOIN student_guardians sg ON sg.student_id = s.student_id AND sg.is_active = true
+      JOIN guardians g ON g.guardian_id = sg.guardian_id
+      LEFT JOIN enrollments en ON en.student_id = s.student_id
+      LEFT JOIN academic_years ay ON ay.academic_year_id = en.academic_year_id AND ay.is_current = true
+      LEFT JOIN classes c ON en.class_id = c.class_id
+      LEFT JOIN sections sec ON en.section_id = sec.section_id
       WHERE g.user_id = $1 AND s.school_id = $2 AND s.student_id = $3
     `;
 

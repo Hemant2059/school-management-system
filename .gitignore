@@ -49,6 +49,8 @@ temp/
 # Database
 *.sql
 *.sqlite
+# Track versioned SQL migrations (restore/verify tenancy chain in CI)
+!src/database/migrations/*.sql
 
 # Secrets (do NOT commit)
 credentials.json

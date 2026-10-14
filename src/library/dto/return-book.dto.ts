@@ -1,4 +1,13 @@
-import { IsNotEmpty, IsInt, IsOptional, IsNumber } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsInt,
+  IsOptional,
+  IsNumber,
+  IsString,
+  IsDate,
+} from 'class-validator';
+import { Type } from 'class-transformer';
+import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class ReturnBookDto {
   @IsNotEmpty()
@@ -11,4 +20,21 @@ export class ReturnBookDto {
 
   @IsOptional()
   readonly daysOverdue?: number;
+
+  @ApiPropertyOptional({
+    description: 'Return date in AD (provided by frontend)',
+    example: '2024-06-01',
+  })
+  @IsOptional()
+  @IsDate()
+  @Type(() => Date)
+  readonly returnDate?: Date;
+
+  @ApiPropertyOptional({
+    description: 'Return date in BS (provided by frontend)',
+    example: '2081-02-19',
+  })
+  @IsOptional()
+  @IsString()
+  readonly returnDateBs?: string;
 }

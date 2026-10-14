@@ -5,7 +5,6 @@ import { ExtractJwt, Strategy } from 'passport-jwt';
 import { FastifyRequest } from 'fastify';
 import { UserService } from '../user/user.service';
 import { DatabaseService } from '../database/database.service';
-import { UserSession } from '../user/entities/interfaces';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {

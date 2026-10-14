@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Logger,
 } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 
@@ -102,6 +103,7 @@ export interface CreateAdmissionDto {
 
 @Injectable()
 export class AdmissionService {
+  private readonly logger = new Logger(AdmissionService.name);
   constructor(private databaseService: DatabaseService) {}
 
   async createApplication(
@@ -262,94 +264,206 @@ export class AdmissionService {
       );
     }
 
-    await this.databaseService.query('BEGIN');
-
-    const tempPassword = Math.random().toString(36).slice(-8);
-    const hashedPassword = this.hashPassword(tempPassword);
-    const username = `student${Date.now()}`;
-
-    const userQuery = `
-      INSERT INTO users (school_id, username, email, password, user_type, is_active, must_change_password, is_verified, created_at)
-      VALUES ($1, $2, $3, $4, 'STUDENT', true, true, true, NOW())
-      RETURNING user_id
-    `;
-
-    const userResult = await this.databaseService.query(userQuery, [
-      schoolId,
-      username,
-      application.email || `${username}@sms.local`,
-      hashedPassword,
-    ]);
-
-    const studentQuery = `
-      INSERT INTO students (
-        school_id, user_id, admission_number, student_code, first_name_en, middle_name_en, last_name_en,
-        first_name_np, middle_name_np, last_name_np,
-        gender, date_of_birth, nationality, phone, mobile, email,
-        father_name, father_phone, mother_name, mother_phone,
-        province_id, district_id, municipality_id, ward_number, address,
-        profile_image, is_active, created_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, true, NOW())
-      RETURNING student_id
-    `;
-
-    const studentCode = await this.generateStudentCode(schoolId);
-
+    // One real transaction (pool.query('BEGIN') would pin the BEGIN to a
+    // random pooled connection and commit nothing — this uses a client).
+    // NOTE: application rows are snake_case (raw DB); app alias below.
     const app = application as any;
-    const studentResult = await this.databaseService.query(studentQuery, [
-      schoolId,
-      userResult[0].user_id,
-      studentCode,
-      studentCode,
-      app.first_name,
-      app.middle_name,
-      app.last_name,
-      app.first_name_np,
-      app.middle_name_np,
-      app.last_name_np,
-      app.gender,
-      app.date_of_birth,
-      app.nationality,
-      app.phone,
-      app.mobile,
-      app.email,
-      app.father_name,
-      app.father_phone,
-      app.mother_name,
-      app.mother_phone,
-      app.province_id,
-      app.district_id,
-      app.municipality_id,
-      app.ward_number,
-      app.address,
-      app.photo_url,
-    ]);
+    const enrolled = await this.databaseService.transaction(async (client) => {
+      const tempPassword = Math.random().toString(36).slice(-8);
+      const hashedPassword = this.hashPassword(tempPassword);
+      const username = `student${Date.now()}`;
 
-    const enrollmentQuery = `
-      INSERT INTO student_enrollments (student_id, school_id, class_id, section_id, academic_year, is_active, enrolled_at)
-      VALUES ($1, $2, $3, $4, $5, true, NOW())
-    `;
+      const userRows = await client.query(
+        `INSERT INTO users (school_id, username, email, password, user_type, is_active, must_change_password, is_verified, created_at)
+         VALUES ($1, $2, $3, $4, 'STUDENT', true, true, true, NOW())
+         RETURNING user_id`,
+        [
+          schoolId,
+          username,
+          application.email || `${username}@sms.local`,
+          hashedPassword,
+        ],
+      );
 
-    const academicYear = new Date().getFullYear();
-    await this.databaseService.query(enrollmentQuery, [
-      studentResult[0].student_id,
-      schoolId,
-      app.class_id,
-      sectionId,
-      academicYear,
-    ]);
+      // Placement needs an active session and a section: honest errors beat
+      // invented placements.
+      const session = await client.query(
+        `SELECT academic_year_id FROM academic_years
+          WHERE school_id = $1 AND is_current = true LIMIT 1`,
+        [schoolId],
+      );
+      if (!session.rows[0]) {
+        throw new BadRequestException(
+          'No active academic session — create one before enrolling',
+        );
+      }
+      let resolvedSectionId = sectionId;
+      if (!resolvedSectionId) {
+        const firstSection = await client.query(
+          `SELECT section_id FROM sections WHERE class_id = $1 ORDER BY section_id LIMIT 1`,
+          [app.class_id],
+        );
+        if (!firstSection.rows[0]) {
+          throw new BadRequestException(
+            'Class has no sections — create one before enrolling',
+          );
+        }
+        resolvedSectionId = firstSection.rows[0].section_id;
+      }
+      const rollRow = await client.query(
+        `SELECT COALESCE(MAX(roll_no), 0) as max_roll FROM enrollments
+          WHERE academic_year_id = $1 AND class_id = $2 AND section_id = $3`,
+        [session.rows[0].academic_year_id, app.class_id, resolvedSectionId],
+      );
+      const rollNo = parseInt(rollRow.rows[0]?.max_roll || '0', 10) + 1;
 
-    await this.databaseService.query('COMMIT');
+      const studentCode = await this.generateStudentCode(schoolId);
+      const canonicalGender =
+        (
+          { male: 'MALE', female: 'FEMALE', other: 'OTHER' } as Record<
+            string,
+            string
+          >
+        )[String(app.gender).toLowerCase()] || 'OTHER';
 
-    await this.databaseService.query(
-      'UPDATE online_admissions SET status = $1 WHERE id = $2',
-      ['enrolled', id],
+      const studentRows = await client.query(
+        `INSERT INTO students (
+           school_id, user_id, admission_number, student_code,
+           first_name_en, middle_name_en, last_name_en,
+           first_name_np, middle_name_np, last_name_np,
+           gender, date_of_birth_ad, date_of_birth_bs, nationality,
+           caste_ethnicity, student_email, student_mobile,
+           father_name, father_phone, mother_name, mother_phone,
+           permanent_province_id, permanent_district_id, permanent_municipality_id,
+           permanent_ward_no, permanent_tole_en, profile_photo_url,
+           current_status, is_active
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, 'ACTIVE', true)
+         RETURNING student_id`,
+        [
+          schoolId,
+          userRows.rows[0].user_id,
+          studentCode,
+          studentCode,
+          app.first_name,
+          app.middle_name,
+          app.last_name,
+          app.first_name_np,
+          app.middle_name_np,
+          app.last_name_np,
+          canonicalGender,
+          app.date_of_birth,
+          app.date_of_birth_bs,
+          app.nationality,
+          app.caste,
+          app.email,
+          app.mobile || app.phone,
+          app.father_name,
+          app.father_phone,
+          app.mother_name,
+          app.mother_phone,
+          app.province_id,
+          app.district_id,
+          app.municipality_id,
+          app.ward_number,
+          app.address,
+          app.photo_url,
+        ],
+      );
+
+      await client.query(
+        `INSERT INTO enrollments (school_id, student_id, academic_year_id, class_id, section_id, roll_no, status, enrolled_on_ad)
+         VALUES ($1, $2, $3, $4, $5, $6, 'ENROLLED', CURRENT_DATE)`,
+        [
+          schoolId,
+          studentRows.rows[0].student_id,
+          session.rows[0].academic_year_id,
+          app.class_id,
+          resolvedSectionId,
+          rollNo,
+        ],
+      );
+
+      await client.query(
+        'UPDATE online_admissions SET status = $1 WHERE id = $2 AND school_id = $3',
+        ['enrolled', id, schoolId],
+      );
+
+      return {
+        studentId: studentRows.rows[0].student_id,
+        userId: userRows.rows[0].user_id,
+      };
+    });
+
+    // Best-effort guardian linkage AFTER commit: auxiliary records must never
+    // roll back an enrollment (nested failure would abort the txn otherwise).
+    try {
+      await this.linkApplicationGuardian(
+        schoolId,
+        enrolled.studentId,
+        application as any,
+      );
+    } catch (error: any) {
+      this.logger.warn(`Guardian linkage skipped: ${error.message}`);
+    }
+
+    return enrolled;
+  }
+
+  /**
+   * Creates one guardian from the application (explicit guardian first,
+   * then father, then mother) and links it as primary fee-payer. Requires a
+   * valid Nepali mobile; otherwise skips loudly via the caller's warning.
+   */
+  private async linkApplicationGuardian(
+    schoolId: number,
+    studentId: number,
+    app: any,
+  ): Promise<void> {
+    const name =
+      app.guardian_name || app.father_name || app.mother_name || null;
+    const phone =
+      app.guardian_phone || app.father_phone || app.mother_phone || null;
+    if (!name || !phone || !/^(98|97|96)[0-9]{8}$/.test(phone)) {
+      throw new Error('no mappable guardian contact on application');
+    }
+    const parts = String(name).trim().split(/\s+/);
+    const guardianCode = `GRD-ADM-${app.application_no || Date.now()}`;
+    const existing = await this.databaseService.queryOne<{
+      guardian_id: number;
+    }>(
+      `SELECT guardian_id FROM guardians WHERE mobile = $1 AND school_id = $2 AND is_active = true`,
+      [phone, schoolId],
     );
-
-    return {
-      studentId: studentResult[0].student_id,
-      userId: userResult[0].user_id,
-    };
+    let guardianId = existing?.guardian_id;
+    if (!guardianId) {
+      const created = await this.databaseService.insert<{
+        guardian_id: number;
+      }>(
+        `INSERT INTO guardians (school_id, guardian_code, first_name_en, last_name_en, mobile, relation_to_student, occupation)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         RETURNING guardian_id`,
+        [
+          schoolId,
+          guardianCode,
+          parts[0],
+          parts.slice(1).join(' ') || parts[0],
+          phone,
+          (app.guardian_relation || 'GUARDIAN').toUpperCase(),
+          app.father_occupation || app.mother_occupation || null,
+        ],
+      );
+      guardianId = created.guardian_id;
+    }
+    await this.databaseService.query(
+      `INSERT INTO student_guardians (student_id, guardian_id, relationship_type, is_primary, is_emergency_contact, is_fee_payer, is_active)
+       VALUES ($1, $2, $3, true, true, true, true)
+       ON CONFLICT (student_id, guardian_id) DO NOTHING`,
+      [
+        studentId,
+        guardianId,
+        (app.guardian_relation || 'GUARDIAN').toUpperCase(),
+      ],
+    );
   }
 
   async deleteApplication(id: number, schoolId: number): Promise<void> {

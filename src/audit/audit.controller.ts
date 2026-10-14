@@ -165,8 +165,9 @@ export class AuditController {
   findByEntity(
     @Param('entityType') entityType: string,
     @Param('entityId') entityId: number,
+    @Query('schoolId') schoolId?: number,
   ) {
-    return this.auditService.findByEntity(entityType, entityId);
+    return this.auditService.findByEntity(entityType, entityId, schoolId);
   }
 
   @Get('user/:userId')
@@ -203,8 +204,12 @@ export class AuditController {
       },
     },
   })
-  findByUser(@Param('userId') userId: number, @Query('limit') limit?: number) {
-    return this.auditService.findByUser(userId, limit);
+  findByUser(
+    @Param('userId') userId: number,
+    @Query('limit') limit?: number,
+    @Query('schoolId') schoolId?: number,
+  ) {
+    return this.auditService.findByUser(userId, limit, schoolId);
   }
 
   @Get(':id')
@@ -230,7 +235,7 @@ export class AuditController {
       },
     },
   })
-  findOne(@Param('id') id: number) {
-    return this.auditService.findById(id);
+  findOne(@Param('id') id: number, @Query('schoolId') schoolId?: number) {
+    return this.auditService.findById(id, schoolId);
   }
 }

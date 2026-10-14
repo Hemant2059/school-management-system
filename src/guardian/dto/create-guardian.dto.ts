@@ -5,11 +5,13 @@ import {
   IsOptional,
   IsInt,
   IsEmail,
+  IsDate,
   Matches,
   IsNumber,
   Min,
   Max,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateGuardianDto {
@@ -31,6 +33,14 @@ export class CreateGuardianDto {
   @IsNotEmpty()
   @IsNumber()
   readonly schoolId: number;
+
+  @ApiPropertyOptional({
+    description: 'Linked login user ID (enables parent-scoped data access)',
+    example: 42,
+  })
+  @IsOptional()
+  @IsNumber()
+  readonly userId?: number;
 
   @ApiPropertyOptional({
     description: 'Guardian middle name in English',
@@ -195,6 +205,50 @@ export class CreateGuardianDto {
   @IsOptional()
   @Matches(/^(98|97|96)\d{8}$/, { message: 'Invalid Nepali mobile number' })
   readonly whatsappNumber?: string;
+
+  @ApiPropertyOptional({
+    description: 'Citizenship number',
+    example: '27-01-70-01234',
+  })
+  @IsOptional()
+  @IsString()
+  readonly citizenshipNumber?: string;
+
+  @ApiPropertyOptional({
+    description: 'Citizenship issuing district',
+    example: 'Kathmandu',
+  })
+  @IsOptional()
+  @IsString()
+  readonly citizenshipIssueDistrict?: string;
+
+  @ApiPropertyOptional({
+    description: 'Citizenship issue date (AD)',
+    example: '2020-06-10',
+  })
+  @IsOptional()
+  @IsDate()
+  @Type(() => Date)
+  readonly citizenshipIssueDate?: Date;
+
+  @ApiPropertyOptional({
+    description: 'Citizenship issue date (BS) – valid YYYY-MM-DD',
+    example: '2077-02-28',
+  })
+  @IsOptional()
+  @IsString()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/, {
+    message: 'BS date must be YYYY-MM-DD (e.g. 2077-02-28)',
+  })
+  readonly citizenshipIssueDateBs?: string;
+
+  @ApiPropertyOptional({
+    description: 'National Identity Number (Rastriya Parichaya Patra)',
+    example: '1234567890',
+  })
+  @IsOptional()
+  @IsString()
+  readonly nin?: string;
 
   // === Address (English) - Nepal provinces 1-7 ===
   @ApiPropertyOptional({

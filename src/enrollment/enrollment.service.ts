@@ -15,6 +15,7 @@ export interface Enrollment {
   section_id: number | null;
   academic_year: string;
   roll_number: number | null;
+  board_exam_registration?: string | null;
   enrollment_date: Date | null;
   enrollment_date_bs: string | null;
   is_current: boolean;
@@ -43,15 +44,22 @@ export class EnrollmentService {
       );
     }
 
-    const [rollResult] = await this.db.query<{ max_roll: string }>(
-      `SELECT MAX(roll_number) as max_roll FROM student_enrollments WHERE class_id = $1 AND academic_year = $2`,
-      [createDto.classId, createDto.academicYear],
-    );
-    const nextRoll = parseInt(rollResult?.max_roll || '0', 10) + 1;
+    const requestedRoll =
+      createDto.rollNumber !== undefined && /^\d+$/.test(createDto.rollNumber)
+        ? parseInt(createDto.rollNumber, 10)
+        : null;
+    let nextRoll = requestedRoll;
+    if (nextRoll === null) {
+      const [rollResult] = await this.db.query<{ max_roll: string }>(
+        `SELECT MAX(roll_number) as max_roll FROM student_enrollments WHERE class_id = $1 AND academic_year = $2`,
+        [createDto.classId, createDto.academicYear],
+      );
+      nextRoll = parseInt(rollResult?.max_roll || '0', 10) + 1;
+    }
 
     return this.db.insert<Enrollment>(
-      `INSERT INTO student_enrollments (school_id, student_id, class_id, section_id, academic_year, roll_number, enrollment_date, is_current, status)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, true, 'ACTIVE')
+      `INSERT INTO student_enrollments (school_id, student_id, class_id, section_id, academic_year, roll_number, enrollment_date, is_current, status, board_exam_registration)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, true, $8, $9)
        RETURNING *`,
       [
         createDto.schoolId,
@@ -61,6 +69,8 @@ export class EnrollmentService {
         createDto.academicYear,
         nextRoll,
         createDto.enrollmentDate || null,
+        createDto.status || 'ACTIVE',
+        createDto.boardExamRegistration || null,
       ],
     );
   }
@@ -127,8 +137,9 @@ export class EnrollmentService {
 
     const fieldMap: Record<string, string> = {
       sectionId: 'section_id',
-      rollNumber: 'roll_number',
       status: 'status',
+      boardExamRegistration: 'board_exam_registration',
+      isCurrent: 'is_current',
     };
 
     for (const [key, dbField] of Object.entries(fieldMap)) {
@@ -188,6 +199,8 @@ export class EnrollmentService {
       studentId,
       schoolId,
       classId: newClassId,
+      sectionId:
+        _newSectionId !== undefined ? Number(_newSectionId) : undefined,
       academicYear: String(academicYear),
       enrollmentDate: new Date(),
     });

@@ -7,8 +7,6 @@ import { DatabaseService } from '../database/database.service';
 import {
   FeeCategory as DbFeeCategory,
   FeeStructure,
-  Fee,
-  Payment,
   LateFineRule,
   StudentBalance,
   FeeWaiverRequest,
@@ -17,7 +15,6 @@ import {
   EnhancedPayment,
   EnhancedFee,
 } from '../database/entities/interfaces';
-import { NepaliDateUtil } from '../utils/nepali-date.util';
 
 export interface FeeCategory extends DbFeeCategory {
   category_code?: string;
@@ -54,7 +51,7 @@ export class FeeService {
 
   async findFeeCategory(id: number): Promise<FeeCategory> {
     const category = await this.db.queryOne<FeeCategory>(
-      `SELECT * FROM fee_categories WHERE category_id = $1 AND is_active = true`,
+      `SELECT * FROM fee_categories WHERE id = $1 AND is_active = true`,
       [id],
     );
 
@@ -68,7 +65,7 @@ export class FeeService {
   async removeFeeCategory(id: number): Promise<void> {
     await this.findFeeCategory(id);
     await this.db.query(
-      `UPDATE fee_categories SET is_active = false, deleted_at = NOW() WHERE category_id = $1`,
+      `UPDATE fee_categories SET is_active = false, deleted_at = NOW() WHERE id = $1`,
       [id],
     );
   }
@@ -212,6 +209,7 @@ export class FeeService {
       branchName?: string;
       chequeNumber?: string;
       chequeDate?: Date;
+      chequeDateBs?: string;
       referenceNumber?: string;
       remarks?: string;
       idempotencyKey?: string;
@@ -229,8 +227,8 @@ export class FeeService {
     }
 
     const payment = await this.db.insert<EnhancedPayment>(
-      `INSERT INTO payments (school_id, fee_id, invoice_id, student_id, amount, payment_date, payment_date_bs, payment_method, transaction_id, transaction_uuid, gateway_name, received_by, bank_name, branch_name, cheque_number, cheque_date, reference_number, remarks, idempotency_key, is_verified)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, false)
+      `INSERT INTO payments (school_id, fee_id, invoice_id, student_id, amount, payment_date, payment_date_bs, payment_method, transaction_id, transaction_uuid, gateway_name, received_by, bank_name, branch_name, cheque_number, cheque_date, cheque_date_bs, reference_number, remarks, idempotency_key, is_verified)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, false)
        RETURNING *`,
       [
         createDto.schoolId,
@@ -239,8 +237,8 @@ export class FeeService {
         createDto.studentId,
         createDto.amount,
         createDto.paymentDate,
-        createDto.paymentDateBs ||
-          NepaliDateUtil.adToBs(createDto.paymentDate).bsDate,
+        // BS dates come from the frontend — the backend stores them as given.
+        createDto.paymentDateBs || null,
         createDto.paymentMethod,
         createDto.transactionId || null,
         createDto.transactionUuid || null,
@@ -250,6 +248,7 @@ export class FeeService {
         createDto.branchName || null,
         createDto.chequeNumber || null,
         createDto.chequeDate || null,
+        createDto.chequeDateBs || null,
         createDto.referenceNumber || null,
         createDto.remarks || null,
         createDto.idempotencyKey || null,
@@ -761,13 +760,14 @@ export class FeeService {
     studentId: number,
     academicYear?: string,
   ): Promise<EnhancedPayment[]> {
-    let query = `SELECT p.* FROM payments p 
+    let query = `SELECT p.* FROM payments p
+                 LEFT JOIN fees f ON f.fee_id = p.fee_id
                  WHERE p.student_id = $1`;
     const params: any[] = [studentId];
 
     if (academicYear) {
       params.push(academicYear);
-      query += ` AND p.academic_year = $${params.length}`;
+      query += ` AND f.academic_year = $${params.length}`;
     }
 
     query += ` ORDER BY p.payment_date DESC`;

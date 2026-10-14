@@ -31,7 +31,7 @@ export class TimetableService {
 
   async create(createDto: CreateTimetableDto): Promise<Timetable> {
     const conflict = await this.db.queryOne<Timetable>(
-      `SELECT timetable_id FROM timetables 
+      `SELECT id FROM timetables 
        WHERE school_id = $1 AND class_id = $2 AND (section_id = $3 OR ($3 IS NULL AND section_id IS NULL))
        AND day_of_week = $4 AND period_number = $5 AND is_active = true AND deleted_at IS NULL`,
       [
@@ -89,7 +89,7 @@ export class TimetableService {
   }
 
   async findOne(id: number, schoolId?: number): Promise<Timetable> {
-    let query = `SELECT * FROM timetables WHERE timetable_id = $1 AND deleted_at IS NULL`;
+    let query = `SELECT * FROM timetables WHERE id = $1 AND deleted_at IS NULL`;
     const params: any[] = [id];
 
     if (schoolId) {
@@ -138,7 +138,7 @@ export class TimetableService {
 
     params.push(id);
     await this.db.update(
-      `UPDATE timetables SET ${updates.join(', ')} WHERE timetable_id = $${paramIndex}`,
+      `UPDATE timetables SET ${updates.join(', ')} WHERE id = $${paramIndex}`,
       params,
     );
 
@@ -148,7 +148,7 @@ export class TimetableService {
   async remove(id: number, schoolId: number): Promise<void> {
     await this.findOne(id, schoolId);
     await this.db.update(
-      `UPDATE timetables SET is_active = false, deleted_at = NOW() WHERE timetable_id = $1`,
+      `UPDATE timetables SET is_active = false, deleted_at = NOW() WHERE id = $1`,
       [id],
     );
   }

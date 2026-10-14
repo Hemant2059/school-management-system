@@ -131,11 +131,11 @@ export class UserService {
   async updateLastLoginInfo(
     userId: number,
     ip: string,
-    userAgent: string,
+    _userAgent: string,
   ): Promise<void> {
     await this.db.query(
-      `UPDATE users SET last_login_at = NOW(), last_login_ip = $2, last_login_agent = $3 WHERE user_id = $1`,
-      [userId, ip, userAgent],
+      `UPDATE users SET last_login_at = NOW(), last_login_ip = $2 WHERE user_id = $1`,
+      [userId, ip],
     );
   }
 

@@ -19,7 +19,6 @@ import {
   ApiParam,
   ApiQuery,
   ApiBody,
-  ApiExtraModels,
 } from '@nestjs/swagger';
 import { GuardianService } from './guardian.service';
 import { CreateGuardianDto } from './dto/create-guardian.dto';

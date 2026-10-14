@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsInt, IsDate, IsString, Min } from 'class-validator';
+import { IsNotEmpty, IsInt, IsDate, IsString, IsOptional, Min } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty } from '@nestjs/swagger';
 
@@ -28,6 +28,22 @@ export class CreateLeaveRequestDto {
   @IsDate()
   @Type(() => Date)
   readonly endDate: Date;
+
+  @ApiProperty({
+    description: 'Start date of leave in BS (provided by frontend)',
+    example: '2081-01-28',
+  })
+  @IsOptional()
+  @IsString()
+  readonly startDateBs?: string;
+
+  @ApiProperty({
+    description: 'End date of leave in BS (provided by frontend)',
+    example: '2081-01-30',
+  })
+  @IsOptional()
+  @IsString()
+  readonly endDateBs?: string;
 
   @ApiProperty({
     description: 'Number of days requested',

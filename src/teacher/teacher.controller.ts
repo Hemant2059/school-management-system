@@ -18,7 +18,6 @@ import {
   ApiParam,
   ApiQuery,
   ApiBody,
-  ApiExtraModels,
 } from '@nestjs/swagger';
 import { TeacherService } from './teacher.service';
 import { CreateTeacherDto } from './dto/create-teacher.dto';

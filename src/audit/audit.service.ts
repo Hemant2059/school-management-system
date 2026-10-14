@@ -132,27 +132,38 @@ export class AuditService {
     return { data, total };
   }
 
-  async findById(id: number): Promise<AuditLog | null> {
+  async findById(id: number, schoolId?: number): Promise<AuditLog | null> {
     return this.db.queryOne<AuditLog>(
-      `SELECT * FROM audit_logs WHERE audit_log_id = $1`,
-      [id],
+      schoolId
+        ? `SELECT * FROM audit_logs WHERE id = $1 AND school_id = $2`
+        : `SELECT * FROM audit_logs WHERE id = $1`,
+      schoolId ? [id, schoolId] : [id],
     );
   }
 
   async findByEntity(
     entityType: string,
     entityId: number,
+    schoolId?: number,
   ): Promise<AuditLog[]> {
     return this.db.query<AuditLog>(
-      `SELECT * FROM audit_logs WHERE entity_type = $1 AND entity_id = $2 ORDER BY created_at DESC`,
-      [entityType, entityId],
+      schoolId
+        ? `SELECT * FROM audit_logs WHERE entity_type = $1 AND entity_id = $2 AND school_id = $3 ORDER BY created_at DESC`
+        : `SELECT * FROM audit_logs WHERE entity_type = $1 AND entity_id = $2 ORDER BY created_at DESC`,
+      schoolId ? [entityType, entityId, schoolId] : [entityType, entityId],
     );
   }
 
-  async findByUser(userId: number, limit = 50): Promise<AuditLog[]> {
+  async findByUser(
+    userId: number,
+    limit = 50,
+    schoolId?: number,
+  ): Promise<AuditLog[]> {
     return this.db.query<AuditLog>(
-      `SELECT * FROM audit_logs WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2`,
-      [userId, limit],
+      schoolId
+        ? `SELECT * FROM audit_logs WHERE user_id = $1 AND school_id = $2 ORDER BY created_at DESC LIMIT $3`
+        : `SELECT * FROM audit_logs WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2`,
+      schoolId ? [userId, schoolId, limit] : [userId, limit],
     );
   }
 

@@ -123,7 +123,7 @@ export class SubjectService {
     group: string,
   ): Promise<Subject[]> {
     return this.db.query<Subject>(
-      `SELECT * FROM subjects WHERE school_id = $1 AND subject_type = $2 AND is_active = true ORDER BY subject_name_en ASC`,
+      `SELECT * FROM subjects WHERE school_id = $1 AND subject_group = $2 AND is_active = true ORDER BY subject_name_en ASC`,
       [schoolId, group],
     );
   }

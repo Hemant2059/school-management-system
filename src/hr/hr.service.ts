@@ -7,7 +7,6 @@ import { DatabaseService } from '../database/database.service';
 import { CreateStaffDto } from './dto/create-staff.dto';
 import { ProcessPayrollDto } from './dto/process-payroll.dto';
 import { CreateLeaveRequestDto } from './dto/create-leave-request.dto';
-import { NepaliDateUtil } from '../utils/nepali-date.util';
 import { NepaliNumberUtil } from '../utils/nepali-number.util';
 
 export interface Staff {
@@ -108,9 +107,9 @@ export class HrService {
 
     const result = await this.db.insert<Staff>(
       `INSERT INTO staff (
-        school_id, user_id, staff_code, first_name, last_name, email, mobile,
+        school_id, user_id, staff_code, employee_id, first_name, last_name, email, mobile,
         department, designation, employment_type, joining_date, current_status, is_active
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      ) VALUES ($1, $2, $3, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
       RETURNING *`,
       [
         createDto.schoolId,
@@ -241,8 +240,11 @@ export class HrService {
 
     const netSalary = grossSalary - totalDeductions;
 
-    const paymentDate = new Date();
-    const paymentDateBs = NepaliDateUtil.adToBs(paymentDate).bsDate;
+    // Both dates come from the frontend — the backend stores them as given.
+    const paymentDate = processDto.paymentDate
+      ? new Date(processDto.paymentDate)
+      : new Date();
+    const paymentDateBs = processDto.paymentDateBs || null;
 
     const result = await this.db.insert<Payroll>(
       `INSERT INTO payrolls (
@@ -251,7 +253,7 @@ export class HrService {
         other_allowances, gross_salary, cit_deduction, ssf_employee_contribution,
         ssf_employer_contribution, provident_fund, tax_deduction, other_deductions,
         total_deductions, net_salary, pan_number, is_tax_exempt, is_paid
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
       RETURNING *`,
       [
         processDto.schoolId,
@@ -306,8 +308,9 @@ export class HrService {
       throw new BadRequestException('End date cannot be before start date');
     }
 
-    const startBs = NepaliDateUtil.adToBs(createDto.startDate).bsDate;
-    const endBs = NepaliDateUtil.adToBs(createDto.endDate).bsDate;
+    // BS dates come from the frontend — the backend stores them as given.
+    const startBs = createDto.startDateBs || null;
+    const endBs = createDto.endDateBs || null;
 
     const result = await this.db.insert<LeaveRequest>(
       `INSERT INTO leave_requests (
@@ -413,7 +416,7 @@ export class HrService {
       payrollId,
       staffName: getFullName('en'),
       staffNameNp: getFullName('np'),
-      position: staff.position,
+      position: staff.designation,
       salaryMonth: payroll.salary_month_bs,
       paymentDate: payroll.payment_date,
       paymentDateBs: payroll.payment_date_bs,

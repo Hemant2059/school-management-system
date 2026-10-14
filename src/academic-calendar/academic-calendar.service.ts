@@ -2,7 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { DatabaseService } from '../database/database.service';
 
 export interface AcademicCalendar {
-  calendar_id: number;
+  id: number;
   school_id: number;
   academic_year: string;
   title: string;
@@ -86,7 +86,7 @@ export class AcademicCalendarService {
 
   async findById(id: number, schoolId: number): Promise<AcademicCalendar> {
     const event = await this.db.queryOne<AcademicCalendar>(
-      `SELECT * FROM academic_calendars WHERE calendar_id = $1 AND school_id = $2 AND is_active = true`,
+      `SELECT * FROM academic_calendars WHERE id = $1 AND school_id = $2 AND is_active = true`,
       [id, schoolId],
     );
 
@@ -118,7 +118,7 @@ export class AcademicCalendarService {
         is_exam = COALESCE($11, is_exam),
         is_event = COALESCE($12, is_event),
         updated_at = NOW()
-       WHERE calendar_id = $1 AND school_id = $13`,
+       WHERE id = $1 AND school_id = $13`,
       [
         id,
         dto.title || null,
@@ -143,8 +143,8 @@ export class AcademicCalendarService {
     await this.findById(id, schoolId);
 
     await this.db.query(
-      `UPDATE academic_calendars SET is_active = false, updated_at = NOW() WHERE calendar_id = $1`,
-      [id],
+      `UPDATE academic_calendars SET is_active = false, updated_at = NOW() WHERE id = $1 AND school_id = $2`,
+      [id, schoolId],
     );
   }
 

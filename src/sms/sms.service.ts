@@ -204,7 +204,7 @@ export class SmsService {
       dto.targetType === 'STAFF'
     ) {
       const staff = await this.db.query(
-        `SELECT mobile FROM staff WHERE school_id = $1 AND is_active = true AND mobile IS NOT NULL`,
+        `SELECT phone AS mobile FROM staff WHERE school_id = $1 AND is_active = true AND phone IS NOT NULL`,
         [schoolId],
       );
       recipients = [...recipients, ...staff.map((s: any) => s.mobile)];
@@ -230,11 +230,13 @@ export class SmsService {
     },
   ): Promise<SmsTemplate> {
     return this.db.insert<SmsTemplate>(
-      `INSERT INTO sms_templates (school_id, template_name, template_code, message_en, message_np, is_active)
-       VALUES ($1, $2, $3, $4, $5, true)
+      `INSERT INTO sms_templates (school_id, name, template_text, template_name, template_code, message_en, message_np, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, true)
        RETURNING *`,
       [
         schoolId,
+        dto.templateName,
+        dto.messageEn,
         dto.templateName,
         dto.templateCode,
         dto.messageEn,

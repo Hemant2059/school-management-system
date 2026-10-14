@@ -110,7 +110,8 @@ export class DocumentService {
   }
 
   async getDocumentById(id: number, schoolId: number): Promise<Document> {
-    const query = 'SELECT * FROM documents WHERE id = $1 AND school_id = $2';
+    const query =
+      'SELECT * FROM documents WHERE document_id = $1 AND school_id = $2';
     const result = await this.databaseService.query(query, [id, schoolId]);
 
     if (!result[0]) {
@@ -122,7 +123,7 @@ export class DocumentService {
 
   async deleteDocument(id: number, schoolId: number): Promise<void> {
     const query =
-      'DELETE FROM documents WHERE id = $1 AND school_id = $2 RETURNING id';
+      'DELETE FROM documents WHERE document_id = $1 AND school_id = $2 RETURNING document_id';
     const result = await this.databaseService.query(query, [id, schoolId]);
 
     if (result.length === 0) {
@@ -160,11 +161,12 @@ export class DocumentService {
     certificateType: string,
   ): Promise<any> {
     const studentQuery = `
-      SELECT s.*, c.class_name, sec.section_name, e.roll_number
+      SELECT s.*, c.class_name, sec.section_name, en.roll_no AS roll_number
       FROM students s
-      LEFT JOIN student_enrollments e ON s.student_id = e.student_id AND e.is_active = true
-      LEFT JOIN classes c ON e.class_id = c.class_id
-      LEFT JOIN sections sec ON e.section_id = sec.section_id
+      LEFT JOIN enrollments en ON en.student_id = s.student_id
+      LEFT JOIN academic_years ay ON ay.academic_year_id = en.academic_year_id AND ay.is_current = true
+      LEFT JOIN classes c ON en.class_id = c.class_id
+      LEFT JOIN sections sec ON en.section_id = sec.section_id
       WHERE s.student_id = $1 AND s.school_id = $2
     `;
 

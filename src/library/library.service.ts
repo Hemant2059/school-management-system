@@ -8,15 +8,14 @@ import { CreateBookDto } from './dto/create-book.dto';
 import { UpdateBookDto } from './dto/update-book.dto';
 import { CreateBookIssueDto } from './dto/create-book-issue.dto';
 import { ReturnBookDto } from './dto/return-book.dto';
-import { NepaliDateUtil } from '../utils/nepali-date.util';
 import { NepaliNumberUtil } from '../utils/nepali-number.util';
 
 export interface Book {
   book_id: number;
   school_id: number;
   isbn: string | null;
-  book_code: string;
-  title: string;
+  book_code: string | null;
+  title_en: string;
   title_np: string | null;
   author: string | null;
   author_np: string | null;
@@ -71,13 +70,14 @@ export class LibraryService {
     }
 
     const result = await this.db.insert<Book>(
-      `INSERT INTO books (school_id, isbn, book_code, title, author, publisher, category, quantity, available_quantity, is_active)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true)
+      `INSERT INTO books (school_id, isbn, book_code, title, title_en, author, publisher, category, total_copies, available_copies, is_active)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, true)
        RETURNING *`,
       [
         createDto.schoolId,
         createDto.isbn,
         createDto.bookCode,
+        createDto.titleEn,
         createDto.titleEn,
         createDto.authorEn,
         createDto.publisherEn,
@@ -103,10 +103,6 @@ export class LibraryService {
     if (bookType) {
       params.push(bookType);
       query += ` AND book_type = $${params.length}`;
-    }
-    if (subject) {
-      params.push(subject);
-      query += ` AND subject = $${params.length}`;
     }
     if (isSeeReference !== undefined) {
       params.push(isSeeReference);
@@ -148,7 +144,8 @@ export class LibraryService {
     let paramIndex = 1;
 
     const fieldMap: { [key: string]: string } = {
-      titleEn: 'title',
+      titleEn: 'title_en',
+      title: 'title',
       titleNp: 'title_np',
       authorEn: 'author',
       authorNp: 'author_np',
@@ -156,9 +153,10 @@ export class LibraryService {
       publisherNp: 'publisher_np',
       isbn: 'isbn',
       bookCode: 'book_code',
+      subject: 'subject',
       bookType: 'category',
       price: 'price',
-      currency: 'currency',
+
       totalCopies: 'total_copies',
     };
 
@@ -199,7 +197,7 @@ export class LibraryService {
   async issueBook(createDto: CreateBookIssueDto): Promise<BookIssue> {
     const book = await this.findOneBook(createDto.bookId, createDto.schoolId);
 
-    if ((book.issued_copies || 0) >= book.total_copies) {
+    if ((book.available_copies ?? 0) <= 0) {
       throw new BadRequestException('No copies available for issue');
     }
 
@@ -212,8 +210,9 @@ export class LibraryService {
       throw new BadRequestException('Student already has this book issued');
     }
 
-    const issueDateBs = NepaliDateUtil.adToBs(createDto.issueDate).bsDate;
-    const dueDateBs = NepaliDateUtil.adToBs(createDto.dueDate).bsDate;
+    // BS dates come from the frontend — the backend stores them as given.
+    const issueDateBs = createDto.issueDateBs || null;
+    const dueDateBs = createDto.dueDateBs || null;
 
     const result = await this.db.insert<BookIssue>(
       `INSERT INTO book_issues (
@@ -237,7 +236,7 @@ export class LibraryService {
     );
 
     await this.db.update(
-      `UPDATE books SET issued_copies = issued_copies + 1 WHERE book_id = $1`,
+      `UPDATE books SET available_copies = GREATEST(available_copies - 1, 0) WHERE book_id = $1`,
       [createDto.bookId],
     );
 
@@ -262,21 +261,24 @@ export class LibraryService {
       throw new BadRequestException('Book already returned');
     }
 
-    const today = new Date();
+    const returnDate = returnDto.returnDate
+      ? new Date(returnDto.returnDate)
+      : new Date();
     const dueDate = new Date(bookIssue.due_date);
     const daysOverdue =
       returnDto.daysOverdue ||
       Math.max(
         0,
         Math.floor(
-          (today.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24),
+          (returnDate.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24),
         ),
       );
 
     const finePerDay = 5;
     const fineAmount = returnDto.fineAmount || daysOverdue * finePerDay;
 
-    const returnDateBs = NepaliDateUtil.adToBs(today).bsDate;
+    // BS date comes from the frontend — the backend stores it as given.
+    const returnDateBs = returnDto.returnDateBs || null;
     const remarks = `Returned after ${daysOverdue} days overdue. Fine: NPR ${fineAmount}`;
 
     const result = await this.db.insert<BookIssue>(
@@ -286,7 +288,7 @@ export class LibraryService {
       WHERE issue_id = $7
       RETURNING *`,
       [
-        today,
+        returnDate,
         returnDateBs,
         fineAmount,
         daysOverdue,
@@ -297,7 +299,7 @@ export class LibraryService {
     );
 
     await this.db.update(
-      `UPDATE books SET issued_copies = GREATEST(issued_copies - 1, 0) WHERE book_id = $1`,
+      `UPDATE books SET available_copies = LEAST(available_copies + 1, total_copies) WHERE book_id = $1`,
       [bookIssue.book_id],
     );
 
@@ -324,14 +326,14 @@ export class LibraryService {
 
   async getSeeReferenceBooks(schoolId: number): Promise<Book[]> {
     return this.db.query<Book>(
-      `SELECT * FROM books WHERE school_id = $1 AND is_see_reference = true AND is_active = true AND deleted_at IS NULL ORDER BY subject ASC, curriculum_level ASC`,
+      `SELECT * FROM books WHERE school_id = $1 AND is_see_reference = true AND is_active = true AND deleted_at IS NULL ORDER BY title_en ASC`,
       [schoolId],
     );
   }
 
   async getNebReferenceBooks(schoolId: number): Promise<Book[]> {
     return this.db.query<Book>(
-      `SELECT * FROM books WHERE school_id = $1 AND is_neb_reference = true AND is_active = true AND deleted_at IS NULL ORDER BY subject ASC, curriculum_level ASC`,
+      `SELECT * FROM books WHERE school_id = $1 AND is_neb_reference = true AND is_active = true AND deleted_at IS NULL ORDER BY title_en ASC`,
       [schoolId],
     );
   }
@@ -349,8 +351,8 @@ export class LibraryService {
 
     return {
       issueId: bookIssue.issue_id,
-      bookTitle: book.title,
-      bookTitleNp: book.title_np || book.title,
+      bookTitle: book.title_en,
+      bookTitleNp: book.title_np || book.title_en,
       issueDate: bookIssue.issue_date,
       issueDateBs: bookIssue.issue_date_bs,
       returnDate: bookIssue.return_date,

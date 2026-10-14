@@ -6,7 +6,26 @@ import {
 import { DatabaseService } from '../database/database.service';
 import { CreateStudentDto } from './dto/create-student.dto';
 import { UpdateStudentDto } from './dto/update-student.dto';
-import { NepaliDateUtil } from '../utils/nepali-date.util';
+import { EncryptionUtil } from '../utils/encryption.util';
+
+/** PII at rest: identity/financial fields are AES-encrypted (see 014). */
+const enc = (v: string | null | undefined): string | null =>
+  v ? EncryptionUtil.encrypt(v) : null;
+const dec = (v: string | null): string | null =>
+  v ? EncryptionUtil.decrypt(v) : v;
+
+/** Decrypt identity fields on rows leaving the service (tolerates partial selects). */
+function decStudent<T extends Record<string, any>>(row: T): T {
+  if (!row || typeof row !== 'object') return row;
+  for (const k of [
+    'citizenship_number',
+    'birth_certificate_number',
+    'nin',
+  ] as const) {
+    if (k in row) (row as any)[k] = dec(row[k] ?? null);
+  }
+  return row;
+}
 import { GOVT_FREE_SEAT_QUOTA_PERCENT } from '../common/constants/nepal.constants';
 import { PageDto } from '../common/dto/page.dto';
 import { PageMetaDto } from '../common/dto/page-meta.dto';
@@ -54,6 +73,17 @@ export interface Student {
   permanent_address_en: string | null;
   permanent_tole_np: string | null;
   permanent_address_np: string | null;
+  // Canonical registry additions (005). dob_bs_snapshot kept as a phantom:
+  // column dropped, interface stays a superset so existing consumers compile.
+  iemis_student_id?: string | null;
+  nin?: string | null;
+  citizenship_issue_district?: string | null;
+  citizenship_issue_date?: Date | null;
+  citizenship_issue_date_bs?: string | null;
+  caste_code?: string | null;
+  has_disability?: boolean | null;
+  disability_type?: string | null;
+  admission_date_bs?: string | null;
   created_by: number | null;
   updated_by: number | null;
   created_at: Date;
@@ -118,27 +148,30 @@ export class StudentService {
       const yearSuffix = new Date().getFullYear().toString();
       const studentCode = `STU-${yearSuffix}-${schoolIdStr}-${String(count + 1).padStart(4, '0')}`;
 
-      let dateOfBirthBs = createStudentDto.dateOfBirthBs;
-      if (!dateOfBirthBs && createStudentDto.dateOfBirthAd) {
-        dateOfBirthBs = NepaliDateUtil.adToBs(
-          createStudentDto.dateOfBirthAd,
-        ).bsDate;
-      }
+      // BS date comes from the frontend — the backend stores it as given.
+      const dateOfBirthBs = createStudentDto.dateOfBirthBs || null;
 
       const displayName = createStudentDto.firstNameNp
         ? `${createStudentDto.firstNameNp} ${createStudentDto.lastNameNp || ''}`.trim()
         : `${createStudentDto.firstNameEn} ${createStudentDto.lastNameEn || ''}`.trim();
 
+      // Canonical caste: validated FK when the raw value maps to the CEHRD
+      // master (code or English name); raw text always kept for display.
+      const casteCode = await this.resolveCasteCode(
+        createStudentDto.casteEthnicity,
+      );
+
       const student = await this.db.insert<Student>(
         `INSERT INTO students (
-        school_id, student_code, admission_number, 
-        admission_date, admission_class_id,
-        first_name_en, middle_name_en, last_name_en, 
-        first_name_np, middle_name_np, last_name_np, display_name, 
-        gender, date_of_birth_ad, date_of_birth_bs, dob_bs_snapshot,
-        student_email, student_mobile, 
+        school_id, student_code, admission_number,
+        admission_date, admission_date_bs, admission_class_id,
+        first_name_en, middle_name_en, last_name_en,
+        first_name_np, middle_name_np, last_name_np, display_name,
+        gender, date_of_birth_ad, date_of_birth_bs,
+        student_email, student_mobile,
         current_status, is_active, is_govt_mandated_free_seat, is_economically_disadvantaged,
-        caste_ethnicity_code, caste_ethnicity, citizenship_number, birth_certificate_number,
+        caste_code, caste_ethnicity, citizenship_number, citizenship_issue_district, citizenship_issue_date, citizenship_issue_date_bs, birth_certificate_number, nin,
+        iemis_student_id, has_disability, disability_type,
         blood_group, religion, mother_tongue,
         permanent_province_id, permanent_district_id, permanent_municipality_id, permanent_ward_no,
         permanent_tole_en, permanent_tole_np,
@@ -146,13 +179,14 @@ export class StudentService {
         temporary_tole_en, temporary_address_en, temporary_tole_np, temporary_address_np,
         created_by, updated_by
       )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52)
        RETURNING *`,
         [
           createStudentDto.schoolId,
           studentCode,
           createStudentDto.admissionNumber,
           createStudentDto.admissionDate || new Date(),
+          createStudentDto.admissionDateBs || null,
           createStudentDto.admissionClassId || 1,
           createStudentDto.firstNameEn,
           createStudentDto.middleNameEn || null,
@@ -164,17 +198,24 @@ export class StudentService {
           createStudentDto.gender,
           createStudentDto.dateOfBirthAd || null,
           dateOfBirthBs || null,
-          dateOfBirthBs || null,
           createStudentDto.studentEmail || null,
           createStudentDto.studentMobile || null,
           createStudentDto.currentStatus || 'ACTIVE',
           true,
           createStudentDto.isGovtMandatedFreeSeat || false,
           false,
+          casteCode,
           createStudentDto.casteEthnicity || null,
-          createStudentDto.casteEthnicity || null,
-          null,
-          null,
+          enc(createStudentDto.citizenshipNumber),
+          createStudentDto.citizenshipIssueDistrict || null,
+          createStudentDto.citizenshipIssueDate || null,
+          createStudentDto.citizenshipIssueDateBs || null,
+          enc(createStudentDto.birthCertificateNumber),
+          enc(createStudentDto.nin),
+          createStudentDto.iemisStudentId || null,
+          createStudentDto.hasDisability || false,
+          createStudentDto.disabilityType || null,
+
           createStudentDto.bloodGroup || null,
           createStudentDto.religion || null,
           createStudentDto.motherTongue || null,
@@ -197,11 +238,31 @@ export class StudentService {
         ],
       );
 
-      return student;
+      return decStudent(student);
     } catch (error) {
       console.error('Student creation error:', error);
       throw error;
     }
+  }
+
+  /**
+   * Maps raw caste input (CEHRD code like '01A' or English name like
+   * 'Chhetri') to a validated caste_code FK. NULL when unmappable — the raw
+   * text is always kept in caste_ethnicity for display/stewardship.
+   */
+  private async resolveCasteCode(
+    raw: string | null | undefined,
+  ): Promise<string | null> {
+    if (!raw || !raw.trim()) return null;
+    const hit = await this.db.queryOne<{ caste_code: string }>(
+      `SELECT caste_code FROM caste_ethnicity_groups
+        WHERE caste_code = $1 OR LOWER(name_en) = LOWER($1) OR LOWER(iemis_group) = LOWER($1)
+        LIMIT 1`,
+      [raw.trim()],
+    );
+    if (hit) return hit.caste_code;
+    if (raw.trim().toLowerCase() === 'brahmin') return '01A';
+    return null;
   }
 
   async findAll(
@@ -209,11 +270,18 @@ export class StudentService {
     getStudentsDto: GetStudentsDto,
   ): Promise<PageDto<Student>> {
     const params: any[] = [schoolId];
+    let sessionCond = `AND ay.is_current = true`;
+    if (getStudentsDto.academicYear) {
+      params.push(getStudentsDto.academicYear);
+      sessionCond = `AND ay.session_name = $${params.length}`;
+    }
     let query = `
       SELECT s.*, 
-             e.class_id, e.section_id, e.roll_number, e.academic_year
+             en.roll_no AS roll_number, ay.session_name AS academic_year, en.class_id, en.section_id
       FROM students s
-      LEFT JOIN student_enrollments e ON s.student_id = e.student_id AND e.school_id = s.school_id
+      LEFT JOIN academic_years ay ON ay.school_id = s.school_id ${sessionCond}
+      LEFT JOIN enrollments en ON en.student_id = s.student_id
+        AND en.academic_year_id = ay.academic_year_id
       WHERE s.school_id = $1 AND s.is_active = true
     `;
 
@@ -227,21 +295,14 @@ export class StudentService {
       query += ` AND s.current_status = $${params.length}`;
     }
 
-    if (getStudentsDto.academicYear) {
-      params.push(getStudentsDto.academicYear);
-      query += ` AND e.academic_year = $${params.length}`;
-    } else if (getStudentsDto.classId || getStudentsDto.sectionId) {
-      query += ` AND e.is_current = true`;
-    }
-
     if (getStudentsDto.classId) {
       params.push(getStudentsDto.classId);
-      query += ` AND e.class_id = $${params.length}`;
+      query += ` AND en.class_id = $${params.length}`;
     }
 
     if (getStudentsDto.sectionId) {
       params.push(getStudentsDto.sectionId);
-      query += ` AND e.section_id = $${params.length}`;
+      query += ` AND en.section_id = $${params.length}`;
     }
 
     const isAscending = getStudentsDto.order === Order.ASC;
@@ -257,10 +318,16 @@ export class StudentService {
     let countQuery = `
       SELECT COUNT(*) as total
       FROM students s
-      LEFT JOIN student_enrollments e ON s.student_id = e.student_id AND e.school_id = s.school_id
+      LEFT JOIN academic_years ay ON ay.school_id = s.school_id ${sessionCond}
+      LEFT JOIN enrollments en ON en.student_id = s.student_id
+        AND en.academic_year_id = ay.academic_year_id
       WHERE s.school_id = $1 AND s.is_active = true
     `;
     const countParams: any[] = [schoolId];
+    // Mirror the academicYear push so $ positions match the main query.
+    if (getStudentsDto.academicYear) {
+      countParams.push(getStudentsDto.academicYear);
+    }
 
     if (getStudentsDto.gender) {
       countParams.push(getStudentsDto.gender);
@@ -270,25 +337,20 @@ export class StudentService {
       countParams.push(getStudentsDto.currentStatus);
       countQuery += ` AND s.current_status = $${countParams.length}`;
     }
-    if (getStudentsDto.academicYear) {
-      countParams.push(getStudentsDto.academicYear);
-      countQuery += ` AND e.academic_year = $${countParams.length}`;
-    } else if (getStudentsDto.classId || getStudentsDto.sectionId) {
-      countQuery += ` AND e.is_current = true`;
-    }
     if (getStudentsDto.classId) {
       countParams.push(getStudentsDto.classId);
-      countQuery += ` AND e.class_id = $${countParams.length}`;
+      countQuery += ` AND en.class_id = $${countParams.length}`;
     }
     if (getStudentsDto.sectionId) {
       countParams.push(getStudentsDto.sectionId);
-      countQuery += ` AND e.section_id = $${countParams.length}`;
+      countQuery += ` AND en.section_id = $${countParams.length}`;
     }
 
     const [entities, countResult] = await Promise.all([
       this.db.query<Student>(query, params),
       this.db.query<{ total: string }>(countQuery, countParams),
     ]);
+    entities.forEach(decStudent);
 
     const itemCount = parseInt(countResult[0]?.total || '0', 10);
     const pageMetaDto = new PageMetaDto({
@@ -309,7 +371,7 @@ export class StudentService {
       throw new NotFoundException(`Student with ID ${id} not found`);
     }
 
-    return student;
+    return decStudent(student);
   }
 
   async findByAdmissionNumber(
@@ -327,7 +389,7 @@ export class StudentService {
       );
     }
 
-    return student;
+    return decStudent(student);
   }
 
   async update(
@@ -355,13 +417,38 @@ export class StudentService {
       studentMobile: 'student_mobile',
       currentStatus: 'current_status',
       isGovtMandatedFreeSeat: 'is_govt_mandated_free_seat',
+      hasDisability: 'has_disability',
+      disabilityType: 'disability_type',
+      citizenshipNumber: 'citizenship_number',
+      citizenshipIssueDistrict: 'citizenship_issue_district',
+      citizenshipIssueDate: 'citizenship_issue_date',
+      citizenshipIssueDateBs: 'citizenship_issue_date_bs',
+      birthCertificateNumber: 'birth_certificate_number',
+      nin: 'nin',
+      iemisStudentId: 'iemis_student_id',
+      admissionDateBs: 'admission_date_bs',
     };
 
+    // PII at rest: encrypt identity/financial fields on the way in.
+    const piiKeys = new Set([
+      'citizenshipNumber',
+      'nin',
+      'birthCertificateNumber',
+    ]);
     for (const [key, dbField] of Object.entries(fieldMap)) {
       if (updateStudentDto[key as keyof UpdateStudentDto] !== undefined) {
         updates.push(`${dbField} = $${paramIndex++}`);
-        params.push(updateStudentDto[key as keyof UpdateStudentDto]);
+        const value = updateStudentDto[key as keyof UpdateStudentDto];
+        params.push(piiKeys.has(key) ? enc(value as string) : value);
       }
+    }
+
+    // Caste needs FK resolution; raw text is always kept alongside.
+    if (updateStudentDto.casteEthnicity !== undefined) {
+      updates.push(`caste_code = $${paramIndex++}`);
+      params.push(await this.resolveCasteCode(updateStudentDto.casteEthnicity));
+      updates.push(`caste_ethnicity = $${paramIndex++}`);
+      params.push(updateStudentDto.casteEthnicity);
     }
 
     if (updates.length > 0) {
@@ -394,13 +481,14 @@ export class StudentService {
   async searchStudents(schoolId: number, query: string): Promise<Student[]> {
     const normalizedQuery = `%${query.toLowerCase()}%`;
 
-    return this.db.query<Student>(
-      `SELECT * FROM students WHERE school_id = $1 AND is_active = true 
-       AND (LOWER(first_name_en) LIKE $2 OR LOWER(last_name_en) LIKE $2 
-       OR LOWER(first_name_np) LIKE $2 OR LOWER(last_name_np) LIKE $2 
+    const rows = await this.db.query<Student>(
+      `SELECT * FROM students WHERE school_id = $1 AND is_active = true
+       AND (LOWER(first_name_en) LIKE $2 OR LOWER(last_name_en) LIKE $2
+       OR LOWER(first_name_np) LIKE $2 OR LOWER(last_name_np) LIKE $2
        OR admission_number LIKE $2)
        ORDER BY created_at DESC LIMIT 50`,
       [schoolId, normalizedQuery],
     );
+    return rows.map(decStudent);
   }
 }
