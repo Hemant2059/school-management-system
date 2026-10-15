@@ -207,10 +207,21 @@ async function main() {
   // ---------- 7. students/guardians ----------
   await step('students/guardians/links', async () => {
     if ((await count('students', 'WHERE school_id=$1', [sid])) === 0) {
-      await q(`INSERT INTO students (school_id, admission_number, first_name_en, last_name_en, first_name_np, last_name_np, gender, date_of_birth_ad, date_of_birth_bs, nationality, nationality_np, religion, religion_np, mother_tongue, mother_tongue_np, caste_ethnicity, caste_ethnicity_np, roll_number, current_status)
-        VALUES ($1,'2079-001','Kiran','Sharma','किरण','शर्मा','MALE','2016-03-15','2072-12-02','Nepali','नेपाली','Hindu','हिन्दु','Nepali','नेपाली','Brahmin','ब्राह्मण',1,'ACTIVE'),
-               ($1,'2079-002','Sunita','Khatri','सुनिता','खत्री','FEMALE','2016-05-20','2072-12-08','Nepali','नेपाली','Hindu','हिन्दु','Nepali','नेपाली','Chhetri','क्षेत्री',2,'ACTIVE'),
-               ($1,'2079-003','Raj','Yadav','राज','यादव','MALE','2016-07-10','2073-03-23','Nepali','नेपाली','Hindu','हिन्दु','Maithili','मैथिली','Yadav','यादव',3,'ACTIVE')`, [sid]);
+      await q(`INSERT INTO students (school_id, student_code, admission_number, admission_date, admission_date_bs, admission_class_id,
+        first_name_en, middle_name_en, last_name_en, first_name_np, middle_name_np, last_name_np, display_name,
+        gender, date_of_birth_ad, date_of_birth_bs, nationality, nationality_np, religion, religion_np,
+        mother_tongue, mother_tongue_np, caste_ethnicity, caste_ethnicity_np, caste_code,
+        birthplace, birthplace_np, blood_group, student_email, student_mobile,
+        permanent_province_id, permanent_district_id, permanent_municipality_id, permanent_ward_no,
+        permanent_tole_en, permanent_tole_np,
+        temporary_province_id, temporary_district_id, temporary_municipality_id, temporary_ward_no,
+        temporary_tole_en, temporary_address_en, temporary_tole_np, temporary_address_np,
+        created_by, updated_by, disability_type, disability_type_np,
+        father_name, father_phone, father_name_np, mother_name, mother_phone, mother_name_np,
+        profile_photo_url, roll_number, current_status, is_active, created_at, updated_at)
+        VALUES ($1,'STU-2079-001','2079-001','2022-04-14','2079-04-01',1,'Kiran','','Sharma','किरण','','शर्मा','Kiran Sharma','MALE','2016-03-15','2072-12-02','Nepali','नेपाली','Hindu','हिन्दु','Nepali','नेपाली','Brahmin','ब्राह्मण','01A','','','','','',1,1,1,10,'','',0,0,0,0,'','','','',(SELECT user_id FROM users ORDER BY user_id LIMIT 1),(SELECT user_id FROM users ORDER BY user_id LIMIT 1),'NONE','कुनै छैन','','','','','','',1,'ACTIVE',true,NOW(),NOW()),
+               ($1,'STU-2079-002','2079-002','2022-04-14','2079-04-01',1,'Sunita','','Khatri','सुनिता','','खत्री','Sunita Khatri','FEMALE','2016-05-20','2072-12-08','Nepali','नेपाली','Hindu','हिन्दु','Nepali','नेपाली','Chhetri','क्षेत्री','02B','','','','','',1,1,1,10,'','',0,0,0,0,'','','','',(SELECT user_id FROM users ORDER BY user_id LIMIT 1),(SELECT user_id FROM users ORDER BY user_id LIMIT 1),'NONE','कुनै छैन','','','','','','',2,'ACTIVE',true,NOW(),NOW()),
+               ($1,'STU-2079-003','2079-003','2022-04-14','2079-04-01',1,'Raj','','Yadav','राज','','यादव','Raj Yadav','MALE','2016-07-10','2073-03-23','Nepali','नेपाली','Hindu','हिन्दु','Maithili','मैथिली','Yadav','यादव','03Y','','','','','',1,1,1,10,'','',0,0,0,0,'','','','',(SELECT user_id FROM users ORDER BY user_id LIMIT 1),(SELECT user_id FROM users ORDER BY user_id LIMIT 1),'NONE','कुनै छैन','','','','','','',3,'ACTIVE',true,NOW(),NOW())`, [sid]);
     }
     if ((await count('guardians', 'WHERE school_id=$1', [sid])) === 0) {
       await q(`INSERT INTO guardians (school_id, guardian_code, first_name_en, last_name_en, mobile, email, occupation, occupation_np, relation_to_student, relation_to_student_np)

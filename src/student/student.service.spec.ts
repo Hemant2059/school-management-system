@@ -83,10 +83,13 @@ describe('StudentService', () => {
       lastNameEn: 'Smith',
       gender: 'female',
       dateOfBirthAd: new Date('2010-01-01'),
+      casteEthnicity: 'Brahmin',
     };
 
     it('should create a new student successfully', async () => {
-      mockDatabaseService.queryOne.mockResolvedValue(null);
+      mockDatabaseService.queryOne
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ caste_code: '01A' });
       mockDatabaseService.query.mockResolvedValue([{ count: '0' }]);
       mockDatabaseService.insert.mockResolvedValue({
         ...mockStudent,
@@ -112,7 +115,9 @@ describe('StudentService', () => {
     });
 
     it('should generate unique student code', async () => {
-      mockDatabaseService.queryOne.mockResolvedValue(null);
+      mockDatabaseService.queryOne
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ caste_code: '01A' });
       mockDatabaseService.query.mockResolvedValue([{ count: '5' }]);
       mockDatabaseService.insert.mockResolvedValue(mockStudent);
 
@@ -125,7 +130,9 @@ describe('StudentService', () => {
     });
 
     it('should set display name from Nepali names if provided', async () => {
-      mockDatabaseService.queryOne.mockResolvedValue(null);
+      mockDatabaseService.queryOne
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ caste_code: '01A' });
       mockDatabaseService.query.mockResolvedValue([{ count: '0' }]);
       mockDatabaseService.insert.mockResolvedValue(mockStudent);
 
@@ -143,7 +150,9 @@ describe('StudentService', () => {
     });
 
     it('should set display name from English names if Nepali not provided', async () => {
-      mockDatabaseService.queryOne.mockResolvedValue(null);
+      mockDatabaseService.queryOne
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ caste_code: '01A' });
       mockDatabaseService.query.mockResolvedValue([{ count: '0' }]);
       mockDatabaseService.insert.mockResolvedValue(mockStudent);
 
@@ -154,14 +163,22 @@ describe('StudentService', () => {
       expect(displayName).toBe('Jane Smith');
     });
 
-    it('should convert AD date to BS if only AD provided', async () => {
-      mockDatabaseService.queryOne.mockResolvedValue(null);
+    it('should store the frontend-provided BS date verbatim', async () => {
+      mockDatabaseService.queryOne
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ caste_code: '01A' });
       mockDatabaseService.query.mockResolvedValue([{ count: '0' }]);
       mockDatabaseService.insert.mockResolvedValue(mockStudent);
 
-      await service.create(createStudentDto);
+      const dtoWithBs: CreateStudentDto = {
+        ...createStudentDto,
+        dateOfBirthBs: '2067-02-01',
+      };
 
-      expect(mockDatabaseService.insert).toHaveBeenCalled();
+      await service.create(dtoWithBs);
+
+      const insertCall = mockDatabaseService.insert.mock.calls[0];
+      expect(insertCall[1]).toContain('2067-02-01');
     });
 
     it('should throw BadRequestException if free seat quota exceeded', async () => {
@@ -181,7 +198,9 @@ describe('StudentService', () => {
     });
 
     it('should allow free seat within quota', async () => {
-      mockDatabaseService.queryOne.mockResolvedValue(null);
+      mockDatabaseService.queryOne
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ caste_code: '01A' });
       mockDatabaseService.query
         .mockResolvedValueOnce([{ count: '10' }])
         .mockResolvedValueOnce([{ count: '0' }]);

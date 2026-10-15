@@ -304,7 +304,9 @@ export class AdmissionService {
   async enrollStudent(
     id: number,
     schoolId: number,
-    sectionId?: number,
+    sectionId: number,
+    enrolledBy?: number,
+    admissionDateBs?: string,
   ): Promise<{ studentId: number; userId: number }> {
     const application = await this.getApplicationById(id, schoolId);
 
@@ -347,7 +349,7 @@ export class AdmissionService {
           'No active academic session — create one before enrolling',
         );
       }
-      let resolvedSectionId = sectionId;
+      const resolvedSectionId = sectionId;
       if (resolvedSectionId) {
         const owned = await client.query(
           `SELECT section_id FROM sections WHERE section_id = $1 AND class_id = $2 AND school_id = $3 AND is_active = true`,
@@ -359,17 +361,12 @@ export class AdmissionService {
           );
         }
       }
+      // Section is required: admins pre-create classes/sections and the
+      // frontend always sends both. The backend only validates ownership.
       if (!resolvedSectionId) {
-        const firstSection = await client.query(
-          `SELECT section_id FROM sections WHERE class_id = $1 AND school_id = $2 AND is_active = true ORDER BY section_id LIMIT 1`,
-          [app.class_id, schoolId],
+        throw new BadRequestException(
+          'sectionId is required — admins create sections before enrolling',
         );
-        if (!firstSection.rows[0]) {
-          throw new BadRequestException(
-            'Class has no sections — create one before enrolling',
-          );
-        }
-        resolvedSectionId = firstSection.rows[0].section_id;
       }
       const rollRow = await client.query(
         `SELECT COALESCE(MAX(roll_no), 0) as max_roll FROM enrollments
@@ -387,18 +384,81 @@ export class AdmissionService {
           >
         )[String(app.gender).toLowerCase()] || 'OTHER';
 
+      // Complete profiles are mandatory (students columns are NOT NULL):
+      // reject incomplete applications instead of inventing data.
+      const missingAddr = [
+        'province_id',
+        'district_id',
+        'municipality_id',
+        'ward_number',
+      ].filter((k) => app[k] == null);
+      if (missingAddr.length > 0) {
+        throw new BadRequestException(
+          `Application address incomplete (missing: ${missingAddr.join(', ')}). Update the application first.`,
+        );
+      }
+      const missingProfile = [
+        'first_name',
+        'last_name',
+        'gender',
+        'date_of_birth',
+        'nationality',
+        'religion',
+        'father_name',
+        'mother_name',
+        'class_id',
+      ].filter((k) => app[k] == null || app[k] === '');
+      if (missingProfile.length > 0) {
+        throw new BadRequestException(
+          `Application profile incomplete (missing: ${missingProfile.join(', ')}). Update the application first.`,
+        );
+      }
+      if (!app.caste) {
+        throw new BadRequestException(
+          'Application caste/ethnicity is required for enrollment.',
+        );
+      }
+      const casteHit = await client.query(
+        `SELECT caste_code FROM caste_ethnicity_groups
+          WHERE caste_code = $1 OR LOWER(name_en) = LOWER($1) OR LOWER(iemis_group) = LOWER($1)
+          LIMIT 1`,
+        [String(app.caste).trim()],
+      );
+      // Same 'Brahmin' → 01A leniency as student registration (master
+      // stores 'Brahmin-Hill'; forms send 'Brahmin').
+      const casteCode =
+        casteHit.rows[0]?.caste_code ??
+        (String(app.caste).trim().toLowerCase() === 'brahmin' ? '01A' : null);
+      if (!casteCode) {
+        throw new BadRequestException(
+          `Unrecognized caste/ethnicity '${app.caste}'. Must match a CEHRD master code or name.`,
+        );
+      }
+      const enrollDisplayName = app.first_name_np
+        ? `${app.first_name_np} ${app.last_name_np || ''}`.trim()
+        : `${app.first_name} ${app.last_name || ''}`.trim();
+
       const studentRows = await client.query(
         `INSERT INTO students (
            school_id, user_id, admission_number, student_code,
            first_name_en, middle_name_en, last_name_en,
-           first_name_np, middle_name_np, last_name_np,
-           gender, date_of_birth_ad, date_of_birth_bs, nationality,
-           caste_ethnicity, student_email, student_mobile,
-           father_name, father_phone, mother_name, mother_phone,
+           first_name_np, middle_name_np, last_name_np, display_name,
+           gender, date_of_birth_ad, date_of_birth_bs, nationality, nationality_np,
+           religion, religion_np, mother_tongue, mother_tongue_np,
+           caste_ethnicity, caste_ethnicity_np, caste_code,
+           birthplace, birthplace_np, blood_group,
+           student_email, student_mobile,
+           father_name, father_phone, father_name_np, mother_name, mother_phone, mother_name_np,
            permanent_province_id, permanent_district_id, permanent_municipality_id,
-           permanent_ward_no, permanent_tole_en, profile_photo_url,
+           permanent_ward_no, permanent_tole_en, permanent_tole_np,
+           temporary_province_id, temporary_district_id, temporary_municipality_id,
+           temporary_ward_no, temporary_tole_en, temporary_address_en, temporary_tole_np, temporary_address_np,
+           created_by, updated_by,
+           disability_type, disability_type_np,
+           admission_date, admission_date_bs, admission_class_id, roll_number,
+           profile_photo_url,
            current_status, is_active
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, 'ACTIVE', true)
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, CURRENT_DATE, $53, $54, 0, $55, 'ACTIVE', true)
          RETURNING student_id`,
         [
           schoolId,
@@ -406,28 +466,56 @@ export class AdmissionService {
           studentCode,
           studentCode,
           app.first_name,
-          app.middle_name,
+          app.middle_name || '',
           app.last_name,
           app.first_name_np,
-          app.middle_name_np,
+          app.middle_name_np || '',
           app.last_name_np,
+          enrollDisplayName,
           canonicalGender,
           app.date_of_birth,
           app.date_of_birth_bs,
-          app.nationality,
+          app.nationality || '',
+          app.nationality_np || '',
+          app.religion || '',
+          app.religion_np || '',
+          '',
+          '',
           app.caste,
-          app.email,
-          app.mobile || app.phone,
+          app.caste_np || '',
+          casteCode,
+          app.birth_place || '',
+          app.birth_place_np || '',
+          '',
+          app.email || '',
+          app.mobile || app.phone || '',
           app.father_name,
-          app.father_phone,
+          app.father_phone || '',
+          app.father_name_np || '',
           app.mother_name,
-          app.mother_phone,
+          app.mother_phone || '',
+          app.mother_name_np || '',
           app.province_id,
           app.district_id,
           app.municipality_id,
           app.ward_number,
-          app.address,
-          app.photo_url,
+          app.address || '',
+          '',
+          0,
+          0,
+          0,
+          0,
+          '',
+          '',
+          '',
+          '',
+          enrolledBy ?? null,
+          enrolledBy ?? null,
+          'NONE',
+          'कुनै छैन',
+          admissionDateBs || '',
+          app.class_id,
+          app.photo_url || '',
         ],
       );
 

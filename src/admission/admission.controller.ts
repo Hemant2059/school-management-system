@@ -85,13 +85,16 @@ export class AdmissionController {
   @Roles(UserRole.ADMIN)
   async enrollStudent(
     @Param('id') id: number,
-    @Body() body: { sectionId?: number },
+    @Body()
+    body: { sectionId: number; admissionDateBs?: string },
     @Req() req,
   ): Promise<{ studentId: number; userId: number }> {
     return this.admissionService.enrollStudent(
       id,
       req.user.schoolId,
       body.sectionId,
+      req.user.userId,
+      body.admissionDateBs,
     );
   }
 

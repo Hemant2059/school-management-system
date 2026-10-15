@@ -25,6 +25,22 @@ export interface Enrollment {
   deleted_at: Date | null;
 }
 
+// Canonical enrollments row (admission flow): same grain, legacy column
+// names (roll_no, enrolled_on_ad). Returned by assignSection below.
+export interface CanonicalEnrollment {
+  enrollment_id: number;
+  school_id: number;
+  student_id: number;
+  academic_year_id: number;
+  class_id: number;
+  section_id: number | null;
+  roll_no: number;
+  status: string;
+  enrolled_on_ad: Date | null;
+  enrolled_on_bs: string | null;
+  created_at: Date;
+}
+
 @Injectable()
 export class EnrollmentService {
   constructor(private db: DatabaseService) {}
@@ -120,6 +136,46 @@ export class EnrollmentService {
     return this.db.query<Enrollment>(
       `SELECT * FROM student_enrollments WHERE student_id = $1 AND school_id = $2 ORDER BY academic_year DESC`,
       [studentId, schoolId],
+    );
+  }
+
+  /**
+   * Assigns (or re-assigns) a section on the canonical enrollments row.
+   * Sections are created manually by admins; enrollment itself is
+   * section-optional. Roll restarts per section (MAX+1 in target).
+   */
+  async assignSection(
+    enrollmentId: number,
+    schoolId: number,
+    sectionId: number,
+  ): Promise<CanonicalEnrollment> {
+    const enrollment = await this.db.queryOne<CanonicalEnrollment>(
+      `SELECT * FROM enrollments WHERE enrollment_id = $1 AND school_id = $2`,
+      [enrollmentId, schoolId],
+    );
+    if (!enrollment) {
+      throw new NotFoundException(
+        `Enrollment with ID ${enrollmentId} not found`,
+      );
+    }
+    const section = await this.db.queryOne(
+      `SELECT section_id FROM sections WHERE section_id = $1 AND class_id = $2 AND school_id = $3 AND is_active = true`,
+      [sectionId, enrollment.class_id, schoolId],
+    );
+    if (!section) {
+      throw new BadRequestException(
+        'Section does not belong to this enrollment class/school',
+      );
+    }
+    const rollRow = await this.db.queryOne<{ max_roll: string }>(
+      `SELECT COALESCE(MAX(roll_no), 0) as max_roll FROM enrollments
+        WHERE academic_year_id = $1 AND class_id = $2 AND section_id = $3`,
+      [enrollment.academic_year_id, enrollment.class_id, sectionId],
+    );
+    const rollNo = parseInt(rollRow?.max_roll || '0', 10) + 1;
+    return this.db.insert<CanonicalEnrollment>(
+      `UPDATE enrollments SET section_id = $1, roll_no = $2 WHERE enrollment_id = $3 RETURNING *`,
+      [sectionId, rollNo, enrollmentId],
     );
   }
 

@@ -149,17 +149,60 @@ export class StudentService {
       const studentCode = `STU-${yearSuffix}-${schoolIdStr}-${String(count + 1).padStart(4, '0')}`;
 
       // BS date comes from the frontend — the backend stores it as given.
-      const dateOfBirthBs = createStudentDto.dateOfBirthBs || null;
+      const dateOfBirthBs = createStudentDto.dateOfBirthBs ?? null;
 
       const displayName = createStudentDto.firstNameNp
         ? `${createStudentDto.firstNameNp} ${createStudentDto.lastNameNp || ''}`.trim()
         : `${createStudentDto.firstNameEn} ${createStudentDto.lastNameEn || ''}`.trim();
 
-      // Canonical caste: validated FK when the raw value maps to the CEHRD
-      // master (code or English name); raw text always kept for display.
+      // Canonical caste: validated FK — unmappable values are rejected
+      // instead of storing NULL (caste_code is NOT NULL with an FK).
       const casteCode = await this.resolveCasteCode(
         createStudentDto.casteEthnicity,
       );
+      if (!casteCode) {
+        throw new BadRequestException(
+          `Unrecognized caste/ethnicity '${createStudentDto.casteEthnicity}'. Must match a CEHRD master code or name.`,
+        );
+      }
+
+      // Placement is validated BEFORE the student row is created so a
+      // bad class/section can never leave an orphan student behind.
+      let placementSession: {
+        academic_year_id: number;
+        session_name: string;
+      } | null = null;
+      if (
+        createStudentDto.classId !== undefined &&
+        createStudentDto.sectionId !== undefined
+      ) {
+        placementSession = await this.db.queryOne<{
+          academic_year_id: number;
+          session_name: string;
+        }>(
+          `SELECT academic_year_id, session_name FROM academic_years
+            WHERE school_id = $1 AND is_current = true LIMIT 1`,
+          [createStudentDto.schoolId],
+        );
+        if (!placementSession) {
+          throw new BadRequestException(
+            'No active academic session — create one before admitting students',
+          );
+        }
+        const ownedSection = await this.db.queryOne(
+          `SELECT section_id FROM sections WHERE section_id = $1 AND class_id = $2 AND school_id = $3 AND is_active = true`,
+          [
+            createStudentDto.sectionId,
+            createStudentDto.classId,
+            createStudentDto.schoolId,
+          ],
+        );
+        if (!ownedSection) {
+          throw new BadRequestException(
+            'Section does not belong to this class/school',
+          );
+        }
+      }
 
       const student = await this.db.insert<Student>(
         `INSERT INTO students (
@@ -177,74 +220,127 @@ export class StudentService {
         permanent_tole_en, permanent_tole_np,
         temporary_province_id, temporary_district_id, temporary_municipality_id, temporary_ward_no,
         temporary_tole_en, temporary_address_en, temporary_tole_np, temporary_address_np,
-        created_by, updated_by
+        created_by, updated_by,
+        nationality, birthplace, father_name, father_phone, mother_name, mother_phone, roll_number, profile_photo_url
       )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55, $56, $57, $58, $59, $60)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55, $56, $57, $58, $59, $60, $61, $62, $63, $64, $65, $66, $67, $68)
        RETURNING *`,
         [
           createStudentDto.schoolId,
           studentCode,
           createStudentDto.admissionNumber,
           createStudentDto.admissionDate || new Date(),
-          createStudentDto.admissionDateBs || null,
+          createStudentDto.admissionDateBs ?? null,
           createStudentDto.admissionClassId || 1,
           createStudentDto.firstNameEn,
-          createStudentDto.middleNameEn || null,
+          createStudentDto.middleNameEn ?? null,
           createStudentDto.lastNameEn,
-          createStudentDto.firstNameNp || null,
-          createStudentDto.middleNameNp || null,
-          createStudentDto.lastNameNp || null,
+          createStudentDto.firstNameNp ?? null,
+          createStudentDto.middleNameNp ?? null,
+          createStudentDto.lastNameNp ?? null,
           displayName,
           createStudentDto.gender,
-          createStudentDto.dateOfBirthAd || null,
-          dateOfBirthBs || null,
-          createStudentDto.studentEmail || null,
-          createStudentDto.studentMobile || null,
+          createStudentDto.dateOfBirthAd ?? null,
+          dateOfBirthBs ?? null,
+          createStudentDto.studentEmail ?? null,
+          createStudentDto.studentMobile ?? null,
           createStudentDto.currentStatus || 'ACTIVE',
           true,
           createStudentDto.isGovtMandatedFreeSeat || false,
           false,
           casteCode,
-          createStudentDto.casteEthnicity || null,
-          createStudentDto.casteEthnicityNp || null,
+          createStudentDto.casteEthnicity ?? null,
+          createStudentDto.casteEthnicityNp ?? null,
           enc(createStudentDto.citizenshipNumber),
-          createStudentDto.citizenshipIssueDistrict || null,
-          createStudentDto.citizenshipIssueDate || null,
-          createStudentDto.citizenshipIssueDateBs || null,
+          createStudentDto.citizenshipIssueDistrict ?? null,
+          createStudentDto.citizenshipIssueDate ?? null,
+          createStudentDto.citizenshipIssueDateBs ?? null,
           enc(createStudentDto.birthCertificateNumber),
           enc(createStudentDto.nin),
-          createStudentDto.iemisStudentId || null,
+          createStudentDto.iemisStudentId ?? null,
           createStudentDto.hasDisability || false,
-          createStudentDto.disabilityType || null,
-          createStudentDto.disabilityTypeNp || null,
+          createStudentDto.disabilityType ?? null,
+          createStudentDto.disabilityTypeNp ?? null,
 
-          createStudentDto.bloodGroup || null,
-          createStudentDto.religion || null,
-          createStudentDto.religionNp || null,
-          createStudentDto.nationalityNp || null,
-          createStudentDto.motherTongue || null,
-          createStudentDto.motherTongueNp || null,
-          createStudentDto.birthplaceNp || null,
-          createStudentDto.fatherNameNp || null,
-          createStudentDto.motherNameNp || null,
-          createStudentDto.permanentProvinceId || null,
-          createStudentDto.permanentDistrictId || null,
-          createStudentDto.permanentMunicipalityId || null,
-          createStudentDto.permanentWardNo || null,
-          createStudentDto.permanentToleEn || null,
-          createStudentDto.permanentToleNp || null,
-          createStudentDto.temporaryProvinceId || null,
-          createStudentDto.temporaryDistrictId || null,
-          createStudentDto.temporaryMunicipalityId || null,
-          createStudentDto.temporaryWardNo || null,
-          createStudentDto.temporaryToleEn || null,
-          createStudentDto.temporaryAddressEn || null,
-          createStudentDto.temporaryToleNp || null,
-          createStudentDto.temporaryAddressNp || null,
+          createStudentDto.bloodGroup ?? null,
+          createStudentDto.religion ?? null,
+          createStudentDto.religionNp ?? null,
+          createStudentDto.nationalityNp ?? null,
+          createStudentDto.motherTongue ?? null,
+          createStudentDto.motherTongueNp ?? null,
+          createStudentDto.birthplaceNp ?? null,
+          createStudentDto.fatherNameNp ?? null,
+          createStudentDto.motherNameNp ?? null,
+          createStudentDto.permanentProvinceId ?? null,
+          createStudentDto.permanentDistrictId ?? null,
+          createStudentDto.permanentMunicipalityId ?? null,
+          createStudentDto.permanentWardNo ?? null,
+          createStudentDto.permanentToleEn ?? null,
+          createStudentDto.permanentToleNp ?? null,
+          createStudentDto.temporaryProvinceId ?? null,
+          createStudentDto.temporaryDistrictId ?? null,
+          createStudentDto.temporaryMunicipalityId ?? null,
+          createStudentDto.temporaryWardNo ?? null,
+          createStudentDto.temporaryToleEn ?? null,
+          createStudentDto.temporaryAddressEn ?? null,
+          createStudentDto.temporaryToleNp ?? null,
+          createStudentDto.temporaryAddressNp ?? null,
           userId,
           userId,
+          createStudentDto.nationality,
+          createStudentDto.birthplace,
+          createStudentDto.fatherName,
+          createStudentDto.fatherPhone,
+          createStudentDto.motherName,
+          createStudentDto.motherPhone,
+          createStudentDto.rollNumber,
+          createStudentDto.profilePhotoUrl,
         ],
       );
+
+      // Placement: admins send class+section with the admission; the
+      // student is enrolled in both placement tables so class lists,
+      // attendance and portals see them immediately. Skipped only when
+      // placement ids are absent (legacy/internal callers).
+      if (placementSession) {
+        const rollRow = await this.db.queryOne<{ max_roll: string }>(
+          `SELECT COALESCE(MAX(roll_no), 0) as max_roll FROM enrollments
+            WHERE academic_year_id = $1 AND class_id = $2 AND section_id = $3`,
+          [
+            placementSession.academic_year_id,
+            createStudentDto.classId,
+            createStudentDto.sectionId,
+          ],
+        );
+        const placementRoll = parseInt(rollRow?.max_roll || '0', 10) + 1;
+        await this.db.query(
+          `INSERT INTO enrollments (school_id, student_id, academic_year_id, class_id, section_id, roll_no, status, enrolled_on_ad)
+           VALUES ($1, $2, $3, $4, $5, $6, 'ENROLLED', CURRENT_DATE)`,
+          [
+            createStudentDto.schoolId,
+            student.student_id,
+            placementSession.academic_year_id,
+            createStudentDto.classId,
+            createStudentDto.sectionId,
+            placementRoll,
+          ],
+        );
+        const sessionYear =
+          /^\d{4}/.exec(placementSession.session_name || '')?.[0] ??
+          placementSession.session_name;
+        await this.db.query(
+          `INSERT INTO student_enrollments (school_id, student_id, class_id, section_id, academic_year, enrollment_date, status, roll_number, is_current)
+           VALUES ($1, $2, $3, $4, $5, CURRENT_DATE, 'active', $6, true)`,
+          [
+            createStudentDto.schoolId,
+            student.student_id,
+            createStudentDto.classId,
+            createStudentDto.sectionId,
+            sessionYear,
+            placementRoll,
+          ],
+        );
+      }
 
       return decStudent(student);
     } catch (error) {
@@ -435,14 +531,27 @@ export class StudentService {
       nin: 'nin',
       iemisStudentId: 'iemis_student_id',
       admissionDateBs: 'admission_date_bs',
+      religion: 'religion',
       religionNp: 'religion_np',
+      nationality: 'nationality',
       nationalityNp: 'nationality_np',
+      motherTongue: 'mother_tongue',
       motherTongueNp: 'mother_tongue_np',
       casteEthnicityNp: 'caste_ethnicity_np',
+      birthplace: 'birthplace',
       birthplaceNp: 'birthplace_np',
       disabilityTypeNp: 'disability_type_np',
+      fatherName: 'father_name',
+      fatherPhone: 'father_phone',
       fatherNameNp: 'father_name_np',
+      motherName: 'mother_name',
+      motherPhone: 'mother_phone',
       motherNameNp: 'mother_name_np',
+      rollNumber: 'roll_number',
+      profilePhotoUrl: 'profile_photo_url',
+      bloodGroup: 'blood_group',
+      admissionDate: 'admission_date',
+      admissionClassId: 'admission_class_id',
     };
 
     // PII at rest: encrypt identity/financial fields on the way in.
@@ -461,8 +570,16 @@ export class StudentService {
 
     // Caste needs FK resolution; raw text is always kept alongside.
     if (updateStudentDto.casteEthnicity !== undefined) {
+      const updateCasteCode = await this.resolveCasteCode(
+        updateStudentDto.casteEthnicity,
+      );
+      if (!updateCasteCode) {
+        throw new BadRequestException(
+          `Unrecognized caste/ethnicity '${updateStudentDto.casteEthnicity}'. Must match a CEHRD master code or name.`,
+        );
+      }
       updates.push(`caste_code = $${paramIndex++}`);
-      params.push(await this.resolveCasteCode(updateStudentDto.casteEthnicity));
+      params.push(updateCasteCode);
       updates.push(`caste_ethnicity = $${paramIndex++}`);
       params.push(updateStudentDto.casteEthnicity);
     }

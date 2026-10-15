@@ -10,6 +10,8 @@ import {
   Min,
   Max,
   IsBoolean,
+  IsDefined,
+  ValidateIf,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
@@ -25,11 +27,6 @@ export class CreateStudentDto {
   @IsNotEmpty()
   @IsString()
   admissionNumber: string;
-
-  @ApiPropertyOptional({ description: 'Roll number', example: '10A-01' })
-  @IsOptional()
-  @IsString()
-  rollNumber?: string;
 
   @ApiPropertyOptional({
     description: 'Registration number',
@@ -49,9 +46,9 @@ export class CreateStudentDto {
     description: 'Middle name (English)',
     example: 'Bahadur',
   })
-  @IsOptional()
+  @IsDefined()
   @IsString()
-  middleNameEn?: string;
+  middleNameEn: string;
 
   @ApiProperty({ description: 'Last name (English)', example: 'Sharma' })
   @IsNotEmpty()
@@ -59,23 +56,23 @@ export class CreateStudentDto {
   lastNameEn: string;
 
   // === Nepali Names (Optional but recommended) ===
-  @ApiPropertyOptional({ description: 'First name (Nepali)', example: 'राम' })
-  @IsOptional()
+  @ApiProperty({ description: 'First name (Nepali)', example: 'राम' })
+  @IsNotEmpty()
   @IsString()
-  firstNameNp?: string;
+  firstNameNp: string;
 
   @ApiPropertyOptional({
     description: 'Middle name (Nepali)',
     example: 'बहादुर',
   })
-  @IsOptional()
+  @IsDefined()
   @IsString()
-  middleNameNp?: string;
+  middleNameNp: string;
 
-  @ApiPropertyOptional({ description: 'Last name (Nepali)', example: 'शर्मा' })
-  @IsOptional()
+  @ApiProperty({ description: 'Last name (Nepali)', example: 'शर्मा' })
+  @IsNotEmpty()
   @IsString()
-  lastNameNp?: string;
+  lastNameNp: string;
 
   // === Date of Birth ===
   @ApiProperty({ description: 'Date of birth (AD)', example: '2010-05-15' })
@@ -88,13 +85,13 @@ export class CreateStudentDto {
     description: 'Date of birth (BS) – valid YYYY-MM-DD',
     example: '2067-02-01',
   })
-  @IsOptional()
+  @IsNotEmpty()
   @IsString()
   @Matches(/^\d{4}-\d{2}-\d{2}$/, {
     message: 'BS date must be YYYY-MM-DD (e.g. 2067-02-01)',
   })
   @IsValidBsDate()
-  dateOfBirthBs?: string;
+  dateOfBirthBs: string;
 
   // === Gender & Personal Info ===
   @ApiProperty({
@@ -106,219 +103,296 @@ export class CreateStudentDto {
   @IsEnum(['MALE', 'FEMALE', 'OTHER', 'PREFER_NOT_TO_SAY'])
   gender: string;
 
-  @ApiPropertyOptional({ description: 'Blood group', example: 'A+' })
-  @IsOptional()
+  @ApiProperty({ description: 'Religion', example: 'Hinduism' })
+  @IsNotEmpty()
   @IsString()
-  bloodGroup?: string;
+  religion: string;
 
-  @ApiPropertyOptional({ description: 'Religion', example: 'Hinduism' })
-  @IsOptional()
-  @IsString()
-  religion?: string;
-
-  @ApiPropertyOptional({
+  @ApiProperty({
     description: 'Religion (Nepali, provided by frontend)',
     example: 'हिन्दु धर्म',
   })
-  @IsOptional()
+  @IsNotEmpty()
   @IsString()
-  religionNp?: string;
+  religionNp: string;
 
-  @ApiPropertyOptional({
+  @ApiProperty({ description: 'Nationality', example: 'Nepali' })
+  @IsNotEmpty()
+  @IsString()
+  nationality: string;
+
+  @ApiProperty({
     description: 'Nationality (Nepali, provided by frontend)',
     example: 'नेपाली',
   })
-  @IsOptional()
+  @IsNotEmpty()
   @IsString()
-  nationalityNp?: string;
+  nationalityNp: string;
 
-  @ApiPropertyOptional({ description: 'Mother tongue', example: 'Nepali' })
-  @IsOptional()
+  @ApiProperty({ description: 'Mother tongue', example: 'Nepali' })
+  @IsNotEmpty()
   @IsString()
-  motherTongue?: string;
+  motherTongue: string;
 
-  @ApiPropertyOptional({
+  @ApiProperty({
     description: 'Mother tongue (Nepali, provided by frontend)',
     example: 'नेपाली',
   })
-  @IsOptional()
+  @IsNotEmpty()
   @IsString()
-  motherTongueNp?: string;
+  motherTongueNp: string;
 
-  @ApiPropertyOptional({ description: 'Caste/Ethnicity', example: 'Brahmin' })
-  @IsOptional()
+  @ApiProperty({ description: 'Caste/Ethnicity', example: 'Brahmin' })
+  @IsNotEmpty()
   @IsString()
-  casteEthnicity?: string;
+  casteEthnicity: string;
 
-  @ApiPropertyOptional({
+  @ApiProperty({
     description: 'Caste/Ethnicity (Nepali, provided by frontend)',
     example: 'ब्राह्मण',
   })
-  @IsOptional()
+  @IsNotEmpty()
   @IsString()
-  casteEthnicityNp?: string;
+  casteEthnicityNp: string;
 
-  @ApiPropertyOptional({
+  @ApiProperty({ description: 'Birthplace', example: 'Kathmandu' })
+  @IsNotEmpty()
+  @IsString()
+  birthplace: string;
+
+  @ApiProperty({
     description: 'Birthplace (Nepali, provided by frontend)',
     example: 'काठमाडौं',
   })
-  @IsOptional()
+  @IsNotEmpty()
   @IsString()
-  birthplaceNp?: string;
+  birthplaceNp: string;
+
+  @ApiProperty({ description: "Father's name", example: 'Ram Sharma' })
+  @IsNotEmpty()
+  @IsString()
+  fatherName: string;
 
   @ApiPropertyOptional({
+    description: "Father's phone (may be empty)",
+    example: '9841000001',
+  })
+  @IsDefined()
+  @IsString()
+  fatherPhone: string;
+
+  @ApiProperty({
     description: 'Father name (Nepali, provided by frontend)',
     example: 'राम शर्मा',
   })
-  @IsOptional()
+  @IsNotEmpty()
   @IsString()
-  fatherNameNp?: string;
+  fatherNameNp: string;
+
+  @ApiProperty({ description: "Mother's name", example: 'Sita Sharma' })
+  @IsNotEmpty()
+  @IsString()
+  motherName: string;
 
   @ApiPropertyOptional({
+    description: "Mother's phone (may be empty)",
+    example: '9841000002',
+  })
+  @IsDefined()
+  @IsString()
+  motherPhone: string;
+
+  @ApiProperty({
     description: 'Mother name (Nepali, provided by frontend)',
     example: 'सीता शर्मा',
   })
-  @IsOptional()
+  @IsNotEmpty()
   @IsString()
-  motherNameNp?: string;
+  motherNameNp: string;
 
   // === Permanent Address (English) - Nepal provinces 1-7 ===
-  @ApiPropertyOptional({
+  @ApiProperty({
     description: 'Permanent province ID (1-7)',
     example: 3,
   })
-  @IsOptional()
+  @IsNotEmpty()
   @IsInt()
   @Min(1, { message: 'Province ID must be between 1 and 7 (Nepal)' })
   @Max(7, { message: 'Province ID must be between 1 and 7 (Nepal)' })
-  permanentProvinceId?: number;
+  permanentProvinceId: number;
 
-  @ApiPropertyOptional({ description: 'Permanent district ID', example: 27 })
-  @IsOptional()
+  @ApiProperty({ description: 'Permanent district ID', example: 27 })
+  @IsNotEmpty()
   @IsInt()
-  permanentDistrictId?: number;
+  permanentDistrictId: number;
 
-  @ApiPropertyOptional({
+  @ApiProperty({
     description: 'Permanent municipality ID',
     example: 124,
   })
-  @IsOptional()
+  @IsNotEmpty()
   @IsInt()
-  permanentMunicipalityId?: number;
+  permanentMunicipalityId: number;
 
-  @ApiPropertyOptional({ description: 'Permanent ward number', example: 5 })
-  @IsOptional()
+  @ApiProperty({ description: 'Permanent ward number', example: 5 })
+  @IsNotEmpty()
   @IsInt()
-  permanentWardNo?: number;
+  @Min(1)
+  @Max(35)
+  permanentWardNo: number;
 
-  @ApiPropertyOptional({
+  @ApiProperty({
     description: 'Permanent tole (English)',
     example: 'Baluwatar',
   })
-  @IsOptional()
+  @IsNotEmpty()
   @IsString()
-  permanentToleEn?: string;
+  permanentToleEn: string;
 
   // === Permanent Address (Nepali) ===
-  @ApiPropertyOptional({
+  @ApiProperty({
     description: 'Permanent tole (Nepali)',
     example: 'बालुवाटार',
   })
-  @IsOptional()
+  @IsNotEmpty()
   @IsString()
-  permanentToleNp?: string;
+  permanentToleNp: string;
 
   // === Temporary Address (English) - Nepal provinces 1-7 ===
-  @ApiPropertyOptional({
+  @ApiProperty({
     description: 'Temporary province ID (1-7)',
     example: 3,
   })
-  @IsOptional()
+  @IsNotEmpty()
   @IsInt()
   @Min(1, { message: 'Province ID must be between 1 and 7 (Nepal)' })
   @Max(7, { message: 'Province ID must be between 1 and 7 (Nepal)' })
-  temporaryProvinceId?: number;
+  temporaryProvinceId: number;
 
-  @ApiPropertyOptional({ description: 'Temporary district ID', example: 27 })
-  @IsOptional()
+  @ApiProperty({ description: 'Temporary district ID', example: 27 })
+  @IsNotEmpty()
   @IsInt()
-  temporaryDistrictId?: number;
+  temporaryDistrictId: number;
 
-  @ApiPropertyOptional({
+  @ApiProperty({
     description: 'Temporary municipality ID',
     example: 124,
   })
-  @IsOptional()
+  @IsNotEmpty()
   @IsInt()
-  temporaryMunicipalityId?: number;
+  temporaryMunicipalityId: number;
 
-  @ApiPropertyOptional({ description: 'Temporary ward number', example: 5 })
-  @IsOptional()
+  @ApiProperty({ description: 'Temporary ward number', example: 5 })
+  @IsNotEmpty()
   @IsInt()
-  temporaryWardNo?: number;
+  @Min(1)
+  @Max(35)
+  temporaryWardNo: number;
 
-  @ApiPropertyOptional({
+  @ApiProperty({
     description: 'Temporary tole (English)',
     example: 'Baluwatar',
   })
-  @IsOptional()
+  @IsNotEmpty()
   @IsString()
-  temporaryToleEn?: string;
+  temporaryToleEn: string;
 
-  @ApiPropertyOptional({
+  @ApiProperty({
     description: 'Temporary address details (English)',
     example: 'House No. 123, Street Name',
   })
-  @IsOptional()
+  @IsNotEmpty()
   @IsString()
-  temporaryAddressEn?: string;
+  temporaryAddressEn: string;
 
   // === Temporary Address (Nepali) ===
-  @ApiPropertyOptional({
+  @ApiProperty({
     description: 'Temporary tole (Nepali)',
     example: 'बालुवाटार',
   })
-  @IsOptional()
+  @IsNotEmpty()
   @IsString()
-  temporaryToleNp?: string;
+  temporaryToleNp: string;
 
-  @ApiPropertyOptional({
+  @ApiProperty({
     description: 'Temporary address details (Nepali)',
     example: 'घर नं १२३, सडकको नाम',
   })
-  @IsOptional()
+  @IsNotEmpty()
   @IsString()
-  temporaryAddressNp?: string;
+  temporaryAddressNp: string;
 
   // === Contact ===
   @ApiPropertyOptional({
-    description: 'Student mobile number',
+    description: 'Student mobile number (may be empty for minors)',
     example: '9841234567',
   })
   @IsOptional()
   @Matches(/^(98|97|96)\d{8}$/, { message: 'Invalid Nepali mobile number' })
   studentMobile?: string;
 
-  @ApiPropertyOptional({
-    description: 'Student email address',
+  @ApiProperty({
+    description: 'Student email address (may be empty)',
     example: 'student@example.com',
   })
-  @IsOptional()
+  @IsDefined()
+  @ValidateIf((o) => o.studentEmail !== '')
   @IsEmail()
-  studentEmail?: string;
+  studentEmail: string;
 
-  // === Admission Details ===
-  @ApiPropertyOptional({ description: 'Admission date', example: '2024-04-14' })
-  @IsOptional()
-  @IsDate()
-  @Type(() => Date)
-  admissionDate?: Date;
+  @ApiProperty({
+    description: 'Blood group (may be empty if unknown)',
+    example: 'A+',
+  })
+  @IsDefined()
+  @IsString()
+  bloodGroup: string;
 
-  @ApiPropertyOptional({ description: 'Admission class ID', example: 5 })
-  @IsOptional()
+  @ApiProperty({ description: 'Roll number', example: 1 })
+  @IsNotEmpty()
   @IsInt()
   @Type(() => Number)
-  admissionClassId?: number;
+  rollNumber: number;
+
+  @ApiProperty({
+    description: 'Profile photo URL (may be empty)',
+    example: '/uploads/s1.jpg',
+  })
+  @IsDefined()
+  @IsString()
+  profilePhotoUrl: string;
+
+  // === Admission Details ===
+  @ApiProperty({ description: 'Admission date', example: '2024-04-14' })
+  @IsNotEmpty()
+  @IsDate()
+  @Type(() => Date)
+  admissionDate: Date;
+
+  @ApiProperty({ description: 'Admission class ID', example: 5 })
+  @IsNotEmpty()
+  @IsInt()
+  @Type(() => Number)
+  admissionClassId: number;
+
+  @ApiProperty({
+    description:
+      'Current class ID for placement (same as admission class for new admissions)',
+    example: 5,
+  })
+  @IsNotEmpty()
+  @IsInt()
+  @Type(() => Number)
+  classId: number;
+
+  @ApiProperty({
+    description: 'Section ID for placement (admin-created sections)',
+    example: 2,
+  })
+  @IsNotEmpty()
+  @IsInt()
+  @Type(() => Number)
+  sectionId: number;
 
   @ApiPropertyOptional({
     description: 'Previous school name',
@@ -351,7 +425,7 @@ export class CreateStudentDto {
   tcIssueDate?: Date;
 
   // === Status ===
-  @ApiPropertyOptional({
+  @ApiProperty({
     description: 'Student current status',
     enum: [
       'ACTIVE',
@@ -363,7 +437,7 @@ export class CreateStudentDto {
     ],
     example: 'ACTIVE',
   })
-  @IsOptional()
+  @IsNotEmpty()
   @IsEnum([
     'ACTIVE',
     'INACTIVE',
@@ -372,16 +446,16 @@ export class CreateStudentDto {
     'GRADUATED',
     'SUSPENDED',
   ])
-  currentStatus?: string;
+  currentStatus: string;
 
-  @ApiPropertyOptional({
+  @ApiProperty({
     description:
       'Government-mandated free seat (subject to 10% quota per school)',
     example: false,
   })
-  @IsOptional()
+  @IsDefined()
   @IsBoolean()
-  isGovtMandatedFreeSeat?: boolean;
+  isGovtMandatedFreeSeat: boolean;
 
   // === CEHRD / IEMIS registry fields (writable subset) ===
   @ApiPropertyOptional({
@@ -439,31 +513,34 @@ export class CreateStudentDto {
   @IsString()
   nin?: string;
 
-  @ApiPropertyOptional({ description: 'Has disability', example: false })
-  @IsOptional()
+  @ApiProperty({ description: 'Has disability', example: false })
+  @IsDefined()
   @IsBoolean()
-  hasDisability?: boolean;
+  hasDisability: boolean;
 
-  @ApiPropertyOptional({ description: 'Disability type', example: 'Visual' })
-  @IsOptional()
-  @IsString()
-  disabilityType?: string;
-
-  @ApiPropertyOptional({
-    description: 'Disability type (Nepali, provided by frontend)',
-    example: 'दृष्टिविहीन',
+  @ApiProperty({
+    description: 'Disability type (NONE when no disability)',
+    example: 'NONE',
   })
-  @IsOptional()
+  @IsNotEmpty()
   @IsString()
-  disabilityTypeNp?: string;
+  disabilityType: string;
 
-  @ApiPropertyOptional({
+  @ApiProperty({
+    description: 'Disability type (Nepali, provided by frontend)',
+    example: 'कुनै छैन',
+  })
+  @IsNotEmpty()
+  @IsString()
+  disabilityTypeNp: string;
+
+  @ApiProperty({
     description: 'Admission date (BS) – valid YYYY-MM-DD',
     example: '2082-01-15',
   })
-  @IsOptional()
+  @IsNotEmpty()
   @IsString()
   @Matches(/^\d{4}-\d{2}-\d{2}$/, { message: 'BS date must be YYYY-MM-DD' })
   @IsValidBsDate()
-  admissionDateBs?: string;
+  admissionDateBs: string;
 }
