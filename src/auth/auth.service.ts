@@ -86,10 +86,9 @@ export class AuthService {
         const school = await this.db.queryOne<{
           school_id: number;
           status: string;
-        }>(
-          `SELECT school_id, status FROM schools WHERE school_code = $1`,
-          [loginDto.schoolCode],
-        );
+        }>(`SELECT school_id, status FROM schools WHERE school_code = $1`, [
+          loginDto.schoolCode,
+        ]);
         if (!school) {
           throw new BadRequestException(
             `Unknown school code '${loginDto.schoolCode}'`,
@@ -105,9 +104,7 @@ export class AuthService {
           [user.user_id, school.school_id],
         );
         if (!membership && !user.is_system) {
-          throw new ForbiddenException(
-            'User does not belong to this school',
-          );
+          throw new ForbiddenException('User does not belong to this school');
         }
         loginSchoolId = school.school_id;
       }
@@ -440,7 +437,8 @@ export class AuthService {
     );
   }
 
-  async getUserProfile(userId: number) {    const user = await this.userService.findOneWithSchool(userId);
+  async getUserProfile(userId: number) {
+    const user = await this.userService.findOneWithSchool(userId);
 
     const school = user.school_id
       ? await this.db.queryOne<{ school_id: number; name: string }>(
