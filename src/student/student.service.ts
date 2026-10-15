@@ -48,8 +48,6 @@ export interface Student {
   date_of_birth_ad: Date | null;
   date_of_birth_bs: string | null;
   dob_bs_snapshot: string | null;
-  student_email: string | null;
-  student_mobile: string | null;
   current_status: string;
   is_active: boolean;
   is_govt_mandated_free_seat: boolean;
@@ -211,7 +209,6 @@ export class StudentService {
         first_name_en, middle_name_en, last_name_en,
         first_name_np, middle_name_np, last_name_np, display_name,
         gender, date_of_birth_ad, date_of_birth_bs,
-        student_email, student_mobile,
         current_status, is_active, is_govt_mandated_free_seat, is_economically_disadvantaged,
         caste_code, caste_ethnicity, caste_ethnicity_np, citizenship_number, citizenship_issue_district, citizenship_issue_date, citizenship_issue_date_bs, birth_certificate_number, nin,
         iemis_student_id, has_disability, disability_type, disability_type_np,
@@ -223,7 +220,7 @@ export class StudentService {
         created_by, updated_by,
         nationality, birthplace, father_name, father_phone, mother_name, mother_phone, roll_number, profile_photo_url
       )
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55, $56, $57, $58, $59, $60, $61, $62, $63, $64, $65, $66, $67, $68)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55, $56, $57, $58, $59, $60, $61, $62, $63, $64, $65, $66)
        RETURNING *`,
         [
           createStudentDto.schoolId,
@@ -242,8 +239,6 @@ export class StudentService {
           createStudentDto.gender,
           createStudentDto.dateOfBirthAd ?? null,
           dateOfBirthBs ?? null,
-          createStudentDto.studentEmail ?? null,
-          createStudentDto.studentMobile ?? null,
           createStudentDto.currentStatus || 'ACTIVE',
           true,
           createStudentDto.isGovtMandatedFreeSeat || false,
@@ -517,8 +512,6 @@ export class StudentService {
       gender: 'gender',
       dateOfBirthAd: 'date_of_birth_ad',
       dateOfBirthBs: 'date_of_birth_bs',
-      studentEmail: 'student_email',
-      studentMobile: 'student_mobile',
       currentStatus: 'current_status',
       isGovtMandatedFreeSeat: 'is_govt_mandated_free_seat',
       hasDisability: 'has_disability',

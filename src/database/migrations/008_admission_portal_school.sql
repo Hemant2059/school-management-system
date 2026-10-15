@@ -1,9 +1,7 @@
 -- ============================================================================
 -- Migration 008: admission funnel + parent portal + school directory
 -- ============================================================================
--- ADMISSION (online_admissions was a stub: 12 cols vs the 40-col CRM intake
--- the service writes). Expanded to the service contract; review trail
--- (remarks/reviewed_at/reviewed_by) included.
+-- ADMISSION: removed (see online_admissions section below + migration 022).
 -- STUDENTS: user_id login link (student portal accounts), parent snapshot
 -- (father/mother name+phone, as on Nepali admission forms), profile_photo_url.
 -- USERS: must_change_password (first-login flow).
@@ -14,44 +12,11 @@
 -- ============================================================================
 
 -- --------------------------------------------------------------------------
--- online_admissions: full CRM intake
+-- online_admissions: REMOVED (migration 022). This funnel was dropped: admins
+-- admit directly via POST /students, so the 40-column CRM expansion that
+-- used to live here is intentionally a no-op. The students/users/schools
+-- sections below still apply.
 -- --------------------------------------------------------------------------
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS middle_name VARCHAR(100);
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS first_name_np VARCHAR(100);
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS middle_name_np VARCHAR(100);
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS last_name_np VARCHAR(100);
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS date_of_birth_bs VARCHAR(20);
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS birth_place VARCHAR(100);
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS nationality VARCHAR(50);
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS religion VARCHAR(50);
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS caste VARCHAR(50);
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS email VARCHAR(255);
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS phone VARCHAR(20);
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS mobile VARCHAR(20);
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS father_name VARCHAR(100);
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS father_phone VARCHAR(20);
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS father_occupation VARCHAR(100);
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS mother_name VARCHAR(100);
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS mother_phone VARCHAR(20);
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS mother_occupation VARCHAR(100);
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS guardian_name VARCHAR(100);
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS guardian_phone VARCHAR(20);
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS guardian_relation VARCHAR(50);
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS province_id INTEGER;
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS district_id INTEGER;
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS municipality_id INTEGER;
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS ward_number INTEGER;
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS address TEXT;
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS previous_school VARCHAR(200);
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS previous_class VARCHAR(50);
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS previous_grade VARCHAR(50);
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS transfer_certificate BOOLEAN;
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS class_id INTEGER REFERENCES classes(class_id) ON DELETE SET NULL;
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS photo_url VARCHAR(500);
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS documents JSONB NOT NULL DEFAULT '[]';
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS remarks TEXT;
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS reviewed_at TIMESTAMPTZ;
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS reviewed_by INTEGER REFERENCES users(user_id) ON DELETE SET NULL;
 
 -- --------------------------------------------------------------------------
 -- students: account link + admission snapshot + photo

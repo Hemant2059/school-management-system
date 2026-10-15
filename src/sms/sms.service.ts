@@ -107,7 +107,7 @@ export class SmsService {
     },
   ): Promise<{ sent: number; results: any[] }> {
     const students = await this.db.query(
-      `SELECT s.student_id, s.first_name_en, s.student_mobile, sg.guardian_id, g.mobile as guardian_mobile
+      `SELECT s.student_id, s.first_name_en, sg.guardian_id, g.mobile as guardian_mobile
        FROM students s
        LEFT JOIN student_guardians sg ON s.student_id = sg.student_id AND sg.is_primary = true AND sg.is_active = true
        LEFT JOIN guardians g ON sg.guardian_id = g.guardian_id
@@ -119,7 +119,8 @@ export class SmsService {
     let sent = 0;
 
     for (const student of students) {
-      const phone = student.guardian_mobile || student.student_mobile;
+      // Students have no mobiles of their own — guardian mobile only.
+      const phone = student.guardian_mobile;
       if (!phone) continue;
 
       const message =
@@ -188,7 +189,7 @@ export class SmsService {
 
     if (dto.targetType === 'ALL' || dto.targetType === 'STUDENTS') {
       const students = await this.db.query(
-        `SELECT DISTINCT COALESCE(g.mobile, s.student_mobile) as phone
+        `SELECT DISTINCT g.mobile as phone
          FROM students s
          LEFT JOIN student_guardians sg ON s.student_id = sg.student_id AND sg.is_active = true
          LEFT JOIN guardians g ON sg.guardian_id = g.guardian_id

@@ -38,21 +38,7 @@ ALTER TABLE staff ADD COLUMN IF NOT EXISTS department_np VARCHAR(100);
 ALTER TABLE staff ADD COLUMN IF NOT EXISTS designation_np VARCHAR(100);
 ALTER TABLE staff ADD COLUMN IF NOT EXISTS employment_type_np VARCHAR(50);
 ALTER TABLE users ADD COLUMN IF NOT EXISTS full_name_np VARCHAR(100);
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS caste_np VARCHAR(50);
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS religion_np VARCHAR(50);
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS nationality_np VARCHAR(50);
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS birth_place_np VARCHAR(100);
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS grade_applied_np VARCHAR(20);
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS parent_name_np VARCHAR(100);
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS guardian_name_np VARCHAR(100);
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS guardian_relation_np VARCHAR(50);
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS father_name_np VARCHAR(100);
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS mother_name_np VARCHAR(100);
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS father_occupation_np VARCHAR(100);
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS mother_occupation_np VARCHAR(100);
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS previous_school_np VARCHAR(200);
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS previous_class_np VARCHAR(50);
-ALTER TABLE online_admissions ADD COLUMN IF NOT EXISTS previous_grade_np VARCHAR(50);
+-- (online_admissions twins removed with the table in migration 022.)
 ALTER TABLE classes ADD COLUMN IF NOT EXISTS class_name_np VARCHAR(50);
 ALTER TABLE sections ADD COLUMN IF NOT EXISTS section_name_np VARCHAR(20);
 ALTER TABLE exams ADD COLUMN IF NOT EXISTS exam_name_np VARCHAR(100);
@@ -121,14 +107,6 @@ ALTER TABLE schools ADD COLUMN IF NOT EXISTS name_np VARCHAR(255);
 ALTER TABLE schools ADD COLUMN IF NOT EXISTS address_np TEXT;
 ALTER TABLE schools ADD COLUMN IF NOT EXISTS ownership_type_np VARCHAR(50);
 ALTER TABLE schools ADD COLUMN IF NOT EXISTS school_type_np VARCHAR(50);
-ALTER TABLE exam ADD COLUMN IF NOT EXISTS exam_name_np VARCHAR(100);
-ALTER TABLE libraries ADD COLUMN IF NOT EXISTS name_np VARCHAR(100);
-ALTER TABLE libraries ADD COLUMN IF NOT EXISTS location_np VARCHAR(200);
-ALTER TABLE libraries ADD COLUMN IF NOT EXISTS incharge_name_np VARCHAR(100);
-ALTER TABLE transports ADD COLUMN IF NOT EXISTS driver_name_np VARCHAR(100);
-ALTER TABLE transports ADD COLUMN IF NOT EXISTS route_name_np VARCHAR(100);
-ALTER TABLE transports ADD COLUMN IF NOT EXISTS vehicle_name_np VARCHAR(100);
-ALTER TABLE transports ADD COLUMN IF NOT EXISTS vehicle_type_np VARCHAR(50);
 
 -- Missed free-text columns caught in review (same rule).
 ALTER TABLE exams ADD COLUMN IF NOT EXISTS remarks_np TEXT;

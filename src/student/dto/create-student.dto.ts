@@ -5,13 +5,11 @@ import {
   IsOptional,
   IsInt,
   IsDate,
-  IsEmail,
   Matches,
   Min,
   Max,
   IsBoolean,
   IsDefined,
-  ValidateIf,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
@@ -323,22 +321,8 @@ export class CreateStudentDto {
   temporaryAddressNp: string;
 
   // === Contact ===
-  @ApiPropertyOptional({
-    description: 'Student mobile number (may be empty for minors)',
-    example: '9841234567',
-  })
-  @IsOptional()
-  @Matches(/^(98|97|96)\d{8}$/, { message: 'Invalid Nepali mobile number' })
-  studentMobile?: string;
-
-  @ApiProperty({
-    description: 'Student email address (may be empty)',
-    example: 'student@example.com',
-  })
-  @IsDefined()
-  @ValidateIf((o) => o.studentEmail !== '')
-  @IsEmail()
-  studentEmail: string;
+  // NOTE: students have no email/mobile of their own — contact goes
+  // through guardians (guardians.mobile). No fields here by design.
 
   @ApiProperty({
     description: 'Blood group (may be empty if unknown)',

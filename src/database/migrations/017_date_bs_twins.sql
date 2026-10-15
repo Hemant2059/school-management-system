@@ -53,9 +53,3 @@ ALTER TABLE transport_assignments ADD COLUMN IF NOT EXISTS effective_from_bs VAR
 ALTER TABLE transport_assignments ADD COLUMN IF NOT EXISTS effective_to_bs VARCHAR(10);
 ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS insurance_expiry_bs VARCHAR(10);
 ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS permit_expiry_bs VARCHAR(10);
-
--- Legacy dead tables (no code refs, still present): same rule for uniformity.
-ALTER TABLE exam ADD COLUMN IF NOT EXISTS start_date_bs VARCHAR(10);
-ALTER TABLE exam ADD COLUMN IF NOT EXISTS end_date_bs VARCHAR(10);
-ALTER TABLE fee_transactions ADD COLUMN IF NOT EXISTS payment_date_bs VARCHAR(10);
-ALTER TABLE payroll ADD COLUMN IF NOT EXISTS payment_date_bs VARCHAR(10);

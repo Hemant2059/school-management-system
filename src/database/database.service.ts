@@ -154,7 +154,6 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
           current_class_id INTEGER REFERENCES classes(class_id), current_section_id INTEGER REFERENCES sections(section_id),
           academic_year VARCHAR(10), roll_number INTEGER, current_status VARCHAR(20) DEFAULT 'ACTIVE',
           is_active BOOLEAN DEFAULT true, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-          student_email VARCHAR(100), student_mobile VARCHAR(20),
           is_govt_mandated_free_seat BOOLEAN DEFAULT false, is_economically_disadvantaged BOOLEAN DEFAULT false,
           caste_ethnicity_code VARCHAR(20), caste_ethnicity VARCHAR(50),
           citizenship_number VARCHAR(50), birth_certificate_number VARCHAR(50),

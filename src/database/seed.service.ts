@@ -61,27 +61,34 @@ export class SeedService implements OnModuleInit {
     return created[0].school_id;
   }
 
+  // Each step is isolated: one failing seed logs and continues instead
+  // of aborting everything after it.
   async seedAll() {
     this.logger.log('Starting seed data...');
-    try {
-      await this.seedSchools();
-      await this.seedUsers();
-      await this.seedClasses();
-      await this.seedSections();
-      await this.seedSubjects();
-      await this.seedStudents();
-      await this.seedGuardians();
-      await this.seedStudentGuardians();
-      await this.seedFees();
-      await this.seedPayments();
-      await this.seedAttendance();
-      await this.seedExams();
-      await this.seedMarks();
-      await this.seedTeachers();
-      this.logger.log('Seed data completed successfully');
-    } catch (error) {
-      this.logger.error('Seed error: ' + error.message);
+    const steps: Array<[string, () => Promise<void>]> = [
+      ['schools', () => this.seedSchools()],
+      ['users', () => this.seedUsers()],
+      ['classes', () => this.seedClasses()],
+      ['sections', () => this.seedSections()],
+      ['subjects', () => this.seedSubjects()],
+      ['students', () => this.seedStudents()],
+      ['guardians', () => this.seedGuardians()],
+      ['studentGuardians', () => this.seedStudentGuardians()],
+      ['fees', () => this.seedFees()],
+      ['payments', () => this.seedPayments()],
+      ['attendance', () => this.seedAttendance()],
+      ['exams', () => this.seedExams()],
+      ['marks', () => this.seedMarks()],
+      ['teachers', () => this.seedTeachers()],
+    ];
+    for (const [name, run] of steps) {
+      try {
+        await run();
+      } catch (error: any) {
+        this.logger.error(`Seed error [${name}]: ` + error.message);
+      }
     }
+    this.logger.log('Seed data completed successfully');
   }
 
   async resetAdminPassword() {
@@ -409,7 +416,7 @@ export class SeedService implements OnModuleInit {
         first_name_en, middle_name_en, last_name_en, first_name_np, middle_name_np, last_name_np, display_name,
         gender, date_of_birth_ad, date_of_birth_bs, nationality, nationality_np, religion, religion_np,
         mother_tongue, mother_tongue_np, caste_ethnicity, caste_ethnicity_np, caste_code,
-        birthplace, birthplace_np, blood_group, student_email, student_mobile,
+        birthplace, birthplace_np, blood_group,
         permanent_province_id, permanent_district_id, permanent_municipality_id, permanent_ward_no,
         permanent_tole_en, permanent_tole_np,
         temporary_province_id, temporary_district_id, temporary_municipality_id, temporary_ward_no,
@@ -418,18 +425,18 @@ export class SeedService implements OnModuleInit {
         father_name, father_phone, father_name_np, mother_name, mother_phone, mother_name_np,
         profile_photo_url, roll_number, current_status, is_active, created_at, updated_at)
       VALUES
-        ($1, 'STU-2079-001', '2079-001', '2022-04-14', '2079-04-01', 1, 'Kiran', 'Kumar', 'Sharma', 'किरण', '', 'शर्मा', 'Kiran Sharma', 'MALE', '2016-03-15', '2072-12-02', 'Nepali', 'नेपाली', 'Hindu', 'हिन्दु', 'Nepali', 'नेपाली', 'Brahmin', 'ब्राह्मण', '01A', '', '', '', '', '', 1, 1, 1, 10, '', '', 0, 0, 0, 0, '', '', '', '', 1, 1, 'NONE', 'कुनै छैन', '', '', '', '', '', '', '', 1, 'ACTIVE', true, NOW(), NOW()),
-        ($1, 'STU-2079-002', '2079-002', '2022-04-14', '2079-04-01', 1, 'Sunita', '', 'Khatri', 'सुनिता', '', 'खत्री', 'Sunita Khatri', 'FEMALE', '2016-05-20', '2072-12-08', 'Nepali', 'नेपाली', 'Hindu', 'हिन्दु', 'Nepali', 'नेपाली', 'Chhetri', 'क्षेत्री', '02B', '', '', '', '', '', 1, 1, 1, 10, '', '', 0, 0, 0, 0, '', '', '', '', 1, 1, 'NONE', 'कुनै छैन', '', '', '', '', '', '', '', 2, 'ACTIVE', true, NOW(), NOW()),
-        ($1, 'STU-2079-003', '2079-003', '2022-04-14', '2079-04-01', 1, 'Raj', 'Kumar', 'Yadav', 'राज', '', 'यादव', 'Raj Yadav', 'MALE', '2016-07-10', '2073-03-23', 'Nepali', 'नेपाली', 'Hindu', 'हिन्दु', 'Maithili', 'मैथिली', 'Yadav', 'यादव', '03Y', '', '', '', '', '', 1, 1, 1, 10, '', '', 0, 0, 0, 0, '', '', '', '', 1, 1, 'NONE', 'कुनै छैन', '', '', '', '', '', '', '', 1, 'ACTIVE', true, NOW(), NOW()),
-        ($1, 'STU-2079-004', '2079-004', '2022-04-14', '2079-04-01', 1, 'Anita', 'Devi', 'Chaudhary', 'अनिता', '', 'चौधरी', 'Anita Chaudhary', 'FEMALE', '2016-02-28', '2072-11-16', 'Nepali', 'नेपाली', 'Hindu', 'हिन्दु', 'Tharu', 'थारु', 'Tharu', 'थारु', '09T', '', '', '', '', '', 1, 1, 1, 10, '', '', 0, 0, 0, 0, '', '', '', '', 1, 1, 'NONE', 'कुनै छैन', '', '', '', '', '', '', '', 2, 'ACTIVE', true, NOW(), NOW()),
-        ($1, 'STU-2079-005', '2079-005', '2022-04-14', '2079-04-01', 1, 'Niraj', '', 'Maharjan', 'निरज', '', 'महर्जन', 'Niraj Maharjan', 'MALE', '2015-11-05', '2072-07-18', 'Nepali', 'नेपाली', 'Buddhist', 'बौद्ध', 'Nepali', 'नेपाली', 'Newar', 'नेवार', '10N', '', '', '', '', '', 1, 1, 1, 10, '', '', 0, 0, 0, 0, '', '', '', '', 1, 1, 'NONE', 'कुनै छैन', '', '', '', '', '', '', '', 1, 'ACTIVE', true, NOW(), NOW()),
-        ($1, 'STU-2079-006', '2079-006', '2022-04-14', '2079-04-01', 1, 'Sabina', '', 'Rai', 'सबिना', '', 'राई', 'Sabina Rai', 'FEMALE', '2015-08-12', '2072-04-28', 'Nepali', 'नेपाली', 'Christian', 'क्रिस्चियन', 'Nepali', 'नेपाली', 'Rai', 'राई', '06C', '', '', '', '', '', 1, 1, 1, 10, '', '', 0, 0, 0, 0, '', '', '', '', 1, 1, 'NONE', 'कुनै छैन', '', '', '', '', '', '', '', 2, 'ACTIVE', true, NOW(), NOW()),
-        ($1, 'STU-2079-007', '2079-007', '2022-04-14', '2079-04-01', 1, 'Prakash', 'Bahadur', 'Thapa', 'प्रकाश', '', 'थापा', 'Prakash Thapa', 'MALE', '2015-04-22', '2071-12-09', 'Nepali', 'नेपाली', 'Hindu', 'हिन्दु', 'Nepali', 'नेपाली', 'Gurung', 'गुरुङ', '06E', '', '', '', '', '', 1, 1, 1, 10, '', '', 0, 0, 0, 0, '', '', '', '', 1, 1, 'NONE', 'कुनै छैन', '', '', '', '', '', '', '', 1, 'ACTIVE', true, NOW(), NOW()),
-        ($1, 'STU-2079-008', '2079-008', '2022-04-14', '2079-04-01', 1, 'Maya', '', 'Lama', 'माया', '', 'लामा', 'Maya Lama', 'FEMALE', '2015-06-30', '2072-03-15', 'Nepali', 'नेपाली', 'Buddhist', 'बौद्ध', 'Nepali', 'नेपाली', 'Lama', 'लामा', '06G', '', '', '', '', '', 1, 1, 1, 10, '', '', 0, 0, 0, 0, '', '', '', '', 1, 1, 'NONE', 'कुनै छैन', '', '', '', '', '', '', '', 2, 'ACTIVE', true, NOW(), NOW()),
-        ($1, 'STU-2079-009', '2079-009', '2022-04-14', '2079-04-01', 1, 'Santosh', 'Kumar', 'Mahato', 'सन्तोष', '', 'महतो', 'Santosh Mahato', 'MALE', '2014-09-18', '2071-05-01', 'Nepali', 'नेपाली', 'Hindu', 'हिन्दु', 'Maithili', 'मैथिली', 'Mahato', 'महतो', '03H', '', '', '', '', '', 1, 1, 1, 10, '', '', 0, 0, 0, 0, '', '', '', '', 1, 1, 'NONE', 'कुनै छैन', '', '', '', '', '', '', '', 1, 'ACTIVE', true, NOW(), NOW()),
-        ($1, 'STU-2079-010', '2079-010', '2022-04-14', '2079-04-01', 1, 'Laxmi', '', 'Poudel', 'लक्ष्मी', '', 'पौडेल', 'Laxmi Poudel', 'FEMALE', '2014-12-25', '2071-08-10', 'Nepali', 'नेपाली', 'Hindu', 'हिन्दु', 'Nepali', 'नेपाली', 'Brahmin', 'ब्राह्मण', '01A', '', '', '', '', '', 1, 1, 1, 10, '', '', 0, 0, 0, 0, '', '', '', '', 1, 1, 'NONE', 'कुनै छैन', '', '', '', '', '', '', '', 2, 'ACTIVE', true, NOW(), NOW()),
-        ($1, 'STU-2079-011', '2079-011', '2022-04-14', '2079-04-01', 1, 'Bibek', '', 'Shrestha', 'बिबेक', '', 'श्रेष्ठ', 'Bibek Shrestha', 'MALE', '2014-03-14', '2070-11-30', 'Nepali', 'नेपाली', 'Hindu', 'हिन्दु', 'Nepali', 'नेपाली', 'Newar', 'नेवार', '10N', '', '', '', '', '', 1, 1, 1, 10, '', '', 0, 0, 0, 0, '', '', '', '', 1, 1, 'NONE', 'कुनै छैन', '', '', '', '', '', '', '', 1, 'ACTIVE', true, NOW(), NOW()),
-        ($1, 'STU-2079-012', '2079-012', '2022-04-14', '2079-04-01', 1, 'Sarita', 'Kumari', 'Basnet', 'सरिता', '', 'बस्नेत', 'Sarita Basnet', 'FEMALE', '2014-07-08', '2071-03-25', 'Nepali', 'नेपाली', 'Hindu', 'हिन्दु', 'Nepali', 'नेपाली', 'Chhetri', 'क्षेत्री', '02B', '', '', '', '', '', 1, 1, 1, 10, '', '', 0, 0, 0, 0, '', '', '', '', 1, 1, 'NONE', 'कुनै छैन', '', '', '', '', '', '', '', 2, 'ACTIVE', true, NOW(), NOW())
+        ($1, 'STU-2079-001', '2079-001', '2022-04-14', '2079-04-01', 1, 'Kiran', 'Kumar', 'Sharma', 'किरण', '', 'शर्मा', 'Kiran Sharma', 'MALE', '2016-03-15', '2072-12-02', 'Nepali', 'नेपाली', 'Hindu', 'हिन्दु', 'Nepali', 'नेपाली', 'Brahmin', 'ब्राह्मण', '01A', '', '', '', 1, 1, 1, 10, '', '', 0, 0, 0, 0, '', '', '', '', 1, 1, 'NONE', 'कुनै छैन', '', '', '', '', '', '', '', 1, 'ACTIVE', true, NOW(), NOW()),
+        ($1, 'STU-2079-002', '2079-002', '2022-04-14', '2079-04-01', 1, 'Sunita', '', 'Khatri', 'सुनिता', '', 'खत्री', 'Sunita Khatri', 'FEMALE', '2016-05-20', '2072-12-08', 'Nepali', 'नेपाली', 'Hindu', 'हिन्दु', 'Nepali', 'नेपाली', 'Chhetri', 'क्षेत्री', '02B', '', '', '', 1, 1, 1, 10, '', '', 0, 0, 0, 0, '', '', '', '', 1, 1, 'NONE', 'कुनै छैन', '', '', '', '', '', '', '', 2, 'ACTIVE', true, NOW(), NOW()),
+        ($1, 'STU-2079-003', '2079-003', '2022-04-14', '2079-04-01', 1, 'Raj', 'Kumar', 'Yadav', 'राज', '', 'यादव', 'Raj Yadav', 'MALE', '2016-07-10', '2073-03-23', 'Nepali', 'नेपाली', 'Hindu', 'हिन्दु', 'Maithili', 'मैथिली', 'Yadav', 'यादव', '03Y', '', '', '', 1, 1, 1, 10, '', '', 0, 0, 0, 0, '', '', '', '', 1, 1, 'NONE', 'कुनै छैन', '', '', '', '', '', '', '', 1, 'ACTIVE', true, NOW(), NOW()),
+        ($1, 'STU-2079-004', '2079-004', '2022-04-14', '2079-04-01', 1, 'Anita', 'Devi', 'Chaudhary', 'अनिता', '', 'चौधरी', 'Anita Chaudhary', 'FEMALE', '2016-02-28', '2072-11-16', 'Nepali', 'नेपाली', 'Hindu', 'हिन्दु', 'Tharu', 'थारु', 'Tharu', 'थारु', '09T', '', '', '', 1, 1, 1, 10, '', '', 0, 0, 0, 0, '', '', '', '', 1, 1, 'NONE', 'कुनै छैन', '', '', '', '', '', '', '', 2, 'ACTIVE', true, NOW(), NOW()),
+        ($1, 'STU-2079-005', '2079-005', '2022-04-14', '2079-04-01', 1, 'Niraj', '', 'Maharjan', 'निरज', '', 'महर्जन', 'Niraj Maharjan', 'MALE', '2015-11-05', '2072-07-18', 'Nepali', 'नेपाली', 'Buddhist', 'बौद्ध', 'Nepali', 'नेपाली', 'Newar', 'नेवार', '10N', '', '', '', 1, 1, 1, 10, '', '', 0, 0, 0, 0, '', '', '', '', 1, 1, 'NONE', 'कुनै छैन', '', '', '', '', '', '', '', 1, 'ACTIVE', true, NOW(), NOW()),
+        ($1, 'STU-2079-006', '2079-006', '2022-04-14', '2079-04-01', 1, 'Sabina', '', 'Rai', 'सबिना', '', 'राई', 'Sabina Rai', 'FEMALE', '2015-08-12', '2072-04-28', 'Nepali', 'नेपाली', 'Christian', 'क्रिस्चियन', 'Nepali', 'नेपाली', 'Rai', 'राई', '06C', '', '', '', 1, 1, 1, 10, '', '', 0, 0, 0, 0, '', '', '', '', 1, 1, 'NONE', 'कुनै छैन', '', '', '', '', '', '', '', 2, 'ACTIVE', true, NOW(), NOW()),
+        ($1, 'STU-2079-007', '2079-007', '2022-04-14', '2079-04-01', 1, 'Prakash', 'Bahadur', 'Thapa', 'प्रकाश', '', 'थापा', 'Prakash Thapa', 'MALE', '2015-04-22', '2071-12-09', 'Nepali', 'नेपाली', 'Hindu', 'हिन्दु', 'Nepali', 'नेपाली', 'Gurung', 'गुरुङ', '06E', '', '', '', 1, 1, 1, 10, '', '', 0, 0, 0, 0, '', '', '', '', 1, 1, 'NONE', 'कुनै छैन', '', '', '', '', '', '', '', 1, 'ACTIVE', true, NOW(), NOW()),
+        ($1, 'STU-2079-008', '2079-008', '2022-04-14', '2079-04-01', 1, 'Maya', '', 'Lama', 'माया', '', 'लामा', 'Maya Lama', 'FEMALE', '2015-06-30', '2072-03-15', 'Nepali', 'नेपाली', 'Buddhist', 'बौद्ध', 'Nepali', 'नेपाली', 'Lama', 'लामा', '06G', '', '', '', 1, 1, 1, 10, '', '', 0, 0, 0, 0, '', '', '', '', 1, 1, 'NONE', 'कुनै छैन', '', '', '', '', '', '', '', 2, 'ACTIVE', true, NOW(), NOW()),
+        ($1, 'STU-2079-009', '2079-009', '2022-04-14', '2079-04-01', 1, 'Santosh', 'Kumar', 'Mahato', 'सन्तोष', '', 'महतो', 'Santosh Mahato', 'MALE', '2014-09-18', '2071-05-01', 'Nepali', 'नेपाली', 'Hindu', 'हिन्दु', 'Maithili', 'मैथिली', 'Mahato', 'महतो', '03H', '', '', '', 1, 1, 1, 10, '', '', 0, 0, 0, 0, '', '', '', '', 1, 1, 'NONE', 'कुनै छैन', '', '', '', '', '', '', '', 1, 'ACTIVE', true, NOW(), NOW()),
+        ($1, 'STU-2079-010', '2079-010', '2022-04-14', '2079-04-01', 1, 'Laxmi', '', 'Poudel', 'लक्ष्मी', '', 'पौडेल', 'Laxmi Poudel', 'FEMALE', '2014-12-25', '2071-08-10', 'Nepali', 'नेपाली', 'Hindu', 'हिन्दु', 'Nepali', 'नेपाली', 'Brahmin', 'ब्राह्मण', '01A', '', '', '', 1, 1, 1, 10, '', '', 0, 0, 0, 0, '', '', '', '', 1, 1, 'NONE', 'कुनै छैन', '', '', '', '', '', '', '', 2, 'ACTIVE', true, NOW(), NOW()),
+        ($1, 'STU-2079-011', '2079-011', '2022-04-14', '2079-04-01', 1, 'Bibek', '', 'Shrestha', 'बिबेक', '', 'श्रेष्ठ', 'Bibek Shrestha', 'MALE', '2014-03-14', '2070-11-30', 'Nepali', 'नेपाली', 'Hindu', 'हिन्दु', 'Nepali', 'नेपाली', 'Newar', 'नेवार', '10N', '', '', '', 1, 1, 1, 10, '', '', 0, 0, 0, 0, '', '', '', '', 1, 1, 'NONE', 'कुनै छैन', '', '', '', '', '', '', '', 1, 'ACTIVE', true, NOW(), NOW()),
+        ($1, 'STU-2079-012', '2079-012', '2022-04-14', '2079-04-01', 1, 'Sarita', 'Kumari', 'Basnet', 'सरिता', '', 'बस्नेत', 'Sarita Basnet', 'FEMALE', '2014-07-08', '2071-03-25', 'Nepali', 'नेपाली', 'Hindu', 'हिन्दु', 'Nepali', 'नेपाली', 'Chhetri', 'क्षेत्री', '02B', '', '', '', 1, 1, 1, 10, '', '', 0, 0, 0, 0, '', '', '', '', 1, 1, 'NONE', 'कुनै छैन', '', '', '', '', '', '', '', 2, 'ACTIVE', true, NOW(), NOW())
     `,
       [sid],
     );
