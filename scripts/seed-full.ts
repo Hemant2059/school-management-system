@@ -583,13 +583,8 @@ async function main() {
   });
 
   // ---------- 20. admissions ----------
-  await step('online_admissions', async () => {
-    if ((await count('online_admissions', 'WHERE school_id=$1', [sid])) === 0) {
-      await q(`INSERT INTO online_admissions (school_id, application_no, first_name, last_name, gender, date_of_birth, grade_applied, grade_applied_np, parent_name, parent_name_np, parent_phone, status, father_name, father_name_np, mother_name, mother_name_np, religion, religion_np, nationality, nationality_np)
-        VALUES ($1,'ADM-2082-001','Aarav','KC','MALE','2019-05-01','Nursery','नर्सरी','Ramesh KC','रमेश केसी','9841000201','pending','Ramesh KC','रमेश केसी','Sita KC','सीता केसी','Hindu','हिन्दु','Nepali','नेपाली'),
-               ($1,'ADM-2082-002','Diya','Magar','FEMALE','2019-08-12','LKG','एलकेजी','Bikash Magar','बिकास मगर','9841000202','approved','Bikash Magar','बिकास मगर','Gita Magar','गीता मगर','Hindu','हिन्दु','Nepali','नेपाली')`, [sid]);
-    }
-  });
+  // No online-apply flow: admins admit directly via POST /students.
+  // (online_admissions table dropped in migration 022.)
 
   // ---------- 21. system ----------
   await step('audit/sync/webhooks/rate_limits', async () => {

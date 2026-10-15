@@ -56,7 +56,6 @@ const PAIRS: Array<[string, string, string, boolean?]> = [
   ['leave_requests', 'start_date', 'start_date_bs'],
   ['leave_requests', 'end_date', 'end_date_bs'],
   ['live_classes', 'scheduled_at', 'scheduled_at_bs', true],
-  ['online_admissions', 'date_of_birth', 'date_of_birth_bs'],
   ['payments', 'payment_date', 'payment_date_bs'],
   ['payments', 'cheque_date', 'cheque_date_bs'],
   ['payroll', 'payment_date', 'payment_date_bs'],

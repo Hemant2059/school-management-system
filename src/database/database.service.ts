@@ -507,15 +507,6 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
 
-        -- Online Admissions
-        CREATE TABLE IF NOT EXISTS online_admissions (
-          id SERIAL PRIMARY KEY, school_id INTEGER REFERENCES schools(school_id),
-          application_no VARCHAR(50) UNIQUE NOT NULL, first_name VARCHAR(100), last_name VARCHAR(100),
-          gender VARCHAR(20), date_of_birth DATE, grade_applied VARCHAR(20),
-          parent_name VARCHAR(100), parent_phone VARCHAR(20), parent_email VARCHAR(100),
-          status VARCHAR(20) DEFAULT 'pending', applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        );
-
         -- Certificates
         CREATE TABLE IF NOT EXISTS certificates (
           certificate_id SERIAL PRIMARY KEY, school_id INTEGER REFERENCES schools(school_id),

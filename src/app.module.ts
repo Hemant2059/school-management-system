@@ -40,7 +40,6 @@ import { VideoClassModule } from './video-class/video-class.module';
 import { PortalModule } from './portal/portal.module';
 import { DocumentModule } from './document/document.module';
 import { HostelModule } from './hostel/hostel.module';
-import { AdmissionModule } from './admission/admission.module';
 import { EmailModule } from './email/email.module';
 import { GradeModule } from './grade/grade.module';
 import { StudentGuardianModule } from './student-guardian/student-guardian.module';
@@ -175,7 +174,6 @@ import { AppController } from './app.controller';
     PortalModule,
     DocumentModule,
     HostelModule,
-    AdmissionModule,
     EmailModule,
     GradeModule,
     StudentGuardianModule,

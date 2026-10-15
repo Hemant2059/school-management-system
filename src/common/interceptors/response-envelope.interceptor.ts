@@ -32,6 +32,20 @@ function isEnvelope(value: any): boolean {
   );
 }
 
+// Legacy PageDto shape ({ data: [], meta: { page, take, itemCount } })
+// returned by a few list services — normalized into the envelope.
+function isPageDto(value: any): boolean {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    !Buffer.isBuffer(value) &&
+    Array.isArray(value.data) &&
+    value.meta !== null &&
+    typeof value.meta === 'object' &&
+    typeof value.meta?.itemCount === 'number'
+  );
+}
+
 function isStream(value: any): boolean {
   return (
     value !== null &&
@@ -76,6 +90,14 @@ export class ResponseEnvelopeInterceptor implements NestInterceptor {
                 : limit > 0
                   ? limit
                   : value.data.length,
+          };
+        }
+        if (isPageDto(value)) {
+          return {
+            data: value.data,
+            total: value.meta.itemCount,
+            page: value.meta.page ?? page,
+            limit: value.meta.take ?? value.data.length,
           };
         }
         if (Array.isArray(value)) {
