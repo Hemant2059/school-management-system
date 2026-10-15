@@ -149,13 +149,13 @@ export class SeedService implements OnModuleInit {
     }
 
     await this.db.query(`
-      INSERT INTO schools (name, address, phone, email, is_active, created_at, updated_at)
+      INSERT INTO schools (name, school_code, address, phone, email, is_active, created_at, updated_at)
       VALUES 
-        ('Shree Nepal Primary School', 'Baneshwor, Kathmandu', '01-1234567', 'info@nepalprimary.edu.np', true, NOW(), NOW()),
-        ('Little Stars Academy', 'Lazimpat, Kathmandu', '01-2345678', 'contact@litlestars.edu.np', true, NOW(), NOW()),
-        ('Garden View School', 'Kumaripati, Lalitpur', '01-3456789', 'info@gardenview.edu.np', true, NOW(), NOW()),
-        ('Everest International School', 'Pokhara, Kaski', '061-123456', 'admin@everest.edu.np', true, NOW(), NOW()),
-        ('Bharatpur Model College', 'Bharatpur, Chitwan', '056-123456', 'info@bharatpurmodel.edu.np', true, NOW(), NOW())
+        ('Shree Nepal Primary School', 'SNP-001', 'Baneshwor, Kathmandu', '01-1234567', 'info@nepalprimary.edu.np', true, NOW(), NOW()),
+        ('Little Stars Academy', 'LSA-002', 'Lazimpat, Kathmandu', '01-2345678', 'contact@litlestars.edu.np', true, NOW(), NOW()),
+        ('Garden View School', 'GVS-003', 'Kumaripati, Lalitpur', '01-3456789', 'info@gardenview.edu.np', true, NOW(), NOW()),
+        ('Everest International School', 'EIS-004', 'Pokhara, Kaski', '061-123456', 'admin@everest.edu.np', true, NOW(), NOW()),
+        ('Bharatpur Model College', 'BMC-005', 'Bharatpur, Chitwan', '056-123456', 'info@bharatpurmodel.edu.np', true, NOW(), NOW())
     `);
     this.logger.log('Schools seeded');
   }

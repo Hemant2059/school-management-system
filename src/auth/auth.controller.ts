@@ -405,6 +405,19 @@ export class AuthController {
     return user;
   }
 
+  @Get('my-schools')
+  @ApiOperation({
+    summary: 'List My Schools',
+    description: `Schools the authenticated user belongs to (for the school
+switcher UI). Re-login with a schoolCode to switch context. Platform
+super-admins see every active school.`,
+  })
+  @ApiResponse({ status: 200, description: 'School memberships' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  async getMySchools(@Request() req) {
+    return this.authService.getUserSchools(req.user.userId);
+  }
+
   @Post('change-password')
   @ApiOperation({
     summary: 'Change Password',

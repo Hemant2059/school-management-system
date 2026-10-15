@@ -1,4 +1,10 @@
-import { Injectable, UnauthorizedException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  UnauthorizedException,
+  BadRequestException,
+  ForbiddenException,
+  Logger,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { DatabaseService } from '../database/database.service';
@@ -72,13 +78,47 @@ export class AuthService {
       );
       this.logger.log('User validated: ' + user.username);
 
+      // School context for this session: explicit schoolCode wins (for
+      // users in multiple schools); otherwise the primary school.
+      // Codes are non-enumerable unique text, unlike sequential ids.
+      let loginSchoolId: number | null = user.school_id ?? null;
+      if (loginDto.schoolCode) {
+        const school = await this.db.queryOne<{
+          school_id: number;
+          status: string;
+        }>(
+          `SELECT school_id, status FROM schools WHERE school_code = $1`,
+          [loginDto.schoolCode],
+        );
+        if (!school) {
+          throw new BadRequestException(
+            `Unknown school code '${loginDto.schoolCode}'`,
+          );
+        }
+        if (school.status !== 'ACTIVE' && school.status !== 'TRIAL') {
+          throw new ForbiddenException(
+            'This school is not active. Contact support.',
+          );
+        }
+        const membership = await this.db.queryOne(
+          `SELECT 1 FROM school_members WHERE user_id = $1 AND school_id = $2 AND status = 'ACTIVE'`,
+          [user.user_id, school.school_id],
+        );
+        if (!membership && !user.is_system) {
+          throw new ForbiddenException(
+            'User does not belong to this school',
+          );
+        }
+        loginSchoolId = school.school_id;
+      }
+
       const sessionId = crypto.randomUUID();
 
       const tokens = await this.getTokens(
         user.user_id,
         user.username,
         user.user_type ?? '',
-        user.school_id ?? null,
+        loginSchoolId,
         sessionId,
       );
 
@@ -88,7 +128,7 @@ export class AuthService {
         [
           sessionId,
           user.user_id,
-          user.school_id,
+          loginSchoolId,
           sessionId,
           ip,
           userAgent,
@@ -105,7 +145,7 @@ export class AuthService {
         sessionId,
         user: {
           id: user.user_id,
-          schoolId: user.school_id,
+          schoolId: loginSchoolId,
           username: user.username,
           fullName: user.full_name,
           userType: user.user_type,
@@ -372,8 +412,35 @@ export class AuthService {
     }
   }
 
-  async getUserProfile(userId: number) {
-    const user = await this.userService.findOneWithSchool(userId);
+  async getUserSchools(userId: number): Promise<
+    Array<{
+      school_id: number;
+      school_code: string | null;
+      name: string;
+      status: string;
+    }>
+  > {
+    const user = await this.userService.findOne(userId);
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+    // Platform super-admins operate across every active school.
+    if ((user.user_type as string) === 'SUPER_ADMIN' || user.is_system) {
+      return this.db.query(
+        `SELECT school_id, school_code, name, status FROM schools WHERE status IN ('ACTIVE','TRIAL') ORDER BY school_id`,
+      );
+    }
+    return this.db.query(
+      `SELECT s.school_id, s.school_code, s.name, s.status
+         FROM school_members m
+         JOIN schools s ON s.school_id = m.school_id
+        WHERE m.user_id = $1 AND m.status = 'ACTIVE' AND s.status IN ('ACTIVE','TRIAL')
+        ORDER BY s.school_id`,
+      [userId],
+    );
+  }
+
+  async getUserProfile(userId: number) {    const user = await this.userService.findOneWithSchool(userId);
 
     const school = user.school_id
       ? await this.db.queryOne<{ school_id: number; name: string }>(

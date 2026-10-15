@@ -13,6 +13,7 @@ export interface User {
   full_name?: string;
   is_active: boolean;
   is_verified?: boolean;
+  is_system?: boolean;
   locked_until?: Date;
   failed_login_attempts?: number;
   last_login_at?: Date;

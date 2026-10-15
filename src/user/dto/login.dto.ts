@@ -1,5 +1,10 @@
-import { IsNotEmpty, IsString } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import {
+  IsNotEmpty,
+  IsString,
+  IsOptional,
+  MinLength,
+} from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class LoginDto {
   @ApiProperty({
@@ -20,4 +25,13 @@ export class LoginDto {
   @IsNotEmpty()
   @IsString()
   password: string;
+
+  @ApiPropertyOptional({
+    description:
+      'School code to log into (for users belonging to multiple schools). Defaults to the primary school.',
+    example: 'SNP-001',
+  })
+  @IsOptional()
+  @IsString()
+  schoolCode?: string;
 }
