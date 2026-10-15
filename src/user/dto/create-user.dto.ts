@@ -95,11 +95,27 @@ export class CreateUserDto {
   @ApiProperty({
     description: 'Role/type of the user in the system',
     example: 'TEACHER',
-    enum: ['SUPER_ADMIN', 'ADMIN', 'TEACHER', 'STAFF', 'STUDENT', 'PARENT', 'ACCOUNTANT'],
+    enum: [
+      'SUPER_ADMIN',
+      'ADMIN',
+      'TEACHER',
+      'STAFF',
+      'STUDENT',
+      'PARENT',
+      'ACCOUNTANT',
+    ],
     required: false,
   })
   @IsOptional()
-  @IsEnum(['SUPER_ADMIN', 'ADMIN', 'TEACHER', 'STAFF', 'STUDENT', 'PARENT', 'ACCOUNTANT'])
+  @IsEnum([
+    'SUPER_ADMIN',
+    'ADMIN',
+    'TEACHER',
+    'STAFF',
+    'STUDENT',
+    'PARENT',
+    'ACCOUNTANT',
+  ])
   userType?: string;
 
   @ApiPropertyOptional({

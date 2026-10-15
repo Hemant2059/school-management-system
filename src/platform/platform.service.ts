@@ -37,9 +37,7 @@ export class PlatformService {
       school_id: number;
       name: string;
       status: string;
-    }>(
-      `SELECT school_id, name, status FROM schools ORDER BY school_id`,
-    );
+    }>(`SELECT school_id, name, status FROM schools ORDER BY school_id`);
     const out: SchoolOverview[] = [];
     for (const s of schools) {
       // Explicit school_id predicates (not RLS): the app role is a DB

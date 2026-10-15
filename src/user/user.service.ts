@@ -38,7 +38,7 @@ export class UserService {
     const isPlatform = createUserDto.userType === 'SUPER_ADMIN';
     const schoolId = isPlatform
       ? (createUserDto.schoolId ?? createUserDto.school_id ?? null)
-      : (createUserDto.schoolId || createUserDto.school_id || 1);
+      : createUserDto.schoolId || createUserDto.school_id || 1;
     const email =
       createUserDto.email || `${createUserDto.username}@school.edu.np`;
     const phone = createUserDto.phone || null;
