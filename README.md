@@ -190,6 +190,20 @@ npm run seed:full      # Seed sample data for every model
 npm run seed:bs-backfill  # Backfill *_bs twins from AD dates (one-off)
 ```
 
+## Seed Login Credentials
+
+`npm run seed:full` creates one admin per school (password `Admin123!` for all):
+
+| School ID | School | Username | Password |
+| --------- | ------ | -------- | -------- |
+| 1 | Shree Nepal Primary School | `admin_1` | `Admin123!` |
+| 2 | Little Stars Academy | `admin_2` | `Admin123!` |
+| 3 | Garden View School | `admin_3` | `Admin123!` |
+| 4 | Everest International School | `admin_4` | `Admin123!` |
+| 5 | Bharatpur Model College | `admin_5` | `Admin123!` |
+
+Legacy demo logins (school 1): `principal` / `teacher1` / `accountant`, all with password `password123`.
+
 ## Documentation
 
 - [Government Submission Documentation](./docs/GOVERNMENT_SUBMISSION.md) - Full compliance documentation

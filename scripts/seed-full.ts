@@ -88,6 +88,45 @@ async function main() {
   const sid = school!.school_id;
   const school2 = await one(`SELECT school_id FROM schools ORDER BY school_id LIMIT 1 OFFSET 1`);
 
+  // ---------- 1b. admin login per school ----------
+  await step('school-admins', async () => {
+    const adminHash = await bcrypt.hash('Admin123!', 10);
+    const schools = await q<{ school_id: number }>(
+      `SELECT school_id FROM schools ORDER BY school_id`,
+    );
+    for (const s of schools) {
+      const uname = `admin_${s.school_id}`;
+      const ex = await one<{ user_id: number }>(
+        `SELECT user_id FROM users WHERE username = $1`,
+        [uname],
+      );
+      let uid = ex?.user_id;
+      if (!ex) {
+        const created = await q<{ user_id: number }>(
+          `INSERT INTO users (username, email, password, password_hash, full_name, full_name_np, phone, user_type, school_id, is_active, is_verified)
+           VALUES ($1, $2, $3, $3, $4, $5, $6, 'ADMIN', $7, true, true)
+           RETURNING user_id`,
+          [
+            uname,
+            `${uname}@school.local`,
+            adminHash,
+            `School ${s.school_id} Admin`,
+            `विद्यालय ${s.school_id} प्रशासक`,
+            `984100000${s.school_id}`,
+            s.school_id,
+          ],
+        );
+        uid = created[0]?.user_id;
+      }
+      if (uid) {
+        await q(
+          `INSERT INTO school_members (user_id, school_id, status)
+           VALUES ($1, $2, 'ACTIVE') ON CONFLICT DO NOTHING`,
+          [uid, s.school_id],
+        );
+      }
+    }
+  });
   // ---------- 2. academic_years + terms ----------
   await step('academic_years+terms', async () => {
     const fy = await one(`SELECT fiscal_year_id FROM fiscal_years WHERE is_current=true LIMIT 1`);
