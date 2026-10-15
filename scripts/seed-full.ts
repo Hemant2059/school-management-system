@@ -127,6 +127,20 @@ async function main() {
       }
     }
   });
+  // ---------- 1c. platform super-admin ----------
+  await step('platform-superadmin', async () => {
+    const ex = await one<{ user_id: number }>(
+      `SELECT user_id FROM users WHERE username = 'superadmin'`,
+    );
+    if (!ex) {
+      const ph = await bcrypt.hash('SuperAdmin123!', 10);
+      await q(
+        `INSERT INTO users (username, email, password, password_hash, full_name, full_name_np, phone, user_type, school_id, is_system, is_active, is_verified)
+         VALUES ('superadmin', 'superadmin@platform.local', $1, $1, 'Platform Administrator', 'प्लेटफर्म प्रशासक', '9800000000', 'SUPER_ADMIN', NULL, true, true, true)`,
+        [ph],
+      );
+    }
+  });
   // ---------- 2. academic_years + terms ----------
   await step('academic_years+terms', async () => {
     const fy = await one(`SELECT fiscal_year_id FROM fiscal_years WHERE is_current=true LIMIT 1`);

@@ -204,6 +204,23 @@ npm run seed:bs-backfill  # Backfill *_bs twins from AD dates (one-off)
 
 Legacy demo logins (school 1): `principal` / `teacher1` / `accountant`, all with password `password123`.
 
+## Platform Administration
+
+Platform users manage the software across all schools (create schools, create
+school admins, cross-school analysis). They live in the same `users` table:
+
+- `user_type = 'SUPER_ADMIN'`, `is_system = true`, `school_id = NULL`
+- Guards bypass `SUPER_ADMIN`; tenant checks roam via `is_system`; with no
+  school context they work unscoped, otherwise send `X-School-Id` to act
+  within one school. JWTs carry `schoolId: null` (never `0`).
+- `GET /platform/overview` — per-school stats (students, teachers, users,
+  open invoices, balances, today's attendance) plus totals. No school
+  context needed.
+- Schools are created via `POST /schools`, school admins via `POST /users`
+  (membership is added automatically).
+
+Seed platform login: `superadmin` / `SuperAdmin123!`.
+
 ## Documentation
 
 - [Government Submission Documentation](./docs/GOVERNMENT_SUBMISSION.md) - Full compliance documentation

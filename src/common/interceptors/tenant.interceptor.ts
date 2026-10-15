@@ -39,13 +39,25 @@ export class TenantInterceptor implements NestInterceptor {
       return next.handle();
     }
 
+    const headerSchoolId = this.tenants.parseHeader(
+      req.headers['x-school-id'] as string | undefined,
+    );
+    const jwtSchoolId =
+      user.schoolId == null || user.schoolId === 0
+        ? undefined
+        : Number(user.schoolId);
+    if (headerSchoolId === undefined && jwtSchoolId === undefined) {
+      // Platform super-admins may work without a school context (e.g.
+      // cross-school overview); the service pins per-school tenants itself.
+      if ((user.userType as string) === 'SUPER_ADMIN') {
+        return next.handle();
+      }
+    }
+
     const schoolId = await this.tenants.resolveSchoolId({
       userId: user.userId,
-      jwtSchoolId:
-        user.schoolId !== undefined ? Number(user.schoolId) : undefined,
-      headerSchoolId: this.tenants.parseHeader(
-        req.headers['x-school-id'] as string | undefined,
-      ),
+      jwtSchoolId,
+      headerSchoolId,
     });
     req.tenantSchoolId = schoolId;
     return runWithTenant(schoolId, () => next.handle(), user.userId);

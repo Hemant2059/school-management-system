@@ -7,6 +7,7 @@ import {
   Matches,
   IsNumber,
   IsOptional,
+  IsBoolean,
 } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -94,10 +95,19 @@ export class CreateUserDto {
   @ApiProperty({
     description: 'Role/type of the user in the system',
     example: 'TEACHER',
-    enum: ['ADMIN', 'TEACHER', 'STAFF', 'STUDENT', 'PARENT', 'ACCOUNTANT'],
+    enum: ['SUPER_ADMIN', 'ADMIN', 'TEACHER', 'STAFF', 'STUDENT', 'PARENT', 'ACCOUNTANT'],
     required: false,
   })
   @IsOptional()
-  @IsEnum(['ADMIN', 'TEACHER', 'STAFF', 'STUDENT', 'PARENT', 'ACCOUNTANT'])
+  @IsEnum(['SUPER_ADMIN', 'ADMIN', 'TEACHER', 'STAFF', 'STUDENT', 'PARENT', 'ACCOUNTANT'])
   userType?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Platform user flag (SUPER_ADMIN only; manages all schools, no school scope)',
+    example: false,
+  })
+  @IsOptional()
+  @IsBoolean()
+  isSystem?: boolean;
 }

@@ -36,6 +36,11 @@ export class RolesGuard implements CanActivate {
 
     const userRole = user.userType as UserRole;
 
+    // Platform super-admins manage all schools: bypass role checks.
+    if (userRole === UserRole.SUPER_ADMIN) {
+      return true;
+    }
+
     if (requiredRoles.includes(userRole)) {
       return true;
     }
@@ -72,7 +77,10 @@ export class PermissionsGuard implements CanActivate {
     }
 
     // Legacy super-admin bypass (unchanged behavior).
-    if ((user.userType as UserRole) === UserRole.ADMIN) {
+    if (
+      (user.userType as UserRole) === UserRole.ADMIN ||
+      (user.userType as UserRole) === UserRole.SUPER_ADMIN
+    ) {
       return true;
     }
 

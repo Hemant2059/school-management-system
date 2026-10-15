@@ -78,7 +78,7 @@ export class AuthService {
         user.user_id,
         user.username,
         user.user_type ?? '',
-        user.school_id ?? 0,
+        user.school_id ?? null,
         sessionId,
       );
 
@@ -203,7 +203,7 @@ export class AuthService {
       user.user_id,
       user.username,
       user.user_type ?? '',
-      user.school_id ?? 0,
+      user.school_id ?? null,
       sessionId,
     );
 
@@ -234,7 +234,7 @@ export class AuthService {
     userId: number,
     username: string,
     userType: string,
-    schoolId: number,
+    schoolId: number | null,
     sid?: string,
   ) {
     const payload = {

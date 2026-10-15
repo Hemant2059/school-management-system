@@ -34,15 +34,19 @@ export class UserService {
 
     const passwordHash = await bcrypt.hash(createUserDto.password, 10);
 
-    const schoolId = createUserDto.schoolId || createUserDto.school_id || 1;
+    // Platform users (SUPER_ADMIN) live outside any school: no default to 1.
+    const isPlatform = createUserDto.userType === 'SUPER_ADMIN';
+    const schoolId = isPlatform
+      ? (createUserDto.schoolId ?? createUserDto.school_id ?? null)
+      : (createUserDto.schoolId || createUserDto.school_id || 1);
     const email =
       createUserDto.email || `${createUserDto.username}@school.edu.np`;
     const phone = createUserDto.phone || null;
     const userType = createUserDto.userType || 'TEACHER';
 
     const user = await this.db.insert<User>(
-      `INSERT INTO users (school_id, username, email, phone, password, password_hash, full_name, full_name_np, user_type, is_verified, is_active, failed_login_attempts)
-       VALUES ($1, $2, $3, $4, $5, $5, $6, $7, $8, false, true, 0)
+      `INSERT INTO users (school_id, username, email, phone, password, password_hash, full_name, full_name_np, user_type, is_system, is_verified, is_active, failed_login_attempts)
+       VALUES ($1, $2, $3, $4, $5, $5, $6, $7, $8, $9, false, true, 0)
        RETURNING *`,
       [
         schoolId,
@@ -53,8 +57,18 @@ export class UserService {
         createUserDto.fullName,
         createUserDto.fullNameNp || null,
         userType,
+        isPlatform ? true : createUserDto.isSystem || false,
       ],
     );
+
+    // School users need membership for tenant checks (platform roams free).
+    if (schoolId !== null && schoolId !== undefined) {
+      await this.db.query(
+        `INSERT INTO school_members (user_id, school_id, status)
+         VALUES ($1, $2, 'ACTIVE') ON CONFLICT DO NOTHING`,
+        [user.user_id, schoolId],
+      );
+    }
 
     return user;
   }

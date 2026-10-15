@@ -53,6 +53,7 @@ import { SyncModule } from './sync/sync.module';
 import { WebhookModule } from './webhook/webhook.module';
 import { AdminModule } from './admin/admin.module';
 import { RbacModule } from './rbac/rbac.module';
+import { PlatformModule } from './platform/platform.module';
 import { JwtAuthGuard } from './auth/jwt-auth.guard';
 import { RolesGuard } from './auth/roles.guard';
 import { ResponseEnvelopeInterceptor } from './common/interceptors/response-envelope.interceptor';
@@ -187,6 +188,7 @@ import { AppController } from './app.controller';
     WebhookModule,
     AdminModule,
     RbacModule,
+    PlatformModule,
   ],
   controllers: [AppController],
   providers: [

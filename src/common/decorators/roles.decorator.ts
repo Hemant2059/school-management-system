@@ -116,6 +116,7 @@ export const Permissions = (...permissions: Permission[]) =>
 export const ALL_PERMISSIONS = Object.values(Permission);
 
 export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
+  [UserRole.SUPER_ADMIN]: ALL_PERMISSIONS,
   [UserRole.ADMIN]: ALL_PERMISSIONS,
   [UserRole.PRINCIPAL]: [
     Permission.RESULT_READ,
